@@ -1,0 +1,10 @@
+.DS_Store
+*.scrt
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+node_modules/
+__pycache__/
+*.pyc

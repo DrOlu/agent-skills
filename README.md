@@ -50,6 +50,20 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `hyperframes-media` | Asset preprocessing for HyperFrames compositions — text-to-speech narration (Kok |
 | `hyperframes-registry` | Install and wire registry blocks and components into HyperFrames compositions. U |
 | `interminai` | Control interactive terminal applications like vim, git rebase -i, git add -i, g |
+| `inngest-agent-evals` | Use when building, migrating, or debugging Agent Evals on Inngest: scoring AI agent workflows. |
+| `inngest-agents` | Use when building durable AI agents or agentic workflows with Inngest and AgentKit. |
+| `inngest-api` | Use when the user explicitly asks for the Inngest REST API v2, raw HTTP, OpenAPI, API docs. |
+| `inngest-api-cli` | Use when operating Inngest API resources from the terminal with `npx inngest-cli@latest api`. |
+| `inngest-brownfield-audit` | Use when analyzing an existing TypeScript/JS codebase to decide where and how to introduce Inngest. |
+| `inngest-cli` | Use when installing or running the Inngest CLI and Dev Server for local development and testing. |
+| `inngest-durable-functions` | Use when building functions that must survive process crashes, retry automatically on failure. |
+| `inngest-events` | Use when designing event-driven workflows, decoupling services, fan-out patterns on Inngest. |
+| `inngest-flow-control` | Use when handling external API rate limits, throttling, or queue concurrency with Inngest. |
+| `inngest-middleware` | Use when adding cross-cutting concerns to durable functions — logging, tracing, dependency injection. |
+| `inngest-realtime` | Use when streaming durable workflow updates to a UI in real time — live order status pages. |
+| `inngest-setup` | Use when adding durable execution to a TypeScript project — retry-safe webhook handlers, queues. |
+| `inngest-steps` | Use when implementing delays that must survive process restarts (e.g. 24-hour cart abandonment). |
+| `inngest-v3-v4-migration` | Use when upgrading an existing TypeScript codebase from Inngest SDK v3 to v4, or fixing mixed SDKs. |
 | `large-file-reader` | Comprehensive toolkit for AI agents to read, analyze, and extract information fr |
 | `loop` | Run any task iteratively until completion using Ralph Wiggum methodology. Execut |
 | `lottie` | Lottie and dotLottie adapter patterns for HyperFrames. Use when embedding lottie |

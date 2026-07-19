@@ -81,6 +81,7 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `reactorpro-doc` | Comprehensive ReactorPro documentation covering installation, features, agent mo |
 | `remotion-to-hyperframes` | Translate an existing Remotion (React-based) video composition into a HyperFrame |
 | `rpa` | Enterprise-grade Robotic Process Automation framework for web automation without |
+| `rterm-backend` | Install, configure, run, administer & manage the standalone RTerm backend (gybackend) headlessly on macOS/Linux/Windows — install the daemon, configure the gateway, run as a service, manage automation & schedules. |
 | `rterm-gateway` | Remotely drive any RTerm instance over its WebSocket gateway — run AI agent tasks, control SSH/WinRM/Serial/local terminals, transfer files, manage settings & scheduled automation, fully headless. |
 | `secure-scan` | Comprehensive secure code analysis and vulnerability review using Semgrep, Gitle |
 | `skill-creator` | Design and create Agent Skills using progressive disclosure principles. Use when |

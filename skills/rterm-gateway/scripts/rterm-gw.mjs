@@ -98,13 +98,23 @@ class GW {
     } catch {
       return;
     }
-    if (msg.id && (msg.result !== undefined || msg.error !== undefined)) {
+    // Real envelope: { type:"gateway:response", id, ok, result? , error? }
+    // (accept legacy flat { id, result|error } too for forward/backward compat)
+    const isResp =
+      msg.id !== undefined &&
+      (msg.type === 'gateway:response' || msg.result !== undefined || msg.error !== undefined);
+    if (isResp && (msg.result !== undefined || msg.error !== undefined || msg.ok !== undefined)) {
       const p = this.pending.get(msg.id);
       if (p) {
         clearTimeout(p.timer);
         this.pending.delete(msg.id);
-        if (msg.error) p.reject(new Error(`${p.method} -> ${msg.error.code}: ${msg.error.message}`));
-        else p.resolve(msg.result);
+        if (msg.ok === false || msg.error) {
+          const code = msg.error?.code || 'ERROR';
+          const text = msg.error?.message || 'unknown error';
+          p.reject(new Error(`${p.method} -> ${code}: ${text}`));
+        } else {
+          p.resolve(msg.result !== undefined ? msg.result : msg);
+        }
       }
       return;
     }

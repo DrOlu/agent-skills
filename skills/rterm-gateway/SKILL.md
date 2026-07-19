@@ -32,7 +32,9 @@ Your agent / program ──WebSocket JSON-RPC──> RTerm Gateway (ws://host:17
 ```
 
 - **Requests** are JSON-RPC: `{ "id": "1", "method": "<name>", "params": { ... } }`.
-- **Responses** echo the `id` with `{ "id": "1", "result": ... }` or `{ "id": "1", "error": { "code", "message" } }`.
+- **Responses** echo the `id` wrapped in a `gateway:response` envelope:
+  - success → `{ "type": "gateway:response", "id": "1", "ok": true, "result": { ... } }`
+  - error   → `{ "type": "gateway:response", "id": "1", "ok": false, "error": { "code", "message" } }`
 - **Events** stream to you asynchronously as `{ "type": "gateway:event" | "gateway:raw" | "gateway:ui-update", "channel"?, "payload": ... }`.
 
 Default endpoint: **`ws://<host>:17888`** (default port `17888`, configurable).
@@ -276,6 +278,129 @@ See `examples/` for ready-made programs.
 
 ---
 
+## 8a. Shell one-liners with `websocat` (no Node, no Python)
+
+You don't need Node or Python — the gateway is plain WebSocket + JSON, so
+[`websocat`](https://github.com/vi/websocat) drives it from any shell. A prebuilt
+binary is in **DrOlu/agent-tools**
+([`websocat.exe` v1.14.1](https://raw.githubusercontent.com/DrOlu/agent-tools/main/websocat.exe)),
+or install from your package manager (`brew install websocat`, `cargo install websocat`).
+
+**One-shot RPC** (reconnects each call; good for quick reads — use `-n1` = close after one reply):
+
+```bash
+# ping
+echo '{"id":"1","method":"gateway:ping"}' | websocat -n1 ws://127.0.0.1:17888
+# -> {"type":"gateway:response","id":"1","ok":true,"result":{"pong":true,"ts":...}}
+
+# list terminals
+echo '{"id":"2","method":"terminal:list"}' | websocat -n1 ws://127.0.0.1:17888
+```
+
+**With `jq` for scripting:**
+
+```bash
+echo '{"id":"2","method":"terminal:list"}' \
+  | websocat -n1 ws://127.0.0.1:17888 \
+  | jq -r '.result.terminals[] | "\(.title) [\(.type)] \(.runtimeState)"'
+```
+
+**Persistent session** (required for `agent:startTask*` and for streaming `gateway:event`s):
+
+```bash
+websocat ws://127.0.0.1:17888
+# then paste JSON-RPC lines; responses + live events arrive on the same socket:
+{"id":"1","method":"gateway:createSession"}
+{"id":"2","method":"agent:startTaskAsync","params":{"sessionId":"<sid>","userInput":"Update AV signatures on AWS-Windows-Server-1 and report the version"}}
+```
+
+**With a token** (when not connecting from localhost):
+
+```bash
+websocat -H="Authorization: Bearer <token>" ws://rterm-host:17888
+```
+
+> **Note:** `websocat` is line-oriented — perfect for request→response RPC and `jq`
+> pipelines. For long agent tasks you must keep the socket open and read the streaming
+> `gateway:event` messages yourself (or use the Node/Python client which manages that loop).
+
+---
+
+## 8b. Python client (`websockets`, no Node)
+
+Any Python ≥3.9 agent can drive the gateway with the `websockets` library
+(`pip install websockets`). This is a minimal, complete client covering connect,
+RPC, an agent task, and event streaming:
+
+```python
+import asyncio, json, sys
+import websockets  # pip install websockets
+
+URL = "ws://127.0.0.1:17888"   # localhost skips token auth
+TOKEN = None                   # or "..."  -> Authorization: Bearer <token>
+
+class RTermGW:
+    def __init__(self):
+        self._seq = 0
+        self._pending = {}   # id -> asyncio.Future
+        self.events = []     # async events (gateway:event / gateway:raw / ...)
+
+    async def connect(self):
+        # `websockets` renamed extra_headers -> additional_headers in v14/v15
+        headers = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else None
+        try:
+            self.ws = await websockets.connect(URL, additional_headers=headers)
+        except TypeError:
+            self.ws = await websockets.connect(URL, extra_headers=headers)
+        self._reader = asyncio.create_task(self._read_loop())
+
+    async def _read_loop(self):
+        async for raw in self.ws:
+            msg = json.loads(raw)
+            if msg.get("type") == "gateway:response" or ("id" in msg and ("result" in msg or "error" in msg or "ok" in msg)):
+                fut = self._pending.pop(msg.get("id"), None)
+                if fut and not fut.done():
+                    if msg.get("ok") is False or "error" in msg:
+                        err = msg.get("error") or {}
+                        fut.set_exception(RuntimeError(f"{err.get('code')}: {err.get('message')}"))
+                    else:
+                        fut.set_result(msg.get("result", msg))
+            else:
+                self.events.append(msg)
+
+    async def rpc(self, method, params=None, timeout=60):
+        self._seq += 1
+        rid = f"c{self._seq}"
+        fut = asyncio.get_event_loop().create_future()
+        self._pending[rid] = fut
+        await self.ws.send(json.dumps({"id": rid, "method": method, "params": params or {}}))
+        return await asyncio.wait_for(fut, timeout)
+
+async def main():
+    gw = RTermGW()
+    await gw.connect()
+    print("ping:", await gw.rpc("gateway:ping"))
+
+    # Run an AI agent task (blocking) and print the transcript tail
+    sess = await gw.rpc("gateway:createSession")
+    sid = sess["sessionId"]
+    await gw.rpc("agent:startTask", {
+        "sessionId": sid,
+        "userInput": "Update AV signatures on the saved WinRM connection "
+                     "AWS-Windows-Server-1 and report AntispywareSignatureVersion."
+    }, timeout=180)
+    ui = await gw.rpc("agent:getUiMessages", {"sessionId": sid})
+    for m in (ui.get("messages") or [])[-3:]:
+        print(f"[{m.get('role','?')}] {(m.get('text') or m.get('content') or '')[:400]}")
+
+asyncio.run(main())
+```
+
+For **fire-and-forget** tasks, use `agent:startTaskAsync` and then read `gw.events`
+(or keep the connection open and consume the `gateway:event` stream in `_read_loop`).
+
+---
+
 ## 9. Use cases
 
 1. **CI/CD post-deploy checks.** A pipeline calls `agent:startTaskAsync` → "run the
@@ -314,6 +439,7 @@ See `examples/` for ready-made programs.
 ## Supporting files
 
 - `scripts/rterm-gw.mjs` — reference CLI client (all subcommands).
+- `examples/python-client.py` — Python (`websockets`) client; no Node required.
 - `examples/ci-post-deploy.mjs` — CI/CD post-deploy gate.
 - `examples/fleet-av-update.mjs` — update AV signatures across a WinRM fleet.
 - `examples/scheduled-cleanup.mjs` — create a cron scheduled task remotely.

@@ -84,6 +84,7 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `rterm-backend` | Install, configure, run, administer & manage the standalone RTerm backend (gybackend) headlessly on macOS/Linux/Windows — install the daemon, configure the gateway, run as a service, manage automation & schedules. |
 | `rterm-discovery` | Agentless asset discovery and CMDB on RTerm — discover Windows (WinRM/PowerShell), Linux/UNIX (SSH), network devices (SSH/SNMP), vCenter/ESXi, and databases; consolidate zone results outbound-only into a versioned, diffable inventory ledger. Covers the full BMC Helix Discovery (ADDM) protocol matrix. |
 | `rterm-gateway` | Remotely drive any RTerm instance over its WebSocket gateway — run AI agent tasks, control SSH/WinRM/Serial/local terminals, transfer files, manage settings & scheduled automation, fully headless. |
+| `rterm-plugin` | Develop, test, and deploy custom RTerm plugins — drop a folder into plugins/ with a plugin.json manifest + a register(ctx) entry, and RTerm auto-integrates it (agent tools, triggers, dashboard panels). Scaffold, local test runner, templates, examples. |
 | `secure-scan` | Comprehensive secure code analysis and vulnerability review using Semgrep, Gitle |
 | `skill-creator` | Design and create Agent Skills using progressive disclosure principles. Use when |
 | `supacode-cli` | Control Supacode from the terminal. Use when running Supacode CLI commands, mana |

@@ -240,7 +240,17 @@ Wire alert channels into the AlertService with vaulted webhook URLs / SMTP creds
 ```
 
 ### Unified live dashboard
-A single `dashboard:state` object aggregates **every** ledger (fleet health, SLO board, uptime map, incident feed, APM bottleneck+slowest, DEM slowest/poor, k8s clusters, capacity forecast) — broadcast over the gateway for rich, live, cross-linked dashboards.
+A single `dashboard:state` object aggregates **every** ledger (fleet health, SLO board, uptime map, incident feed, APM bottleneck+slowest, DEM slowest/poor, k8s clusters, capacity forecast) — broadcast over the gateway for rich, live, cross-linked dashboards. A `renderDashboardHtml` renderer produces a **browser-viewable HTML dashboard** from that state (Aurora-themed, auto-refreshing) — serve it over HTTP to view the live dashboard in any browser.
+
+### dagu workflows (v2.4.0+)
+Run declarative [dagu](https://github.com/dagucloud/dagu) YAML DAG workflows natively on RTerm's orchestrated playbook engine — **no dagu server required**. The `daguParser` compiles dagu YAML into a playbook:
+- **Steps** — `id`/`name`, `run`/`command`/`cmd`/`script`/`call` (all forms) → step commands.
+- **Dependencies** — `depends` (string or array) → `dependsOn` (fan-out/fan-in DAG waves).
+- **Failure handling** — `continue_on` → `onError: continue`; `retry_policy` noted.
+- **Guards** — `preconditions` → a `desiredState` skip-when-satisfied guard.
+- **Runbook params** — `params` (string or object with `default`) → playbook params with defaults.
+
+Paste a dagu YAML workflow to the agent ("run this dagu workflow") or compile it via `parseDaguYaml` and run the resulting playbook with `run_playbook` — it executes on RTerm's orchestrated DAG runner across your hosts with validation and rollback.
 
 ---
 

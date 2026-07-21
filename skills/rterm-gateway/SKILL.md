@@ -203,6 +203,8 @@ The observability modules are wired into the backend and driven through `agent:s
 | **Behavioral** | "Flag any run-spikes, token-blowouts, error-spikes, or unusual models vs the baseline" |
 | **Evals** | "Run the embedded eval harness on the golden set and report accuracy/tool/safety/replay %" |
 | **Notify (Slack/Teams/SMTP/Telegram)** | "Wire a Slack alert channel (webhook …) and fire a test alert" |
+| **dagu workflows (v2.4.0+)** | "Compile + run this dagu YAML workflow (paste YAML) using daguParser, show the DAG waves, and report per-step results" |
+| **Browser dashboard** | "Render the dashboard:state as a browser-viewable HTML page (renderDashboardHtml) and serve it so I can view the live dashboard" |
 
 > The observability ledgers feed the unified dashboard and are driven by the agent's
 > built-in tools — no separate RPC methods are needed beyond `agent:startTask` /

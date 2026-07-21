@@ -205,7 +205,46 @@ node scripts/rterm-backend.mjs uninstall       # stop + npm uninstall -g
 
 ---
 
-## 6. Manage connections, automation & schedules
+## 6. Observability & SRE features (v2.0.0–v2.3.1)
+
+The backend boots with a full **observability** stack wired in (`createObservability`), fed live by monitor snapshots. All of it is callable over the gateway (see the `rterm-gateway` skill).
+
+### SRE core
+- **MetricsLedger** — time-series store for resource snapshots (cpu/mem/disk/load/net/gpu) per host, with trend slope + **days-to-threshold forecasting** ("disk full in N days").
+- **UptimeWatchdog** — liveness probes (tcp/ssh/http/command) per host, up/degraded/down, with state transitions firing alerts.
+- **SloService** — SLO/SLI definitions, error budget, **burn rate**, fast-burn alerting.
+- **AlertService** — alertmanager-style routing: grouping, dedupe, silences, severity channels.
+- **IncidentLedger** — auto-incidents with timelines, AI **RCA**, **postmortems**, runbook links.
+- **GoldenSignals** — saturation/traffic/latency/errors per host + capacity forecast.
+- **SyntheticChecks** — blackbox probes feeding the SLO SLI + golden latency/error.
+- **DriftDetector** — template-vs-live config diff + MOP auto-remediation.
+
+### APM / DEM / Infra / ETW
+- **SpanLedger (APM)** — OTLP distributed-trace store + analysis (per-service p50/95/99, error rate, slowest traces, bottleneck services).
+- **RumLedger (DEM)** — Core Web Vitals (LCP/INP/CLS/TTFB) per page + error rate, slowest/poor pages.
+- **InfraMonitor (k8s/cloud)** — cluster health (running/notReady/CrashLoop/restarts/nodes + cpu/mem % of limit), unhealthy instances.
+- **EtwService (Windows)** — built-in ETW diagnostics (network/file/registry/process providers, logman sessions, Get-WinEvent/Get-Counter) — agentless, no install.
+
+### Predictive + behavioral + evals
+- **AnomalyDetector** — z-score / robust z-score (median±MAD) anomaly detection over metric series.
+- **EarlyWarningService** — predictive failure alerts (trend forecast + anomaly) + optional MOP auto-remediation.
+- **BehaviorLedger** — UEBA-style baselines (runs/day, tokens/run, error rate, models) + deviations (run-spike, token-blowout, error-spike, unusual-model).
+- **EvalHarness** — embedded evals measuring the agent's **accuracy, tool selection, safety/policy, determinism/replay** with an aggregate reliability report.
+
+### Notifications (Slack / Teams / SMTP / Telegram)
+Wire alert channels into the AlertService with vaulted webhook URLs / SMTP creds (rich, severity-colored payloads):
+
+```bash
+# via the gateway (rterm-gateway skill) — add a Slack channel
+# (see examples/notify-channels.mjs)
+```
+
+### Unified live dashboard
+A single `dashboard:state` object aggregates **every** ledger (fleet health, SLO board, uptime map, incident feed, APM bottleneck+slowest, DEM slowest/poor, k8s clusters, capacity forecast) — broadcast over the gateway for rich, live, cross-linked dashboards.
+
+---
+
+## 7. Manage connections, automation & schedules
 
 Once running, manage it over RPC (see the `rterm-gateway` skill). Highlights:
 

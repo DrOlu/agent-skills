@@ -185,6 +185,29 @@ Params are passed as a JSON object under `params`. `…` = see source for full s
 | `tools:getBuiltIn` / `tools:setBuiltInEnabled` | `{name, enabled}` | built-in tools |
 | `system:saveImageAttachment` | `{…}` | attach an image |
 
+### Observability / SRE (v2.0.0–v2.3.1) — driven via the agent
+The observability modules are wired into the backend and driven through `agent:startTask` (the agent reads/writes them via its built-in tools). Key capabilities to ask for:
+
+| Area | Example `userInput` |
+|---|---|
+| **Unified dashboard** | "Build the dashboard:state — fleet health, SLO, uptime, incidents, APM, DEM, capacity" |
+| **SRE metrics** | "Report golden signals + capacity forecast for all hosts; days-to-disk-full" |
+| **Uptime watchdog** | "Add an uptime watchdog for web-01 (tcp 443) and report its state" |
+| **SLO** | "Create an SLO api-uptime 99.9% over 30d and evaluate burn rate" |
+| **Incidents** | "List open incidents and generate the postmortem for the latest one" |
+| **APM (OTLP)** | "Ingest these OTLP spans and report the slowest traces + bottleneck services" |
+| **DEM (RUM)** | "Report p75 LCP/INP and error rate per page; which pages are poor on Core Web Vitals?" |
+| **k8s/cloud** | "Collect cluster health (pods, restarts, node readiness, cpu/mem % of limit)" |
+| **ETW (Windows)** | "Run a network ETW trace on AWS-Windows-Server-1 for 60s and summarize connections" |
+| **Predictive** | "Detect anomalies in cpu/disk for all hosts and any forecast breaches within 7 days" |
+| **Behavioral** | "Flag any run-spikes, token-blowouts, error-spikes, or unusual models vs the baseline" |
+| **Evals** | "Run the embedded eval harness on the golden set and report accuracy/tool/safety/replay %" |
+| **Notify (Slack/Teams/SMTP/Telegram)** | "Wire a Slack alert channel (webhook …) and fire a test alert" |
+
+> The observability ledgers feed the unified dashboard and are driven by the agent's
+> built-in tools — no separate RPC methods are needed beyond `agent:startTask` /
+> `agent:getUiMessages` for these areas.
+
 ---
 
 ## 5. TerminalConfig shapes (for `terminal:createTab`)

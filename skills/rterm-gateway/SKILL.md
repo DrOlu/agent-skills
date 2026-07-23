@@ -205,10 +205,42 @@ The observability modules are wired into the backend and driven through `agent:s
 | **Notify (Slack/Teams/SMTP/Telegram)** | "Wire a Slack alert channel (webhook …) and fire a test alert" |
 | **dagu workflows (v2.4.0+)** | "Compile + run this dagu YAML workflow (paste YAML) using daguParser, show the DAG waves, and report per-step results" |
 | **Browser dashboard** | "Render the dashboard:state as a browser-viewable HTML page (renderDashboardHtml) and serve it so I can view the live dashboard" |
+| **AWS APerf deep-dive (v2.6.0+)** | "Run an APerf performance deep-dive on web-01 — deploy aperf, record CPU/mem/disk/PMU/processes/hotspot for 60s, parse the findings, and report the top issues" |
+| **Plugin system (v2.5.0+)** | "List installed plugins and their tools/triggers/panels" |
+| **Patch management (plugin)** | "Check patch status on web-01, build a patch plan for the security patches, and submit it for approval" |
+| **Request router (plugin)** | "Submit a request to restart nginx on web-01 with justification 'planned maintenance', then list pending requests" |
+| **SOP assistant (plugin)** | "Search the SOP library for 'database failover' and show me the steps; then execute the restart-service SOP on web-01 with service=nginx" |
+| **IAM connector (plugin)** | "Review all users on web-01 and identify privileged accounts; what groups is john in?" |
+| **FraudOps (plugin)** | "Check the fraud pipeline status (Flink/NATS/Kafka health) and summarize recent fraud decisions" |
+| **Netdata integration (plugin)** | "Correlate this Netdata alert with RTerm's metrics and incidents for RCA" |
+| **Monitor diagnostics (v2.7.6+)** | "Run monitor status diagnostics — why aren't stats displaying for terminal X? Report publisher/session/inFlight/connected/last-collect per terminal" |
+| **AGT policy engine (v2.7.7+)** | "Evaluate the action 'restart nginx' on target 'prod-web-01' against the governance policy — allow, deny, or escalate?" |
+| **Review model / maker-checker (v2.7.8+)** | "Review this action with the checker model: type=restart target=prod-web-01 command='systemctl restart nginx' — verify correctness, completeness, safety, compliance, accuracy" |
 
 > The observability ledgers feed the unified dashboard and are driven by the agent's
 > built-in tools — no separate RPC methods are needed beyond `agent:startTask` /
 > `agent:getUiMessages` for these areas.
+
+### Plugins (v2.5.0+)
+
+RTerm ships with **6 official plugins** (auto-discovered on startup) plus any user plugins
+in `~/.gybackend-data/plugins`. Plugin tools are called the same way as built-in tools —
+through `agent:startTask`.
+
+| Plugin | Agent tools | Use for |
+|---|---|---|
+| **patch-manager** | `patch_status`, `patch_plan`, `patch_apply` | Autonomous patch management across hosts (yum/apt/Windows Update) with MOP approval + compliance dashboard |
+| **request-router** | `submit_request`, `approve_request`, `list_requests`, `request_status` | Automated request handling — classify risk (low/med/high), route (auto-approve/queue/MOP), execute, audit |
+| **sop-assistant** | `sop_search`, `sop_get`, `sop_execute`, `iam_lookup` | SOP retrieval + step-by-step guided execution. 8 built-in SOPs (restart-service, disk-cleanup, reset-password, database-failover, ssl-cert-renewal, user-offboarding, backup-restore, incident-response) + 4 IAM policies |
+| **iam-connector** | `iam_user_info`, `iam_user_groups`, `iam_disable_user`, `iam_access_review` | IAM integration — user/group management, privileged access identification, access review (Linux id/groups/usermod + Windows Get-LocalUser) |
+| **fraudops** | `fraudops_pipeline_status`, `fraudops_str_assign`, `fraudops_str_status`, `fraudops_decision_summary` | FraudOps operational layer — Flink/NATS/Kafka health, STR workflow (7-day CBN deadline), decision summary |
+| **netdata-rterm** | `netdata_alert_summary`, `netdata_correlate` | Netdata Cloud webhook ingestion + correlation with RTerm metrics/incidents for RCA |
+
+**Plugin triggers** fire autonomously (e.g., `patch_failure` → propose-change, `fraudops_pipeline_down` → run-playbook, `netdata_critical_alert` → auto-remediation).
+
+To **install a custom plugin** on a headless backend, drop the plugin folder (with a valid
+`plugin.json` + `index.mjs`) into `{GYBACKEND_DATA_DIR}/plugins/` and restart — the
+`PluginRegistry` auto-discovers it.
 
 ---
 
@@ -269,6 +301,59 @@ Every command the agent runs is evaluated against the **command policy**:
 Check the mode with `settings:get` → `commandPolicyMode`. For unattended operation, either
 use `smart` mode or pre-allowlist the commands your workflow needs
 (`settings:addCommandPolicyRule {list:"allowlist", rule:"Update-MpSignature*"}`).
+
+---
+
+## 7a. Governance, audit & the maker/checker model (v2.7.x)
+
+### Audit trail (v2.7.1) — hash-chained, tamper-evident
+
+Every audit-relevant event (agent runs, command evaluations, approvals, MOP changes,
+playbook steps, trigger firings, alert ingestions) is appended to a **hash-chained audit
+ledger** — each record carries the SHA-256 hash of the previous one, so any tampering is
+detectable via `verify()`. The **evidence sealer** computes a Merkle-tree root over the
+records → sealed, independently-verifiable evidence bundles (KLA framework domain 11).
+
+Ask the agent: *"Show the audit ledger for command X and verify the chain"*, or
+*"Seal the audit ledger and produce the evidence bundle for the auditor"*.
+
+### AGT policy engine (v2.7.7) — governance before execution
+
+The **AGT policy engine** evaluates every consequential action against a YAML policy
+before execution. Decisions: `allow` / `deny` / `escalate` (route to approval).
+
+- Glob-style action patterns (`"read"` matches `"read /etc/passwd"`), target wildcards
+  (`prod-*`), first-match-wins, case-insensitive.
+- Built-in default policy: allow read/status/list; deny delete/drop/format; **escalate**
+  restart/patch/deploy on `prod-*`; allow them otherwise.
+- Drop a custom `policy.yaml` in the data dir to override.
+
+Ask the agent: *"Evaluate the action 'restart nginx' on target 'prod-web-01' against the
+governance policy"* — the agent returns the decision + the matched rule + reason.
+
+### Review model / maker-checker (v2.7.8) — independent verification
+
+The **review model** (a second LLM, the "checker") independently verifies the action
+model's (the "maker's") output on **5 dimensions**: correctness, completeness, safety,
+compliance, and **accuracy**.
+
+- Verdicts: `approved` / `needs_revision` / `escalate`.
+- Modes: `strict` (block on any issue), `advisory` (flag but allow), `auto-approve`
+  (skip review for low-risk actions).
+- **Fast output mode:** if no `reviewModelId` is set in the profile, reviews are skipped
+  entirely (zero added latency).
+
+Configure it in the Settings UI (v2.7.9+): the profile has a **Review Model** dropdown
+(`(None — skip reviews)` = fast mode) and a **Review Mode** dropdown.
+
+### Monitor diagnostics (v2.7.6) — "why aren't stats displaying?"
+
+`monitorStatus` reports exactly why monitor stats aren't displaying per terminal:
+publisher wired? session exists? collection stuck in-flight? terminal connected? platform
+detected? last-collect time? Diagnoses: `terminal_not_connected`, `no_monitor_session`,
+`collection_stuck_in_flight`, `never_collected`, `stale_collection`, `publisher_not_wired`.
+
+Ask the agent: *"Run monitor status diagnostics and report any terminals not collecting"*.
 
 ---
 

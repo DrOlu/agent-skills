@@ -121,12 +121,14 @@ node scripts/rterm-backend.mjs install-service     # prints the right unit + ena
 
 | Path | Contents |
 |---|---|
-| `settings.json` | connections (ssh/winrm/serial), automation (groups/scripts/schedules/templates/playbooks), model profiles, command policy, gateway policy |
+| `settings.json` | connections (ssh/winrm/serial), automation (groups/scripts/schedules/templates/playbooks), model profiles (incl. `reviewModelId`/`reviewMode`), command policy, gateway policy |
 | `gyshell-history.sqlite` | chat + UI history |
 | `gyshell-agent-runs.sqlite` | agent run ledger (audit + token cost) |
 | `gyshell-changes.sqlite` | change ledger (MOP records + step events) |
 | `session-logs/` | recorded terminal sessions (plain files) |
 | `skills/` | agent skills |
+| `plugins/` | user-installed plugins (auto-discovered on startup; the 6 official plugins ship in the npm package / desktop app bundle) |
+| `policy.yaml` | optional custom AGT policy document (overrides the built-in default policy) |
 | `access-tokens.json` | gateway access tokens |
 
 ### 4.3 Reuse desktop-app settings
@@ -252,6 +254,49 @@ Run declarative [dagu](https://github.com/dagucloud/dagu) YAML DAG workflows nat
 
 Paste a dagu YAML workflow to the agent ("run this dagu workflow") or compile it via `parseDaguYaml` and run the resulting playbook with `run_playbook` — it executes on RTerm's orchestrated DAG runner across your hosts with validation and rollback.
 
+### AWS APerf deep-dive (v2.6.0+)
+Deploy the [AWS APerf](https://github.com/aws/aperf) CLI to any Linux host via SSH, record deep system performance metrics (CPU, memory, disk, network, PMU counters, processes, hotspot data), generate the aperf analysis report, and parse the findings into structured results that feed the metrics ledger + agent RCA. Combines aperf's deep profiling with RTerm's agent reasoning.
+
+Ask the agent: *"Run an APerf deep-dive on web-01 and report the top performance issues"* — the agent installs aperf on the host (if needed), records for the sampling period, parses the report, and returns findings with severity thresholds (critical ≥90%, warning ≥75%, process ≥50% CPU).
+
+### Plugin system (v2.5.0+)
+Anyone can develop a custom plugin and have it auto-integrate. A plugin is a folder with a `plugin.json` manifest (name, version, entry, tools, triggers, panels, permissions) and an `index.mjs` entry module exporting `register(ctx)`. The `PluginRegistry` discovers plugins in:
+1. `~/.gybackend-data/plugins` (user-installed)
+2. `./plugins` (repo/dev)
+3. `{bundle}/../plugins` (npm package)
+4. `{resourcesPath}/plugins` (desktop app)
+
+The backend **ships with 6 official plugins** out of the box (21 tools, 10 triggers, 6 panels):
+
+| Plugin | What it does |
+|---|---|
+| **patch-manager** | Autonomous patch management — `patch_status`/`patch_plan`/`patch_apply` tools, `patch_failure`/`patch_completion` triggers, patch-compliance dashboard. Supports yum/apt/Windows Update. |
+| **request-router** | Automated request handling — `submit_request`/`approve_request`/`list_requests`/`request_status` tools. Risk classification (low/med/high) → auto-approve/queue/MOP routing. |
+| **sop-assistant** | IAM Knowledge & SOP Assistant — `sop_search`/`sop_get`/`sop_execute`/`iam_lookup` tools. 8 built-in SOPs (restart-service, disk-cleanup, reset-password, database-failover, ssl-cert-renewal, user-offboarding, backup-restore, incident-response) + 4 IAM policies. |
+| **iam-connector** | IAM integration — `iam_user_info`/`iam_user_groups`/`iam_disable_user`/`iam_access_review` tools. Privileged access identification, access review. Linux (id/groups/usermod) + Windows (Get-LocalUser). |
+| **fraudops** | FraudOps operational layer — `fraudops_pipeline_status`/`fraudops_str_assign`/`fraudops_str_status`/`fraudops_decision_summary` tools. Flink/NATS/Kafka health, STR workflow (7-day CBN deadline), decision summary. |
+| **netdata-rterm** | Netdata integration — `netdata_alert_summary`/`netdata_correlate` tools. Ingests Netdata Cloud alert webhooks, correlates with RTerm metrics/incidents for RCA. Triggers for auto-remediation + MOP changes. |
+
+### Audit trail + evidence sealing (v2.7.1)
+Hash-chained, tamper-evident audit ledger — every audit-relevant event (agent runs, command evaluations, approvals, MOP changes, playbook steps, trigger firings, alert ingestions) is appended with the SHA-256 hash of the previous record. Any tampering breaks the chain and is detectable via `verify()`. The **evidence sealer** computes a Merkle-tree root over records → sealed, independently-verifiable evidence bundles (KLA audit framework domain 11). 18 event kinds recorded.
+
+### Monitor diagnostics (v2.7.6)
+`monitorStatus` diagnostic — reports exactly why monitor stats aren't displaying per terminal: publisher wired? session exists? collection stuck in-flight? terminal connected? platform detected? last-collect time? Diagnoses: `terminal_not_connected`, `no_monitor_session`, `collection_stuck_in_flight`, `never_collected`, `stale_collection (>30s)`, `publisher_not_wired`.
+
+Ask the agent: *"Run monitor status diagnostics"* — instantly shows which terminals aren't collecting and why.
+
+### AGT policy engine (v2.7.7)
+Microsoft AGT-style policy engine — evaluates every consequential action against a YAML policy before execution. Decisions: `allow` / `deny` / `escalate` (route to approval). Features: glob-style action patterns (`"read"` matches `"read /etc/passwd"`), target wildcards (`prod-*`), first-match-wins, case-insensitive matching, agent identity + sponsoring principal for zero-trust. Built-in default policy: allow read/status/list; deny delete/drop/format; escalate restart/patch/deploy on `prod-*`. Drop a custom `policy.yaml` in the data dir to override.
+
+### Review model / maker-checker (v2.7.8)
+The **review model** (a second LLM, the "checker") independently verifies the action model's (the "maker's") output on **5 dimensions**: correctness, completeness, safety, compliance, and accuracy.
+
+- **Verdicts:** `approved` / `needs_revision` / `escalate`.
+- **Modes:** `strict` (block on any issue), `advisory` (flag but allow), `auto-approve` (skip review for low-risk actions).
+- **Fast output mode:** if no `reviewModelId` is set in the model profile, reviews are skipped entirely (zero added latency).
+
+Configure in `settings.json` → `models.profiles[].reviewModelId` + `reviewMode` — or in the desktop Settings UI (v2.7.9+).
+
 ---
 
 ## 7. Manage connections, automation & schedules
@@ -282,10 +327,17 @@ Create a cron task headlessly:
 ## 7. Use cases
 
 1. **CI/CD gate** — after deploy, `agent:startTask` → "health-check the fleet and report unhealthy nodes" → fail the pipeline on DEGRADED.
-2. **Scheduled patch/AV** — cron task runs `Update-MpSignature` across a Windows fleet weekly; versions recorded to the run ledger.
+2. **Scheduled patch/AV** — cron task runs `Update-MpSignature` across a Windows fleet weekly; versions recorded to the run ledger. Or use the **patch-manager plugin**: `patch_status` → `patch_plan` → MOP approve → `patch_apply`, with a fleet-wide compliance dashboard.
 3. **Multi-vendor change** — Jinja-render a Cisco BGP config, apply via `algorithmsPreset=cisco` + `vt100`, then update an AWS SG — with validation + rollback.
 4. **Sub-agent** — an orchestrator LLM delegates ops tasks to RTerm's agent and reads transcripts.
-5. **Audit** — run ledger + change ledger + session logs = complete command-and-output trail.
+5. **Audit** — run ledger + change ledger + session logs + **hash-chained audit ledger (v2.7.1)** + **evidence sealing (Merkle tree)** = complete, tamper-evident, independently-verifiable command-and-output trail.
+6. **Autonomous patching** — patch-manager plugin discovers patches, builds deployment plans, executes with MOP approval, alerts on completion/failure, reports fleet compliance.
+7. **Request handling** — request-router plugin receives operational requests, classifies risk, routes for approval (auto-approve/queue/MOP), executes end-to-end, audits every step.
+8. **SOP-guided ops** — sop-assistant plugin answers "how do I X?" with relevant SOPs and executes them step-by-step with variable substitution + confirmation.
+9. **IAM governance** — iam-connector plugin reviews user access, identifies privileged accounts, disables users (with approval), runs access reviews.
+10. **FraudOps** — fraudops plugin monitors the fraud detection pipeline (Flink/NATS/Kafka), manages STR workflow with CBN deadlines, summarizes decisions.
+11. **Performance deep-dive** — AWS APerf integration deploys aperf to any Linux host, records CPU/PMU/flamegraph metrics, parses findings into the metrics ledger + agent RCA.
+12. **Governance** — AGT policy engine evaluates every consequential action against a YAML policy (allow/deny/escalate); the **review model (maker/checker)** independently verifies the action model's output on 5 dimensions (correctness, completeness, safety, compliance, accuracy).
 
 See `examples/` for runnable programs.
 

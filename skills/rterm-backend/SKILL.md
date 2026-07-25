@@ -315,6 +315,8 @@ v2.9.0 added 9 backend modules; **v2.9.2 exposed them as 41 `observability:*` ga
 
 Agent tools (visible in the Tools section since v2.9.3): `get_metrics`, `manage_secret`, `manage_oncall`, `get_cost`, `manage_recording`, `manage_gitops`, `manage_playbook_version`, `get_cloud_inventory`, `get_live_dashboard`. Ask the agent: "add this API key to the vault", "show my AI spend today", "page the on-call", "lint this playbook", "list my AWS instances".
 
+**v2.9.5 — APM/DEM/Infra/ETW ingestion.** The observability ledgers are now genuinely fed out of the box via `observability:apmIngestSpans` (OTLP spans → trace store), `observability:demIngestBeacon` (Core Web Vitals RUM beacons → per-page p75), `observability:infraCollect` (k8s cluster health from kubectl), and `observability:etwStartTrace/etwStopTrace/etwParse` (Windows ETW diagnostics) — plus the matching agent tools `ingest_apm_spans`/`get_apm_summary`, `ingest_dem_beacon`/`get_dem_summary`, `collect_infra`, `manage_etw`.
+
 **New env vars:** `OTEL_EXPORTER_OTLP_ENDPOINT` / `RTERM_OTLP_METRICS_ENDPOINT` (OTel push), `RTERM_SECRETS_MASTER_KEY` (unlock the secrets vault).
 
 ---

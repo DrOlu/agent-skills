@@ -96,7 +96,7 @@ waits) into subcommands. Use it directly or read it as a reference client.
 
 ---
 
-## 4. RPC method reference (113 methods: 72 core + 41 observability:*)
+## 4. RPC method reference (128 methods: 72 core + 56 observability:*)
 
 Params are passed as a JSON object under `params`. `…` = see source for full shape.
 
@@ -270,6 +270,10 @@ the matching agent tools visible in the Tools section. These are the same method
 | **Playbook versioning** | `observability:playbookLint`, `playbookHistory`, `playbookSave`, `playbookRollback`, `playbookDiff` | Version history + static lint (undefined params, dependsOn cycles, missing rollback) |
 | **Cloud inventory** | `observability:cloudSummary`, `cloudQuery`, `cloudSync`, `cloudAddAccount` | Normalized AWS/GCP/Azure instances (inject fetchers) |
 | **Live dashboard** | `observability:liveDashboardState`, `liveDashboardSubscriberCount` | Push-based multi-client dashboard state |
+| **APM ingestion** | `observability:apmIngestSpans`, `apmSummary` | Feed OTLP/HTTP-JSON trace spans → trace store (bottleneck services, slowest traces) |
+| **DEM ingestion** | `observability:demIngestBeacon`, `demSummary` | Feed Core Web Vitals RUM beacons (page, LCP/INP/CLS/TTFB, JS errors) → per-page p75 + error rate |
+| **Infra ingestion** | `observability:infraCollect`, `infraClusters`, `infraUnhealthy` | Collect k8s cluster health (kubectl text or JSON payload) → not-ready, CrashLoopBackOff |
+| **ETW ingestion** | `observability:etwStartTrace`, `etwStopTrace`, `etwParse`, `etwSessions` | Windows ETW diagnostics — logman start/stop commands + parse Get-WinEvent/Get-Counter output |
 
 **Example — set a secret then verify it (values never come back):**
 
@@ -298,8 +302,11 @@ the matching agent tools visible in the Tools section. These are the same method
 
 > Agent-tool equivalents (when you'd rather let the agent drive): `get_metrics`, `manage_secret`,
 > `manage_oncall`, `get_cost`, `manage_recording`, `manage_gitops`, `manage_playbook_version`,
-> `get_cloud_inventory`, `get_live_dashboard`. Ask for them in `userInput`, e.g. "add this API key to
-> the vault", "show my AI spend today", "page the on-call for the DB incident", "lint this playbook".
+> `get_cloud_inventory`, `get_live_dashboard`, `ingest_apm_spans`, `get_apm_summary`,
+> `ingest_dem_beacon`, `get_dem_summary`, `collect_infra`, `manage_etw`. Ask for them in `userInput`,
+> e.g. "add this API key to the vault", "show my AI spend today", "page the on-call for the DB
+> incident", "lint this playbook", "ingest these OTLP spans", "ingest this RUM beacon", "collect the
+> k8s cluster health", "start an ETW network trace on the Windows host".
 
 ---
 

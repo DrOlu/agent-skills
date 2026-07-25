@@ -297,6 +297,26 @@ The **review model** (a second LLM, the "checker") independently verifies the ac
 
 Configure in `settings.json` → `models.profiles[].reviewModelId` + `reviewMode` — or in the desktop Settings UI (v2.7.9+).
 
+### v2.9.x platform capabilities
+
+v2.9.0 added 9 backend modules; **v2.9.2 exposed them as 41 `observability:*` gateway RPC methods + 9 agent tools** (see the `rterm-gateway` skill §4b); **v2.9.3 made the tools visible in the Tools section**. All are wired into `createObservability` and live on a stock install.
+
+| Capability | Module | How you use it |
+|---|---|---|
+| **Prometheus /metrics + OTel push** | `sre/prometheusExporter`, `sre/otelExporter` | Scrape `observability:metricsPrometheus`, or set `OTEL_EXPORTER_OTLP_ENDPOINT` to push OTLP to a collector |
+| **Secrets vault** | `secrets/secretsVault` | AES-256-GCM store; set `RTERM_SECRETS_MASTER_KEY` at boot; `observability:secrets*` (metadata only, never values) |
+| **Incident escalation & on-call** | `oncall/escalationService` | Multi-level policies, ack deadlines, paging via `observability:oncall*` |
+| **AI cost & budgets** | `cost/costBudgetService` | Per-model USD attribution + warn/throttle/deny budgets via `observability:cost*` |
+| **Live dashboard hub** | `liveui/liveDashboardHub` | Push-based multi-client dashboard via `observability:liveDashboard*` |
+| **Session recording/replay** | `recording/sessionRecorder` | asciinema `.cast` v2 via `observability:recording*` |
+| **GitOps** | `gitops/gitOpsService` | Desired-state manifest, drift, reconcile via `observability:gitops*` |
+| **Playbook versioning + lint** | `automation/playbookVersioning` | History/diff/rollback + static lint via `observability:playbook*` |
+| **Cloud inventory (AWS/GCP/Azure)** | `cloud/cloudInventory` | Normalized instance inventory via `observability:cloud*` (inject fetchers) |
+
+Agent tools (visible in the Tools section since v2.9.3): `get_metrics`, `manage_secret`, `manage_oncall`, `get_cost`, `manage_recording`, `manage_gitops`, `manage_playbook_version`, `get_cloud_inventory`, `get_live_dashboard`. Ask the agent: "add this API key to the vault", "show my AI spend today", "page the on-call", "lint this playbook", "list my AWS instances".
+
+**New env vars:** `OTEL_EXPORTER_OTLP_ENDPOINT` / `RTERM_OTLP_METRICS_ENDPOINT` (OTel push), `RTERM_SECRETS_MASTER_KEY` (unlock the secrets vault).
+
 ---
 
 ## 7. Manage connections, automation & schedules

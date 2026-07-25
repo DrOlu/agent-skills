@@ -96,7 +96,7 @@ waits) into subcommands. Use it directly or read it as a reference client.
 
 ---
 
-## 4. RPC method reference (72 methods)
+## 4. RPC method reference (113 methods: 72 core + 41 observability:*)
 
 Params are passed as a JSON object under `params`. `…` = see source for full shape.
 
@@ -241,6 +241,65 @@ through `agent:startTask`.
 To **install a custom plugin** on a headless backend, drop the plugin folder (with a valid
 `plugin.json` + `index.mjs`) into `{GYBACKEND_DATA_DIR}/plugins/` and restart — the
 `PluginRegistry` auto-discovers it.
+
+---
+
+## 4b. Observability RPC methods (v2.9.0+) — direct, no agent needed
+
+v2.9.0 added 9 platform capabilities as backend modules; **v2.9.2 exposed them as 41 first-class
+`observability:*` RPC methods** on the gateway (no `agent:startTask` round-trip needed). v2.9.3 made
+the matching agent tools visible in the Tools section. These are the same methods the agent's
+`get_metrics`/`manage_secret`/`manage_oncall`/`get_cost`/`manage_recording`/`manage_gitops`/
+`manage_playbook_version`/`get_cloud_inventory`/`get_live_dashboard` tools call.
+
+**Call them like any other RPC** (`{id, method, params}`):
+
+```json
+{"id":"1","method":"observability:costSummary","params":{"period":"daily"}}
+```
+
+| Area | Methods | Notes |
+|---|---|---|
+| **Metrics / dashboard** | `observability:metricsPrometheus`, `observability:dashboardState`, `observability:dashboardSummary` | Prometheus exposition text for a scraper; unified dashboard state/summary |
+| **OTel push** | (via `OTEL_EXPORTER_OTLP_ENDPOINT` env) | Pushes OTLP/HTTP JSON to a collector on an interval |
+| **Secrets vault** | `observability:secretsList`, `secretsSet`, `secretsDelete`, `secretsHas` | AES-256-GCM, **metadata only — never values**. Needs `RTERM_SECRETS_MASTER_KEY` at boot |
+| **On-call / escalation** | `observability:oncallListPolicies`, `oncallRegisterPolicy`, `oncallOpenPages`, `oncallPage`, `oncallAck`, `oncallResolve`, `oncallTick` | Multi-level escalation policies, ack deadlines, paging |
+| **AI cost & budgets** | `observability:costSummary`, `costRecord`, `costCheck`, `costListBudgets`, `costSetBudget`, `costRemoveBudget` | USD spend per model/profile; warn/throttle/deny budgets |
+| **Session recording** | `observability:recordingList`, `recordingStart`, `recordingStop`, `recordingReplay`, `recordingExportCast`, `recordingDelete` | asciinema `.cast` v2 export/import + scrub/replay |
+| **GitOps** | `observability:gitopsExport`, `gitopsDrift`, `gitopsInSync`, `gitopsReconcile` | Desired-state manifest, drift detection, gated reconcile |
+| **Playbook versioning** | `observability:playbookLint`, `playbookHistory`, `playbookSave`, `playbookRollback`, `playbookDiff` | Version history + static lint (undefined params, dependsOn cycles, missing rollback) |
+| **Cloud inventory** | `observability:cloudSummary`, `cloudQuery`, `cloudSync`, `cloudAddAccount` | Normalized AWS/GCP/Azure instances (inject fetchers) |
+| **Live dashboard** | `observability:liveDashboardState`, `liveDashboardSubscriberCount` | Push-based multi-client dashboard state |
+
+**Example — set a secret then verify it (values never come back):**
+
+```bash
+./scripts/rterm-gw.mjs call observability:secretsSet '{"key":"aws-access-key","value":"AKIA…","labels":{"service":"aws"}}'
+./scripts/rterm-gw.mjs call observability:secretsList '{}'
+# → [{"key":"aws-access-key","labels":{"service":"aws"},"createdAt":…,"updatedAt":…}]   (no "value" field)
+```
+
+**Example — check AI spend + gate a run:**
+
+```bash
+./scripts/rterm-gw.mjs call observability:costSummary '{"period":"daily"}'
+# → {"totalUsd":3.42, "byModel":[{"model":"gpt-4o","usd":3.42,…}]}
+./scripts/rterm-gw.mjs call observability:costCheck '{"model":"gpt-4o"}'
+# → {"action":"ok"|"warn"|"throttle"|"deny", "statuses":[…]}
+```
+
+**Example — record + export a session:**
+
+```bash
+./scripts/rterm-gw.mjs call observability:recordingStart '{"terminalId":"local-main","title":"deploy"}'
+# → {"recordingId":"r-…"}
+./scripts/rterm-gw.mjs call observability:recordingExportCast '{"recordingId":"r-…"}' > session.cast
+```
+
+> Agent-tool equivalents (when you'd rather let the agent drive): `get_metrics`, `manage_secret`,
+> `manage_oncall`, `get_cost`, `manage_recording`, `manage_gitops`, `manage_playbook_version`,
+> `get_cloud_inventory`, `get_live_dashboard`. Ask for them in `userInput`, e.g. "add this API key to
+> the vault", "show my AI spend today", "page the on-call for the DB incident", "lint this playbook".
 
 ---
 

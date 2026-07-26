@@ -98,6 +98,8 @@ waits) into subcommands. Use it directly or read it as a reference client.
 
 ## 4. RPC method reference (128 methods: 72 core + 56 observability:*)
 
+> **v3.0.0 — ask the gateway instead of reading this list.** Call **`gateway:describe`** (params `{}`, or `{category:"observability"}` / `{prefix:"settings:"}`) to get the full, live method registry (`{version, count, categories, methods:[{name,category,description,since,params}]}`) straight from the source of truth. From the agent, use the **`list_gateway_methods`** tool (same category/prefix filters). The registry below is a static snapshot — `gateway:describe` is always current.
+
 Params are passed as a JSON object under `params`. `…` = see source for full shape.
 
 ### Gateway / session lifecycle
@@ -106,6 +108,7 @@ Params are passed as a JSON object under `params`. `…` = see source for full s
 | `gateway:ping` | — | `{pong:true, ts}` | liveness |
 | `gateway:isSameMachine` | — | `{sameMachine}` | true if client is co-located |
 | `gateway:createSession` | — | `{sessionId}` | new agent/chat session |
+| `gateway:describe` (v3.0.0) | `{category?, prefix?}` | `{version, count, total, categories, methods}` | **self-discovery** — the live method registry |
 | `session:list` | — | `{sessions:[…]}` | session summaries |
 | `session:get` | `{sessionId}` | `{session}` | one session snapshot |
 

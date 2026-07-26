@@ -192,6 +192,8 @@ back for fleet-wide reactions.
 - **Cloud-inventory correlation (v2.9.6):** the `cloud.accounts[]` settings block (Settings → Cloud) lets CloudInventory sync AWS/GCP/Azure instance lists into the same view as your discovered on-prem inventory — per-account region + credential `secretRef` (vault). Useful for hybrid CMDB reconciliation.
 - **Alerting on discovery changes (v2.9.6):** route "new listener / drift detected" pages via the `alerts.channels[]` (Settings → Alerts) and `oncall.pagingChannels[]` (Settings → On-Call) blocks — slack/teams/smtp/telegram/webhook, secrets via vault `secretRef`.
 - **Durable remediation (v2.9.9):** a discovery-driven trigger can now start a **durable AgentSpan/Conductor agent** (`agentspan_run`) that survives restarts while it remediates or re-scans — see Settings → AgentSpan and the `agentspan` skill.
+- **Live triggers (v2.9.12):** triggers created via `manage_trigger` fire **without a backend restart** (they're upserted into the live TriggerEngine). Discovery-change triggers now react immediately.
+- **Self-discovery (v3.0.0):** call `gateway:describe` (or `list_gateway_methods`) to enumerate the live RPC/tool surface for discovery tooling instead of a static reference.
 
 ---
 

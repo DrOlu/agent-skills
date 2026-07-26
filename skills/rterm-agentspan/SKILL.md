@@ -81,3 +81,4 @@ Output map: `answer = ${format_with_llm.output.response.body.choices[0].message.
 - AgentSpan API: `/actuator/health`, `/api/agent/*` (start/status/respond/stop/events/definitions), `/api/workflow/*` (start/get/terminate/retry/search), `/api/metadata/workflow` (register defs), `/api/secrets`.
 - Plugin source: RTerm repo `plugins/agentspan-bridge/` (conductorClient.mjs + index.mjs, 9 tools, 26+ tests).
 - Standalone AgentSpan SDK/CLI: the `agentspan` skill.
+- **v3.0.0:** the gateway is now self-describing — call `gateway:describe` (or the `list_gateway_methods` agent tool) to enumerate the `agentspan_*` tools (and everything else) live from the method registry instead of this static list.

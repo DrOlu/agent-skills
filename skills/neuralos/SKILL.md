@@ -354,6 +354,26 @@ The **`agentspan-bridge` plugin** connects neuralOS/RTerm to an [AgentSpan](http
 - **1 trigger:** `agentspan_execution_failed` (fires on FAILED/TERMINATED/TIMED_OUT). **1 panel:** `agentspan-executions` (live execution feed).
 - **Resilient:** if the server is down, tools return a clear "server unreachable" hint instead of throwing. See the `agentspan` skill for the standalone AgentSpan SDK/CLI.
 
+### v2.9.10 — AgentSpan Phase 2 (playbooks as workflows + delegate)
+
+Deepened the bridge **both directions**: `agentspan_export_playbook` (dry-run a playbook as a Conductor WorkflowDef), `agentspan_register_playbook` (register an RTerm playbook as a reusable Conductor workflow other agents call via SUB_WORKFLOW), and `agentspan_delegate` (hand a prompt to a durable AgentConfig agent that runs start-to-finish → executionId survives restart). The plugin now has **9 tools**.
+
+### v2.9.11 — agent-tool session recording fix
+
+Recordings started via the agent's `manage_recording` tool captured **0 events** (the tool called `SessionRecorder.start()` directly, which never registered the terminal in `TerminalService.activeRecordings` — the live-output feed checks that map). `start` now routes through `TerminalService.startRecording()` (registers the terminal) and `stop` deregisters. Agent-started recordings now capture, replay, and export `.cast`. No asciinema needed.
+
+### v2.9.12 — agent-created triggers fire live
+
+Triggers created via `manage_trigger` were **persisted but never fired** (the `TriggerEngine` loaded persisted triggers once at startup; new ones weren't synced into the live engine). `manage_trigger` create/update/delete/enable/disable now upserts/removes them in the live engine, so they fire **without a backend restart**.
+
+### v2.9.13 — version check 403 fix + silent background updates + no GitHub in UI
+
+The updater fetched `version.json` from the **GitHub API contents endpoint** (rate-limited → red "Check Failed: HTTP 403" every hour). Now it fetches from the **raw GitHub URL** (`raw.githubusercontent.com`, no rate limit), checks **silently in the background** (transient network failures keep last-good and stay quiet instead of a red error), and the UI shows the app website **rterm.app** as the source and **rterm.app/#download** as the download URL — **no GitHub URL visible**.
+
+### v3.0.0 — API self-discovery (`gateway:describe` + method registry + `list_gateway_methods`)
+
+The gateway now **describes itself**. A single-source **`methodRegistry.ts`** holds the whole RPC surface (name, category, description, `since`, params) that the adapter's dispatch, the **`gateway:describe`** endpoint, the **`list_gateway_methods`** agent tool, and the reference docs all derive from — so they can never drift. **123 methods across 12 categories.** `gateway:describe` returns `{version, count, categories, methods}` with optional `category`/`prefix` filters; the agent tool does the same. Ask the gateway what it can do instead of reading `WebSocketGatewayAdapter.ts` or a static doc.
+
 ---
 
 ## 7. Manage connections, automation & schedules

@@ -348,6 +348,12 @@ work over the RTerm gateway (`ws://127.0.0.1:17888`):
 | Operate | `ResourceMonitorService`, `goldenSignals`, `uptimeWatchdog`, `sloService`, `alertService`, `incidentLedger`, `anomalyDetector`, `spanLedger`, `rumLedger`, `infraMonitor`, `etwService`, `manage_trigger` |
 | Govern | `auditLedger` + `evidenceSealer`, `agtPolicyEngine`, `reviewService` (maker/checker) |
 
+**v2.9.6+ additions to the map:**
+- **Operate → notify:** route alerts/pages out via `alerts.channels[]` (Settings → Alerts) + `oncall.pagingChannels[]` (Settings → On-Call) — slack/teams/smtp/telegram/webhook, secrets via vault.
+- **Operate → cost:** gate AI spend with `cost.modelPrices` + `cost.budgets` (Settings → AI Cost) — per-model USD attribution + warn/throttle/deny budgets.
+- **Operate → hybrid:** fold cloud VMs into the estate view with `cloud.accounts[]` (Settings → Cloud).
+- **Build/Operate → durable agents (v2.9.9):** for long-running or crash-prone work, delegate to a **durable AgentSpan/Conductor agent** (Settings → AgentSpan; `agentspan_run/status/approve`) that resumes from the last completed step — a better fit than an interactive ReAct loop when a task must survive restarts (e.g. multi-hour fleet remediation).
+
 ---
 
 ## Supporting files

@@ -187,6 +187,12 @@ back for fleet-wide reactions.
 - **React to changes** — a NATS trigger on `inventory:update` fires a playbook (e.g. alert on a new prod listener).
 - **Consumers** — AI agent (NL queries, RCA, reconciliation), WebSocket clients (dashboards), optional thin REST layer, reactive playbooks/triggers.
 
+### v2.9.x notes for discovery
+
+- **Cloud-inventory correlation (v2.9.6):** the `cloud.accounts[]` settings block (Settings → Cloud) lets CloudInventory sync AWS/GCP/Azure instance lists into the same view as your discovered on-prem inventory — per-account region + credential `secretRef` (vault). Useful for hybrid CMDB reconciliation.
+- **Alerting on discovery changes (v2.9.6):** route "new listener / drift detected" pages via the `alerts.channels[]` (Settings → Alerts) and `oncall.pagingChannels[]` (Settings → On-Call) blocks — slack/teams/smtp/telegram/webhook, secrets via vault `secretRef`.
+- **Durable remediation (v2.9.9):** a discovery-driven trigger can now start a **durable AgentSpan/Conductor agent** (`agentspan_run`) that survives restarts while it remediates or re-scans — see Settings → AgentSpan and the `agentspan` skill.
+
 ---
 
 ## 10. Scripts & examples

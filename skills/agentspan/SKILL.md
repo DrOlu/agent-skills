@@ -698,3 +698,14 @@ See `references/patterns.md` for detailed pattern examples including:
 - Examples: https://agentspan.ai/examples/
 - PyPI: https://pypi.org/project/agentspan/
 - Discord: https://discord.com/invite/ajcA66JcKq
+
+## Using Agentspan from RTerm (the `agentspan-bridge` plugin)
+
+If you run **RTerm / neuralOS** (the AI-native terminal & ops platform), you don't have to drive Agentspan by hand — the **`agentspan-bridge` plugin** (v2.9.9+) wires it into RTerm's agent so any RTerm-managed host can launch durable Agentspan executions.
+
+- **Configure:** RTerm Settings → **AgentSpan** → `agentspan.serverUrl` (default `http://localhost:6767`) + optional `agentspan.authSecretRef` (a vault key holding `AGENTSPAN_AUTH_KEY`/`AGENTSPAN_AUTH_SECRET` — never inline).
+- **RTerm agent tools:** `agentspan_health`, `agentspan_run` (an `AgentConfig` or a registered Conductor `workflow` name → `executionId`), `agentspan_status`, `agentspan_approve` (HITL respond), `agentspan_list`, `agentspan_stop`.
+- **Trigger + panel:** `agentspan_execution_failed` (fires on FAILED/TERMINATED/TIMED_OUT) and an `agentspan-executions` live dashboard feed.
+- **Why pair them:** RTerm gives you the terminal/fleet/governance surface (SSH/WinRM, playbooks, MOP approval, audit, SRE observability); Agentspan gives those operations **durability** (resume-from-step on crash), **plan-execute determinism**, and **Kafka/SQS/AMQP event triggers**. Ask the RTerm agent: "run the disk-cleanup SOP as a durable agent on Agentspan."
+
+See the `rterm-gateway` skill for the RPC surface and the `rterm-backend`/`neuralos` skills for backend setup.

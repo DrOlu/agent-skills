@@ -167,6 +167,18 @@ The sample plugin `plugins/sample-k8s-slo` (shipped in RTerm) is a reference dep
 - **`examples/host-health-plugin/test.mjs`** — a self-contained test that loads it via the registry and calls its tool.
 - **`templates/plugin-template/`** — the minimal scaffold to copy.
 
+### Reference plugin: `agentspan-bridge` (v2.9.9)
+
+A production-grade example of an HTTP-backed plugin in the RTerm repo at `plugins/agentspan-bridge/`. It bridges RTerm to an [AgentSpan (Netflix Conductor)](https://github.com/agentspan-ai/agentspan) durable-agent server and shows the recommended patterns:
+
+- **Split client from glue:** `conductorClient.mjs` is a pure, dependency-free HTTP client with an **injectable `fetchImpl`** (so it's fully unit-testable offline); `index.mjs` wires it to the PluginContext. Mirror this for any API-backed plugin — never hard-code `fetch` so tests can mock it.
+- **Settings-driven config:** reads `settings.agentspan.serverUrl` + `agentspan.authSecretRef` (a vault `secretRef` holding `AGENTSPAN_AUTH_KEY`/`AGENTSPAN_AUTH_SECRET`) — never inline secrets. Resolves auth from the vault via `ctx.getSecret`.
+- **Resilient by design:** every tool is wrapped so an unreachable server returns `{ error, hint }` instead of throwing — the agent stays usable when the external service is down.
+- **6 tools** (`agentspan_health/run/status/approve/list/stop`), **1 trigger** (`agentspan_execution_failed`), **1 panel** (`agentspan-executions`).
+- **Tests:** `agentspan-bridge.extreme.spec.ts` (26 tests) covers URL building, auth headers, error mapping, every endpoint, config resolution, and unreachable-server resilience — all offline via the mocked `fetchImpl`.
+
+Copy this structure for any plugin that talks to an external HTTP service.
+
 ---
 
 ## Supporting files

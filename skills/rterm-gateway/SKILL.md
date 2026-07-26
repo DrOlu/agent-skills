@@ -185,6 +185,8 @@ Params are passed as a JSON object under `params`. `…` = see source for full s
 | `tools:getBuiltIn` / `tools:setBuiltInEnabled` | `{name, enabled}` | built-in tools |
 | `system:saveImageAttachment` | `{…}` | attach an image |
 
+**Settings blocks (v2.9.6+, schema v5)** — persisted + live-reloaded on `settings:set` (no restart), all editable in the desktop Settings UI: `cost.modelPrices`+`cost.budgets` (Settings → AI Cost), `alerts.channels[]` (Settings → Alerts), `oncall.pagingChannels[]` (Settings → On-Call), `cloud.accounts[]` (Settings → Cloud), `agentspan.serverUrl`+`agentspan.authSecretRef` (Settings → AgentSpan). Secrets are always `secretRef` pointers into the vault, never inline. Example: `settings:set {"cost":{"modelPrices":{"moonshotai/kimi-k3":{"promptPer1M":3,"completionPer1M":15},"default":{"promptPer1M":0.7,"completionPer1M":2.2}},"budgets":[{"id":"monthly-all","model":"*","period":"monthly","capUsd":2500,"warnAt":0.8,"overAction":"throttle"}]}}`.
+
 ### Observability / SRE (v2.0.0–v2.3.1) — driven via the agent
 The observability modules are wired into the backend and driven through `agent:startTask` (the agent reads/writes them via its built-in tools). Key capabilities to ask for:
 
@@ -235,8 +237,9 @@ through `agent:startTask`.
 | **iam-connector** | `iam_user_info`, `iam_user_groups`, `iam_disable_user`, `iam_access_review` | IAM integration — user/group management, privileged access identification, access review (Linux id/groups/usermod + Windows Get-LocalUser) |
 | **fraudops** | `fraudops_pipeline_status`, `fraudops_str_assign`, `fraudops_str_status`, `fraudops_decision_summary` | FraudOps operational layer — Flink/NATS/Kafka health, STR workflow (7-day CBN deadline), decision summary |
 | **netdata-rterm** | `netdata_alert_summary`, `netdata_correlate` | Netdata Cloud webhook ingestion + correlation with RTerm metrics/incidents for RCA |
+| **agentspan-bridge** (v2.9.9+) | `agentspan_health`, `agentspan_run`, `agentspan_status`, `agentspan_approve`, `agentspan_list`, `agentspan_stop` | Durable, crash-resilient agent execution on an AgentSpan (Netflix Conductor) server — runs resume from the last completed step; plan-execute determinism; Kafka/SQS/AMQP event triggers. Configure in Settings → AgentSpan (`agentspan.serverUrl`, default `http://localhost:6767`, + optional `agentspan.authSecretRef`). See the `agentspan` skill for the standalone SDK/CLI. |
 
-**Plugin triggers** fire autonomously (e.g., `patch_failure` → propose-change, `fraudops_pipeline_down` → run-playbook, `netdata_critical_alert` → auto-remediation).
+**Plugin triggers** fire autonomously (e.g., `patch_failure` → propose-change, `fraudops_pipeline_down` → run-playbook, `netdata_critical_alert` → auto-remediation, `agentspan_execution_failed` → investigate/re-run).
 
 To **install a custom plugin** on a headless backend, drop the plugin folder (with a valid
 `plugin.json` + `index.mjs`) into `{GYBACKEND_DATA_DIR}/plugins/` and restart — the

@@ -357,6 +357,7 @@ work over the RTerm gateway (`ws://127.0.0.1:17888`):
 - **Build/Operate → live triggers (v2.9.12):** triggers created via `manage_trigger` fire immediately (no restart) — reactive automation lands the moment you define it.
 - **Operate → quiet updater (v2.9.13):** the background version check is now silent (raw URL, no 403, transient failures stay quiet) and shows rterm.app — one less false-alarm in an ops channel.
 - **Build/Operate → self-discovery (v3.0.0):** the gateway describes itself via `gateway:describe` / `list_gateway_methods` — enumerate capabilities live when designing/operating instead of a static doc.
+- **Operate → browser dashboard (v3.0.2):** the unified dashboard (fleet health, SLOs, incidents, APM/DEM, k8s, capacity) is served at `http://<host>:17888/dashboard` with live WS-push updates — share a live ops view with the team, no client install.
 
 ---
 

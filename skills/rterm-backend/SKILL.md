@@ -372,6 +372,10 @@ The updater fetched `version.json` from the **GitHub API contents endpoint** (ra
 
 The gateway now **describes itself**. A single-source **`methodRegistry.ts`** holds the whole RPC surface (name, category, description, `since`, params) that the adapter's dispatch, the **`gateway:describe`** endpoint, the **`list_gateway_methods`** agent tool, and the reference docs all derive from — so they can never drift. **123 methods across 12 categories.** `gateway:describe` returns `{version, count, categories, methods}` with optional `category`/`prefix` filters; the agent tool does the same. Ask the gateway what it can do instead of reading `WebSocketGatewayAdapter.ts` or a static doc.
 
+### v3.0.2 — live browser dashboard at `/dashboard` (same port as the WS gateway)
+
+The unified dashboard is now **visible in any browser**. A new `httpRoutes` option on `WebSocketGatewayAdapter` lets the default server factory create ONE node `http.Server` — plain HTTP requests hit a route table, WS upgrades hit the WSS on the **same socket/port** (ESM-safe `createRequire` for `node:http`; no routes = old behavior). `startGyBackend` registers **`/dashboard`** (live HTML) + **`/dashboard/json`** (state): `renderLiveDashboardHtml()` renders initial state server-side, then an embedded client subscribes via `observability:liveDashboardSubscribe` and updates each section **in place** on every monitor-snapshot push (falls back to polling `/dashboard/json` 5s). Auth mirrors the WS gateway (loopback open, remote needs an access token via Bearer/header/query). Startup logs the dashboard URL. `open http://localhost:17888/dashboard`.
+
 ---
 
 ## 7. Manage connections, automation & schedules

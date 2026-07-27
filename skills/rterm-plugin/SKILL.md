@@ -161,6 +161,13 @@ The sample plugin `plugins/sample-k8s-slo` (shipped in RTerm) is a reference dep
 
 ---
 
+## 9b. v3.0.2 — where plugin panels surface + the gateway's HTTP seam
+
+- **Panels on the browser dashboard:** since v3.0.2 the unified dashboard is served live at `http://<host>:17888/dashboard` (same port as the WS gateway) — plugin-registered dashboard panels feed that page's state (via `observability:dashboardState` / `liveDashboardState`), so a `registerPanel` plugin now has a zero-install browser surface.
+- **`httpRoutes` (new adapter option):** the WS gateway's default server factory can now host plain-HTTP routes on the same port (`WebSocketGatewayAdapter` `httpRoutes`). That's how `/dashboard` is served. Plugins don't register routes themselves today, but if you ever need a plugin to expose an HTTP endpoint, this is the seam the backend uses — the pattern to follow is one shared `http.Server` + WS upgrade, not a second listener.
+
+---
+
 ## 10. Real examples in this skill
 
 - **`examples/host-health-plugin/`** — a complete plugin (tool + threshold trigger + panel) you can run today.

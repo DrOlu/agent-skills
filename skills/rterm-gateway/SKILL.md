@@ -39,6 +39,12 @@ Your agent / program ──WebSocket JSON-RPC──> RTerm Gateway (ws://host:17
 
 Default endpoint: **`ws://<host>:17888`** (default port `17888`, configurable).
 
+**HTTP on the same port (v3.0.2+):** the gateway also serves plain HTTP on that port —
+**`GET /dashboard`** renders the live unified dashboard (WS-push updates in the browser,
+falls back to polling **`GET /dashboard/json`**, which returns the raw state). Same auth
+model: loopback open, remote needs a token (`Authorization: Bearer`, `x-access-token`,
+or `?access_token=`).
+
 ### Auth
 
 - **Token auth** via `Authorization: Bearer <token>` header (or a token provided per deployment).
@@ -96,7 +102,7 @@ waits) into subcommands. Use it directly or read it as a reference client.
 
 ---
 
-## 4. RPC method reference (128 methods: 72 core + 56 observability:*)
+## 4. RPC method reference (123 methods: 70 core + 52 observability:* + gateway:describe)
 
 > **v3.0.0 — ask the gateway instead of reading this list.** Call **`gateway:describe`** (params `{}`, or `{category:"observability"}` / `{prefix:"settings:"}`) to get the full, live method registry (`{version, count, categories, methods:[{name,category,description,since,params}]}`) straight from the source of truth. From the agent, use the **`list_gateway_methods`** tool (same category/prefix filters). The registry below is a static snapshot — `gateway:describe` is always current.
 
@@ -209,7 +215,7 @@ The observability modules are wired into the backend and driven through `agent:s
 | **Evals** | "Run the embedded eval harness on the golden set and report accuracy/tool/safety/replay %" |
 | **Notify (Slack/Teams/SMTP/Telegram)** | "Wire a Slack alert channel (webhook …) and fire a test alert" |
 | **dagu workflows (v2.4.0+)** | "Compile + run this dagu YAML workflow (paste YAML) using daguParser, show the DAG waves, and report per-step results" |
-| **Browser dashboard** | "Render the dashboard:state as a browser-viewable HTML page (renderDashboardHtml) and serve it so I can view the live dashboard" |
+| **Browser dashboard (v3.0.2+)** | "Open http://localhost:17888/dashboard — the live unified dashboard (WS-push updates, /dashboard/json fallback) is served on the same port as the gateway" |
 | **AWS APerf deep-dive (v2.6.0+)** | "Run an APerf performance deep-dive on web-01 — deploy aperf, record CPU/mem/disk/PMU/processes/hotspot for 60s, parse the findings, and report the top issues" |
 | **Plugin system (v2.5.0+)** | "List installed plugins and their tools/triggers/panels" |
 | **Patch management (plugin)** | "Check patch status on web-01, build a patch plan for the security patches, and submit it for approval" |
@@ -275,7 +281,7 @@ the matching agent tools visible in the Tools section. These are the same method
 | **GitOps** | `observability:gitopsExport`, `gitopsDrift`, `gitopsInSync`, `gitopsReconcile` | Desired-state manifest, drift detection, gated reconcile |
 | **Playbook versioning** | `observability:playbookLint`, `playbookHistory`, `playbookSave`, `playbookRollback`, `playbookDiff` | Version history + static lint (undefined params, dependsOn cycles, missing rollback) |
 | **Cloud inventory** | `observability:cloudSummary`, `cloudQuery`, `cloudSync`, `cloudAddAccount` | Normalized AWS/GCP/Azure instances (inject fetchers) |
-| **Live dashboard** | `observability:liveDashboardState`, `liveDashboardSubscriberCount` | Push-based multi-client dashboard state |
+| **Live dashboard** | `observability:liveDashboardState`, `liveDashboardSubscriberCount`, `liveDashboardSubscribe` | Push-based multi-client dashboard state; **`GET /dashboard` + `GET /dashboard/json`** (v3.0.2) serve the live page + state on the same port |
 | **APM ingestion** | `observability:apmIngestSpans`, `apmSummary` | Feed OTLP/HTTP-JSON trace spans → trace store (bottleneck services, slowest traces) |
 | **DEM ingestion** | `observability:demIngestBeacon`, `demSummary` | Feed Core Web Vitals RUM beacons (page, LCP/INP/CLS/TTFB, JS errors) → per-page p75 + error rate |
 | **Infra ingestion** | `observability:infraCollect`, `infraClusters`, `infraUnhealthy` | Collect k8s cluster health (kubectl text or JSON payload) → not-ready, CrashLoopBackOff |

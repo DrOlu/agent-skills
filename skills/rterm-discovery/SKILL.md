@@ -197,6 +197,7 @@ back for fleet-wide reactions.
 - **Updater hygiene (v2.9.13):** the background version check no longer 403s (raw URL, silent on transient failures) and shows rterm.app (no GitHub) — cosmetic but keeps headless deployments quiet.
 - **Self-discovery (v3.0.0):** call `gateway:describe` (or `list_gateway_methods`) to enumerate the live RPC/tool surface for discovery tooling instead of a static reference.
 - **Browser dashboard (v3.0.2):** the unified dashboard (discovered fleet health, SLOs, incidents, APM/DEM, k8s) is now visible at `http://<host>:17888/dashboard` — served on the gateway port with live WS-push updates.
+- **Web intelligence (v3.0.9):** the `web-intel` plugin (wigolo) gives the agent first-class web tools — multi-engine search, clean-page fetch, site crawl, research (synthesis by RTerm agent, no LLM key), and page-watch → `webintel_page_changed` trigger for auto-remediation. Lean by default; ~1.5 GB browser engine + models are opt-in. Discovered automatically from `plugins/web-intel/`.
 
 ---
 

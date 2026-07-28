@@ -222,6 +222,7 @@ The observability modules are wired into the backend and driven through `agent:s
 | **Request router (plugin)** | "Submit a request to restart nginx on web-01 with justification 'planned maintenance', then list pending requests" |
 | **SOP assistant (plugin)** | "Search the SOP library for 'database failover' and show me the steps; then execute the restart-service SOP on web-01 with service=nginx" |
 | **IAM connector (plugin)** | "Review all users on web-01 and identify privileged accounts; what groups is john in?" |
+| **Web intelligence (v3.0.9+)** | "Search the web for 'Cisco BGP-5-ADJCHANGE IOS XE 17.18 known issue' and cite sources; then watch the Cisco advisory page for changes and propose a change if it updates" |
 | **FraudOps (plugin)** | "Check the fraud pipeline status (Flink/NATS/Kafka health) and summarize recent fraud decisions" |
 | **Netdata integration (plugin)** | "Correlate this Netdata alert with RTerm's metrics and incidents for RCA" |
 | **Monitor diagnostics (v2.7.6+)** | "Run monitor status diagnostics — why aren't stats displaying for terminal X? Report publisher/session/inFlight/connected/last-collect per terminal" |
@@ -286,6 +287,7 @@ the matching agent tools visible in the Tools section. These are the same method
 | **DEM ingestion** | `observability:demIngestBeacon`, `demSummary` | Feed Core Web Vitals RUM beacons (page, LCP/INP/CLS/TTFB, JS errors) → per-page p75 + error rate |
 | **Infra ingestion** | `observability:infraCollect`, `infraClusters`, `infraUnhealthy` | Collect k8s cluster health (kubectl text or JSON payload) → not-ready, CrashLoopBackOff |
 | **ETW ingestion** | `observability:etwStartTrace`, `etwStopTrace`, `etwParse`, `etwSessions` | Windows ETW diagnostics — logman start/stop commands + parse Get-WinEvent/Get-Counter output |
+| **Web intelligence (v3.0.9+)** | Plugin tools: `webintel_health`, `web_search`, `web_fetch`, `web_crawl`, `web_research`, `web_find_similar`, `web_watch_add`, `web_watch_list`, `web_watch_remove` | Local-first web intelligence via the `web-intel` plugin (wigolo daemon). Multi-engine search, clean-page fetch, site crawl, research (synthesis by RTerm agent — no LLM key), page-watch → `webintel_page_changed` trigger. Lean by default (`WIGOLO_NO_WARMUP=1`); ~1.5 GB browser engine + models are opt-in (`webIntel.warmupOnInit`). |
 
 **Example — set a secret then verify it (values never come back):**
 

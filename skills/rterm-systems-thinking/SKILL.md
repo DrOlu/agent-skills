@@ -358,6 +358,7 @@ work over the RTerm gateway (`ws://127.0.0.1:17888`):
 - **Operate → quiet updater (v2.9.13):** the background version check is now silent (raw URL, no 403, transient failures stay quiet) and shows rterm.app — one less false-alarm in an ops channel.
 - **Build/Operate → self-discovery (v3.0.0):** the gateway describes itself via `gateway:describe` / `list_gateway_methods` — enumerate capabilities live when designing/operating instead of a static doc.
 - **Operate → browser dashboard (v3.0.2):** the unified dashboard (fleet health, SLOs, incidents, APM/DEM, k8s, capacity) is served at `http://<host>:17888/dashboard` with live WS-push updates — share a live ops view with the team, no client install.
+- **Research → web intelligence (v3.0.9):** the `web-intel` plugin (wigolo) gives the agent first-class web tools — search, fetch, crawl, research (synthesis by RTerm agent, no LLM key), and page-watch → trigger. Use for current-doc-grounded RCA ("search for this Cisco error + release notes, correlate with what you see on cisco-xe-1"), CVE/vendor-advisory watching (page-change → playbook/MOP), and durable research. Lean by default; ~1.5 GB browser engine + models are opt-in.
 
 ---
 

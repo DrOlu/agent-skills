@@ -166,6 +166,28 @@ The sample plugin `plugins/sample-k8s-slo` (shipped in RTerm) is a reference dep
 - **Panels on the browser dashboard:** since v3.0.2 the unified dashboard is served live at `http://<host>:17888/dashboard` (same port as the WS gateway) — plugin-registered dashboard panels feed that page's state (via `observability:dashboardState` / `liveDashboardState`), so a `registerPanel` plugin now has a zero-install browser surface.
 - **`httpRoutes` (new adapter option):** the WS gateway's default server factory can now host plain-HTTP routes on the same port (`WebSocketGatewayAdapter` `httpRoutes`). That's how `/dashboard` is served. Plugins don't register routes themselves today, but if you ever need a plugin to expose an HTTP endpoint, this is the seam the backend uses — the pattern to follow is one shared `http.Server` + WS upgrade, not a second listener.
 
+## 9c. v3.0.9 — `web-intel` plugin (sidecar daemons + live settings)
+
+The `web-intel` plugin (integrating [wigolo](https://github.com/KnockOutEZ/wigolo)) is a real-world example of a plugin that:
+- **Spawns a sidecar daemon** via `ctx.spawnProcess('npx', ['-y', 'wigolo', 'serve', …], {env, detached, stdio})` — the new `PluginContext.spawnProcess` (optional; wired in `observability.ts` via `createRequire('node:child_process')`).
+- **Reads live settings** via `ctx.getSettings()` / `ctx.settings` — the new `PluginContext.settings` / `getSettings` (wired from `settingsService.getSettings()`). Reads the `webIntel` block for `{restUrl, token, autoStart, warmupOnInit}`.
+- **Registers 9 tools + 1 trigger + 1 panel** — `web_search`, `web_fetch`, `web_crawl`, `web_research`, `web_find_similar`, `web_watch_add/list/remove`, `webintel_health`; trigger `webintel_page_changed`; panel `web-intel`.
+- **Degrades gracefully** — if the daemon is down and `spawnProcess` is unavailable, every tool returns `{error, hint}` instead of throwing (the agentspan-bridge pattern).
+- **Uses the object-form `registerPanel({name, title, render})`** — now supported alongside the `(name, render)` form (v3.0.9 fixed the pre-existing signature drift).
+
+**Key pattern for sidecar plugins:**
+```js
+// Lazy start on first use (lean by default)
+const sidecar = new WigoloSidecar({ spawnImpl: ctx.spawnProcess, config: { warmup: false } })
+async function ensureDaemon() {
+  const h = await client.health()
+  if (h.ok) return true
+  if (!ctx.spawnProcess) throw new Error('daemon not reachable; start it: npx -y wigolo serve')
+  await sidecar.start()  // spawns `npx -y wigolo serve` with WIGOLO_NO_WARMUP=1
+  // …poll health until ready…
+}
+```
+
 ---
 
 ## 10. Real examples in this skill

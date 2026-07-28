@@ -376,6 +376,52 @@ The gateway now **describes itself**. A single-source **`methodRegistry.ts`** ho
 
 The unified dashboard is now **visible in any browser**. A new `httpRoutes` option on `WebSocketGatewayAdapter` lets the default server factory create ONE node `http.Server` — plain HTTP requests hit a route table, WS upgrades hit the WSS on the **same socket/port** (ESM-safe `createRequire` for `node:http`; no routes = old behavior). `startGyBackend` registers **`/dashboard`** (live HTML) + **`/dashboard/json`** (state): `renderLiveDashboardHtml()` renders initial state server-side, then an embedded client subscribes via `observability:liveDashboardSubscribe` and updates each section **in place** on every monitor-snapshot push (falls back to polling `/dashboard/json` 5s). Auth mirrors the WS gateway (loopback open, remote needs an access token via Bearer/header/query). Startup logs the dashboard URL. `open http://localhost:17888/dashboard`.
 
+### v3.0.5 — terminal/session core + chat navigation + memory improvements
+
+- **SSH auto-reconnect** with exponential backoff + jitter (1s→2s→5s→15s→60s cap, 10 max attempts); `tab.reconnectState` surfaces "reconnecting (attempt N)…" in the UI; manual kills cancel the schedule.
+- **WinRM persistent runspaces** — `runCommandOnShell()` reuses one shell across commands (was 4 WS-Man round trips per command); **streaming** output via `onChunk`; **persistent cwd** so `cd` sticks; auto-recovery on dead shell.
+- **Serial break/DTR/RTS** — `sendBreak()` (Cisco password recovery / ROMMON) + `setControlLines()`.
+- **Chunked ring buffer** — `ChunkedRingBuffer` replaces the single re-sliced string (O(1)-ish appends, no O(n) copy per chunk on busy tabs).
+- **Chat user-message navigation** — Prev/Next/Latest user buttons + Top/Bottom scroll; programmatic-scroll guard prevents the "can't scroll back to bottom" bug.
+- **Memory manager** — `memoryManager.ts`: search, dedupe, append-with-cap, relevance-ranked `recallForPrompt()` (caps injected memory at 12k chars instead of the whole file).
+
+### v3.0.6 — chat scroll fix + top/bottom buttons
+
+Fixed the scroll bug where "Prev user" latched auto-scroll off permanently. `programmaticScrollRef` guard distinguishes programmatic jumps from user scrolls. Added ⇤ Top / ⇥ Bottom one-click buttons. Nav bar always present.
+
+### v3.0.8 — SSH legacy/cisco algorithm preset hotfix
+
+Removed ssh2-unsupported algorithms from the `legacy`/`cisco` presets (added in v3.0.6 but ssh2 1.17 throws on any offered algo it can't load). `filterToSupported()` defensively intersects presets with ssh2's SUPPORTED_* constants.
+
+### v3.0.9 — `web-intel` plugin: local-first web intelligence (via wigolo)
+
+The agent now has **first-class web tools** it didn't have: multi-engine search, clean-page fetch, site crawl, research, and page-watch → RTerm trigger automation. Built as a first-class plugin (`plugins/web-intel/`) following the agentspan-bridge pattern.
+
+**9 tools / 1 trigger / 1 panel:**
+- `webintel_health` — daemon status, lean-vs-full warmup, auto-start state.
+- `web_search` — multi-engine ranked search with citations (keyless, $0).
+- `web_fetch` — clean markdown + metadata + links (tiered router escalates to browser engine for JS/SPA/anti-bot).
+- `web_crawl` — multi-page crawl (BFS/DFS/sitemap/map-only).
+- `web_research` — decompose a question → ranked evidence + citations. **Synthesis uses RTerm's own agent — no LLM key needed or stored.**
+- `web_find_similar` — pages similar to a URL/concept (keyword + semantic + live web fusion).
+- `web_watch_add` / `web_watch_list` / `web_watch_remove` — watch a vendor/CVE/status page; the `webintel_page_changed` trigger fires so a playbook/MOP can react.
+- Panel `web-intel` — watched pages + daemon status.
+
+**Lean by default (stock RTerm stays lean):**
+- The wigolo daemon starts **lazily on first use** (`npx -y wigolo serve`) — nothing downloaded at install time.
+- Default is `WIGOLO_NO_WARMUP=1` — the ~1.5 GB browser engine + on-device models are **not** downloaded until a tool that needs them runs, or until `webIntel.warmupOnInit: true` (which kicks off a background `wigolo init`).
+- Search/fetch/crawl work keyless without the heavy models.
+
+**Settings block `webIntel`** (schema v5 + `normalizeWebIntelSettings`):
+`{enabled, restUrl, token, autoStart, warmupOnInit}` — defaults keep everything lean and local. Token is optional (only if the daemon uses `WIGOLO_API_TOKEN`).
+
+**Plugin infrastructure upgrades (shared):**
+- `PluginContext.spawnProcess` (optional) — plugins can spawn local sidecar daemons; wired in `observability.ts` via `createRequire('node:child_process')`.
+- `PluginContext.settings` / `getSettings` — live settings snapshots for plugins that read config blocks.
+- `registerPanel` accepts both `(name, render)` and `{name, title?, render}` (pre-existing signature drift fixed).
+
+**Resilient:** if the daemon is down and can't auto-start, every tool returns `{error, hint}` instead of throwing — the agent stays usable.
+
 ---
 
 ## 7. Manage connections, automation & schedules

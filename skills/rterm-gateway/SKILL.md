@@ -56,6 +56,63 @@ or `?access_token=`).
 If a connection is rejected, you'll get a close frame with a reason — treat that as an
 auth/IP problem, not a protocol problem.
 
+### Bootstrapping an access token (no CLI)
+
+There is **no `gybackend create-token` command** — token creation normally happens through
+the gateway's own RPC/UI, which is a chicken-and-egg problem for the *first* token on a
+headless daemon. The store is a simple JSON file at `{DATA_DIR}/access-tokens.json`
+(`{schemaVersion:1, tokens:[…]}`). Each record holds a **scrypt hash**, never the plaintext:
+
+```
+token      = "gys_at_" + base64url(randomBytes(24))     # the plaintext you hand out (shown once)
+tokenSalt  = base64(randomBytes(16))                    # per-token salt
+tokenHash  = base64(scrypt(token, salt, 32))            # stored; verified with timingSafeEqual
+record     = { id: "atk_"+base64url(randomBytes(12)), name, createdAt, tokenSalt, tokenHash }
+```
+
+To mint the first token, write a record matching that exact algorithm into the file (mode
+`0600`). The running backend re-reads the file on **every** `verify()`, so **no restart is
+needed**. Verify over the non-loopback interface: valid token → `200`, no/bad token → `401`.
+Tokens are accepted as `Authorization: Bearer <token>`, `x-access-token: <token>`, or
+`?access_token=<token>` (query). To revoke, delete the record by `id`.
+
+---
+
+## 1b. Standalone `neuralos` daemon vs. the RTerm desktop app
+
+The gateway is served by **gybackend** — the headless engine. There are two ways it runs:
+
+- **RTerm.app (desktop):** embeds gybackend and spawns it in-process. Backend lives only
+  while the app is open. Its data dir is `~/Library/Application Support/rterm`.
+- **`neuralos` (npm package, `npm i -g neuralos`):** the *same* gybackend engine, packaged
+  standalone with **no GUI**. Runs as an always-on/headless service (e.g. a macOS
+  LaunchAgent with `RunAtLoad`+`KeepAlive`). Its data dir is **`~/.gybackend-data`**
+  (override with `GYBACKEND_DATA_DIR`).
+
+**They are separate profiles.** The app and the daemon each keep their own
+`settings.json`, `access-tokens.json`, `gyshell-*.sqlite`, `skills/`, `memory.md`.
+Installing `neuralos` gives you a **fresh, empty profile** — none of the GUI's
+connections/playbooks/schedules. To share state you either copy the data over or point one
+at the other (see §10a). The GUI's backend-settings file is `gyshell-backend-settings.json`;
+the daemon's equivalent is `settings.json` — **same schema**, so it maps 1:1. **Preserve
+the daemon's own `gateway` block when copying** (the GUI may have `gateway.ws.access:
+"disabled"`, which would shut off the very gateway you're trying to reach).
+
+**Feature parity:** every backend capability works in `neuralos` — SSH, WinRM, serial,
+local PTY, playbooks, MOP changes, triggers, vault, recording, observability (APM/DEM/
+cloud/on-call/GitOps/cost), the full agent runtime, and all bundled plugins. The only thing
+absent is the desktop UI (which is a *client* of the gateway, not a backend feature).
+
+> **Gotcha — `neuralos` ships without `ssh2` and `serialport`.** The npm package bundles a
+> single `bin/gybackend.cjs` with **no `node_modules`**; SSH and serial are *lazy, guarded*
+> external requires. The daemon starts fine, but opening an **SSH** tab throws
+> `ssh2 is not available in this build (… WinRM/serial/local terminals still work)`, and a
+> **serial** tab throws "install serialport". Fix once:
+> ```bash
+> cd "$(npm config get prefix)/lib/node_modules/neuralos" && npm install ssh2 serialport --no-save --omit=dev
+> ```
+> WinRM (pure HTTP) and local PTY are unaffected.
+
 ---
 
 ## 2. The 30-second start
@@ -352,6 +409,15 @@ Saved connections already known to RTerm can be opened by asking the agent to
 "open the saved connection named X" (see §6), or by reading `settings:get` →
 `connections.{ssh,winrm,serial}` and passing the same fields to `terminal:createTab`.
 
+> **Gotcha — `terminal:createTab` does NOT resolve saved-connection names or ids.**
+> It passes `config` **straight through** to the terminal service; there is no
+> `savedConnectionName` / `connectionId` lookup. If you pass `{type:"ssh",
+> savedConnectionName:"Remote"}` the tab opens with `host=undefined`, `username=undefined`
+> and fails with `Invalid username` (retried in a loop). To open a saved connection over
+> RPC you must **read it from `settings:get` and expand it into the full inline config
+> yourself** (host/port/username/password/…). The bundled helper **`scripts/gy-open.mjs`**
+> does exactly this (by name or id, across ssh/winrm/serial, incl. proxy/jumpHost) — see §8c.
+
 ---
 
 ## 6. Events (watching progress live)
@@ -591,6 +657,39 @@ For **fire-and-forget** tasks, use `agent:startTaskAsync` and then read `gw.even
 
 ---
 
+## 8c. `scripts/gy-open.mjs` — open a saved connection by NAME (SSH/WinRM/serial)
+
+`terminal:createTab` can't resolve saved-connection names (see §5 gotcha). `gy-open.mjs`
+bridges that: it reads the saved connection from the daemon's `settings.json` (by **name or
+id**, across `ssh`/`winrm`/`serial`), expands it into the full inline config the backend
+expects (same mapping as the backend's own `sshEntryToConfig`/`winrmEntryToConfig`, incl.
+`proxy`/`jumpHost`), redacts secrets in its output, and calls `terminal:createTab`.
+
+```bash
+# resolve + show (secrets redacted) — no connection opened
+node scripts/gy-open.mjs Remote
+node scripts/gy-open.mjs Remote --json            # full resolved config
+node scripts/gy-open.mjs neuralos-win1            # WinRM by name works too
+
+# open the tab in the daemon
+node scripts/gy-open.mjs Remote --open
+
+# open + run one command + tail the output (SSH/local PTY)
+node scripts/gy-open.mjs Remote --open --exec "echo OK \$(hostname) \$(uname -s)"
+```
+
+Env overrides: `GYBACKEND_DATA_DIR` (default `~/.gybackend-data`), `GY_GATEWAY` (default
+`ws://localhost:17888`). Requires the `ws` package (it searches global npm root,
+`~/node_modules`, Homebrew/local roots). Also importable as a module:
+`resolveConnection(nameOrId, settings)`, `buildTabConfig(kind, entry, settings)`,
+`resolveTabConfig(nameOrId, settings)`.
+
+> Note: `--exec` uses `terminal:write` + `getBufferDelta`, so it suits SSH/local PTY tabs.
+> For WinRM (command/response, no live stdin) prefer driving commands through the agent
+> (`rterm-gw.mjs exec-winrm` / `agent-task`) as explained in §3.
+
+---
+
 ## 9. Use cases
 
 1. **CI/CD post-deploy checks.** A pipeline calls `agent:startTaskAsync` → "run the
@@ -623,12 +722,50 @@ For **fire-and-forget** tasks, use `agent:startTaskAsync` and then read `gw.even
 - **Task stalls awaiting approval** → policy is `standard`; answer `agent:replyCommandApproval`
   or switch to `smart`.
 - **Timeouts** → long tasks: use `agent:startTaskAsync` + events instead of blocking `startTask`.
+- **SSH/serial tab fails on `neuralos`** → missing transports; `npm install ssh2 serialport`
+  in the neuralos package (see §1b).
+- **Tab opens then immediately `exited`, buffer shows `Connecting to undefined:undefined`**
+  → you passed a saved-connection name/id to `terminal:createTab` instead of an expanded
+  inline config. Resolve + expand it first (see §5 gotcha, §8c).
+
+---
+
+## 10a. Migrating the RTerm desktop profile into a headless `neuralos` daemon
+
+A fresh `neuralos` install has an **empty** `~/.gybackend-data`. To bring over your GUI
+profile (connections, playbooks, schedules, skills, model config):
+
+1. **Install transports** (or SSH/serial tabs fail): `cd "$(npm config get
+   prefix)/lib/node_modules/neuralos" && npm install ssh2 serialport`.
+2. **Copy the backend settings.** The GUI's `~/Library/Application
+   Support/rterm/gyshell-backend-settings.json` maps 1:1 onto the daemon's
+   `~/.gybackend-data/settings.json` (same schema). Merge — do **not** blindly overwrite —
+   and **preserve the daemon's own blocks**:
+   - `gateway` — the GUI may have `ws.access:"disabled"`; copying it kills the daemon's gateway.
+   - `agentspan` — keep the daemon's verified serverUrl/secretRef.
+   Everything else (connections, automation, model/baseUrl/apiKey, commandPolicyMode) comes
+   from the GUI file.
+3. **Copy the rest:** `skills/` → `~/.gybackend-data/skills/`, `memory.md`,
+   `command-policy.json`, `mcp.json`. **Merge** `access-tokens.json` (union by `id`/`name`;
+   don't clobber tokens either side created).
+4. **Set `commandPolicyMode: "smart"`** for unattended headless runs (otherwise remote tasks
+   stall waiting for approvals nobody can click).
+5. **Restart the daemon** (e.g. `launchctl unload/load` the plist) and verify:
+   ```bash
+   node scripts/rterm-gw.mjs ping
+   node scripts/gy-open.mjs Remote --open --exec "echo OK \$(hostname)"   # by saved-conn NAME
+   ```
+
+> Live-link alternative: instead of copying, point the desktop app at the running daemon's
+> gateway (Settings → backend/gateway) so both share one profile. Copying is a one-time
+> snapshot; it does not stay in sync afterwards.
 
 ---
 
 ## Supporting files
 
 - `scripts/rterm-gw.mjs` — reference CLI client (all subcommands).
+- `scripts/gy-open.mjs` — open a saved connection **by name/id** (SSH/WinRM/serial) via the gateway (see §8c).
 - `examples/python-client.py` — Python (`websockets`) client; no Node required.
 - `examples/ci-post-deploy.mjs` — CI/CD post-deploy gate.
 - `examples/fleet-av-update.mjs` — update AV signatures across a WinRM fleet.

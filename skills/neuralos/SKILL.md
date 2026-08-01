@@ -424,6 +424,19 @@ The agent now has **first-class web tools** it didn't have: multi-engine search,
 
 **Resilient:** if the daemon is down and can't auto-start, every tool returns `{error, hint}` instead of throwing — the agent stays usable.
 
+### v3.1.x — NATS event mesh, Synapse + Numbat bridges, serial fix
+
+**v3.1.1 — serial transport fix + standalone transports.** `SerialBackend.loadSerial()` returned `require('serialport')` (the module namespace) but `spawn()` called it as a constructor → `SerialPort is not a constructor`. Fixed by resolving the class (`mod.SerialPort ?? mod`) and tolerating both call signatures (v9 positional `(path, opts)` vs v10+ object `{path, ...opts}`) — works across serialport v9–v13+. Also declared `serialport` in `optionalDependencies` so the standalone npm packages ship it (SSH/serial/local transports now install automatically via `optionalDependencies {serialport, ssh2, node-pty}`).
+
+**v3.1.2 — comprehensive NATS event mesh.** `NatsEventBus` rewritten from a thin core-pub/sub adapter (no auth) into a full NATS client. **Auth** (token, username/password, NKey seed, JWT jwt+seed, .creds, TLS mutual-auth) — the key gap; before, only open/localhost servers worked. Plus **core pub/sub** (queue groups + headers), **request/reply** (`request()`/`respond()`), **JetStream** (stream add/info/list/purge/delete, durable `jsPublish` with PubAck, `jsConsume` ack/nak, `jsFetch`), **Key-Value** (bucket create/open, put/get/delete, keys, watch), and **connection lifecycle** (reconnect/disconnect/error/ldm handlers, reconnect/timeout knobs). New deps `@nats-io/jetstream` + `@nats-io/kv`. Configure via `settings.nats` (url/servers/prefix/queue/auth). The trigger mesh (terminal output + monitor snapshots → fleet-wide pattern/threshold triggers) federates across backend instances over three subjects (`<prefix>.term.data`, `.monitor.snapshot`, `.trigger.fire`).
+
+**v3.1.3 — `settings.nats` migration fix.** `pickBackendSnapshot` whitelists which settings keys survive a save/load; `nats` wasn't in the list, so the block was **silently deleted** on daemon persist (the mesh couldn't be configured). Added `nats?: NatsSettings` to the `BackendSettings` type, the snapshot whitelist, and `normalizeNatsSettings`. **Lesson applied to all later blocks.**
+
+**v3.1.4 — `synapse-bridge` + `numbat-bridge` plugins (9 → 11 plugins).**
+- **`synapse-bridge`** — RTerm speaks the **Synapse protocol (v0.3.0)** over a shared NATS server (uses the v3.1.2 auth/request-reply/JetStream transport). Discover live mesh agents, dispatch tasks to `mesh.agent.{id}.inbox` (durable response), and **register RTerm itself as a mesh agent** (bidirectional federation). Tools: `synapse_health`, `synapse_discover`, `synapse_dispatch`, `synapse_register`, `synapse_agents_summary` + trigger `synapse_mesh_event` + panel `synapse-mesh-agents`. Config `settings.synapse` (url/servers/prefix/agentId/auth incl. vault secretRef).
+- **`numbat-bridge`** — integrate **Numbat** (endpoint AI-agent detection/EDR — visibility, CEL rules, forensics). **Numbat detects; RTerm responds.** Deploy numbat to hosts (inventory/scan/install-monitor/install-enforce/status/uninstall via policy-gated exec) and ingest NDJSON findings to fire governed actions. Tools: `numbat_health`, `numbat_deploy`, `numbat_ingest`, `numbat_findings_summary` + trigger `numbat_finding` (medium+ severity) + panel `numbat-findings`. Config `settings.numbat` (binaryPath/recordsPath/ingestToken/minSeverity).
+- Both settings blocks (`synapse`, `numbat`) added to the type + snapshot whitelist + normalizers so they persist across save/load.
+
 ---
 
 ## 7. Manage connections, automation & schedules

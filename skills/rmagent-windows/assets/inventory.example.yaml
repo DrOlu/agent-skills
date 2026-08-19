@@ -21,7 +21,7 @@ witnesses:
     address: 44.197.31.152
     endpoint: http://44.197.31.152:5985/wsman
     user: Administrator
-    skills: [attest, sketch, edges, explain, netedges]
+    skills: [attest, sketch, edges, explain, netedges, pslogs]
     track: [Administrator, SYSTEM]
 
   - id: ws2
@@ -33,7 +33,7 @@ witnesses:
     address: 52.3.242.251
     endpoint: http://52.3.242.251:5985/wsman
     user: Administrator
-    skills: [attest, sketch, edges, explain, netedges]
+    skills: [attest, sketch, edges, explain, netedges, pslogs]
     track: [Administrator, SYSTEM]
 
 # Phase 0 = these two boxes, four questions, watch only.

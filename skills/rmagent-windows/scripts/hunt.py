@@ -96,19 +96,25 @@ def main():
                     tk = len(ed.get("task_events") or [])
                     pr = len(ed.get("proc_spawns") or [])
                     wm = len(ed.get("wmi_subscriptions") or [])
-                    print(f"  {wid:8} explain: groups={g} svc={sv} tasks={tk} wmi={wm} procs={pr}")
+                    ac = len(ed.get("audit_cleared") or [])
+                    lol = len(ed.get("lolbin_spawns") or [])
+                    print(f"  {wid:8} explain: groups={g} svc={sv} tasks={tk} wmi={wm} "
+                          f"procs={pr} lolbins={lol} audit-cleared={ac}")
                     write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                          "witness": wid, "skill": "explain",
                                          "group_changes": g, "service_events": sv,
                                          "task_events": tk, "wmi_subscriptions": wm,
-                                         "proc_spawns": pr,
+                                         "audit_cleared": ac, "proc_spawns": pr,
+                                         "lolbin_spawns": lol,
                                          "t": ed.get("utc")})
                     # Telegram: fire a smoke alert when explain finds changes
                     findings = []
                     if g:  findings.append(f"{g} identity/group/explicit-cred change(s) (4720/4732/4648/4672)")
                     if sv: findings.append(f"{sv} service event(s) (7045/7036)")
-                    if tk: findings.append(f"{tk} scheduled task change(s) (4698)")
+                    if tk: findings.append(f"{tk} scheduled task change(s) (4698/4702/4699)")
                     if wm: findings.append(f"{wm} WMI event subscription(s) (5861 — fileless persistence!)")
+                    if ac: findings.append(f"{ac} AUDIT LOG CLEARED (1102 — anti-forensics!)")
+                    if lol: findings.append(f"{lol} LOLBin spawn(s) with command line (4688)")
                     if pr: findings.append(f"{pr} Administrator/SYSTEM process spawn(s) (4688)")
                     if findings:
                         notify.alert_smoke(wid, findings, case_dir.name)
@@ -116,6 +122,21 @@ def main():
                     h = ex.get("hole") or lib.hole(f"{wid} explain", ex.get("error") or "empty")
                     write_hole(case_dir, h)
                     print(f"  {wid:8} explain: HOLE — {h['why']}")
+
+            # pslogs — PowerShell script blocks (the actual code) where advertised
+            if "pslogs" in (r.get("skills") or []):
+                pl = lib.ask(r, "pslogs", since_hours=since_h, limit=args.limit)
+                lib.record_ask(case_dir, r, "pslogs", pl)
+                if pl.get("ok") and pl.get("data"):
+                    nb = len(pl["data"].get("blocks") or [])
+                    print(f"  {wid:8} pslogs: {nb} script block(s) (4104)")
+                    write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
+                                         "witness": wid, "skill": "pslogs",
+                                         "blocks": nb, "t": pl["data"].get("utc")})
+                else:
+                    h = pl.get("hole") or lib.hole(f"{wid} pslogs", pl.get("error") or "empty")
+                    write_hole(case_dir, h)
+                    print(f"  {wid:8} pslogs: HOLE — {h['why']}")
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             write_hole(case_dir, h)

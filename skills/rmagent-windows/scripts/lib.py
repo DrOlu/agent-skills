@@ -29,7 +29,7 @@ except ImportError:
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
-ALLOWED = {"attest", "sketch", "edges", "explain", "netedges"}
+ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs"}
 PHASE0_SKILLS = ALLOWED
 MAX_PULL_BYTES = 32 * 1024
 WALK_DEPTH = 8

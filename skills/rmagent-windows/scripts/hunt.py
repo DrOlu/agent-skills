@@ -76,13 +76,17 @@ def main():
             d = res["data"]
             n_logons = len(d.get("logons") or [])
             n_conns = len(d.get("conns") or [])
-            print(f"  {wid:8} edges: {n_logons} tracked logons, {n_conns} outbound conns")
+            n_expl = len(d.get("explicit_creds") or [])
+            n_privs = len(d.get("special_privs") or [])
+            print(f"  {wid:8} edges: {n_logons} tracked logons, {n_expl} explicit-cred uses, "
+                  f"{n_privs} special-priv grants, {n_conns} outbound conns")
             write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                  "witness": wid, "skill": "edges",
-                                 "logons": n_logons, "conns": n_conns,
+                                 "logons": n_logons, "explicit_creds": n_expl,
+                                 "special_privs": n_privs, "conns": n_conns,
                                  "t": d.get("utc")})
             # explain only where there is smoke (budget: depth-capped)
-            if n_logons > 0 or n_conns > 0:
+            if n_logons > 0 or n_conns > 0 or n_expl > 0:
                 ex = lib.ask(r, "explain", since_hours=since_h, limit=args.limit)
                 lib.record_ask(case_dir, r, "explain", ex)
                 if ex.get("ok") and ex.get("data"):
@@ -91,17 +95,20 @@ def main():
                     sv = len(ed.get("service_events") or [])
                     tk = len(ed.get("task_events") or [])
                     pr = len(ed.get("proc_spawns") or [])
-                    print(f"  {wid:8} explain: groups={g} svc={sv} tasks={tk} procs={pr}")
+                    wm = len(ed.get("wmi_subscriptions") or [])
+                    print(f"  {wid:8} explain: groups={g} svc={sv} tasks={tk} wmi={wm} procs={pr}")
                     write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                          "witness": wid, "skill": "explain",
                                          "group_changes": g, "service_events": sv,
-                                         "task_events": tk, "proc_spawns": pr,
+                                         "task_events": tk, "wmi_subscriptions": wm,
+                                         "proc_spawns": pr,
                                          "t": ed.get("utc")})
                     # Telegram: fire a smoke alert when explain finds changes
                     findings = []
-                    if g:  findings.append(f"{g} identity/group change(s) (4720/4732/4738)")
+                    if g:  findings.append(f"{g} identity/group/explicit-cred change(s) (4720/4732/4648/4672)")
                     if sv: findings.append(f"{sv} service event(s) (7045/7036)")
                     if tk: findings.append(f"{tk} scheduled task change(s) (4698)")
+                    if wm: findings.append(f"{wm} WMI event subscription(s) (5861 — fileless persistence!)")
                     if pr: findings.append(f"{pr} Administrator/SYSTEM process spawn(s) (4688)")
                     if findings:
                         notify.alert_smoke(wid, findings, case_dir.name)

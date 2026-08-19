@@ -101,8 +101,8 @@ cp "$SKILL_DIR/assets/inventory.example.yaml" ./estate.yaml
 |---|---|---|---|
 | **Alive?** (attest) | `attest.ps1` | host, utc, last boot, admin failed logons 60s, admin ok logons 5min, local admin count, SYSTEM remote conns | a full Security log dump |
 | **Anything odd?** (sketch) | `sketch.ps1` | admin failed in window, new local admins 24h, running privileged services, new services/tasks | raw event lists |
-| **Who did they touch?** (edges) | `edges.ps1` | recent Administrator/SYSTEM logons (time, type, src IP, LogonId) + outbound conns owned by them, capped | the whole connection table |
-| **What changed?** (explain) | `explain.ps1` | group/service/task/account changes + process spawns by Administrator/SYSTEM in the window, capped | the whole tenant/ring export |
+| **Who did they touch?** (edges) | `edges.ps1` | recent Administrator/SYSTEM logons (time, type, src IP, LogonId, auth package) + **explicit-credential uses (4648: who→became→dest)** + **special-privilege grants (4672: privilege set)** + outbound conns owned by them, capped | the whole connection table |
+| **What changed?** (explain) | `explain.ps1` | group/service/task/account changes + **4648/4672** (explicit creds, special privs) + **WMI event subscriptions (5861 — fileless persistence, ATT&CK T1546.003)** + process spawns by Administrator/SYSTEM in the window, capped | the whole tenant/ring export |
 | **What connected?** (netedges) | `netedges.ps1` | SYSTEM/Administrator-owned outbound connections from the **Sysmon EID3 ring** (a persisted log, not a point-in-time snapshot) — catches transient connections after they close. Requires Sysmon with `<NetworkConnect onmatch="exclude">` | the full netflow / packet capture |
 
 > `edges` reads *currently-Established* connections — a point-in-time snapshot that misses sub-second connections. `netedges` reads the **Sysmon ring**, which persists them. Use `netedges` when you need to catch transient SYSTEM/Administrator outbound connections (e.g. a short C2 beacon). Both stay pull-only, both capped — no lake.
@@ -177,9 +177,22 @@ You can read the case aloud in two minutes: hops for `ws1` and `ws2`, any holes 
 
 Live-verified bug fixes from a purple-team drill on WS1/WS2:
 
-- **`creds_for()` now falls back to the scrt store** (env → `~/.rmagent/creds.json` → scrt `windows-server1-password`/`windows-server2-password`). Previously `census.py`/`hunt.py` failed with "no credential" unless env vars were manually exported.
+- **`creds_for()` now falls back to the scrt store** (env → `~/.rmagent/creds.json` → scrt). Previously `census.py`/`hunt.py` failed with "no credential" unless env vars were manually exported.
 - **Census miss-state is now stable** at `~/.rmagent/.census_miss.json` (was CWD/case-dir — "2 misses = Critical" could never trigger across runs).
 - **`attest`/`sketch` match only `TargetUserName`** on 4624/4625 — matching any event field counted SYSTEM-subject events as admin failures (false positives).
-- **`sketch.new_local_admins` only reports members still in the group** — a deleted user's 4732 lingers 24h and its SID no longer resolves; the old code reported those stale SIDs as new admins forever.
-- **`netedges` is advertised in the example inventory** — fresh installs previously scored max 5/6 on drills because the question was never asked.
-- Payloads are compacted to fit the WinRM UTF-16LE base64 command-line budget (~8191 chars).
+- **`sketch.new_local_admins` only reports members still in the group** — deleted users' 4732 events linger 24h as stale SIDs.
+- **`netedges` is advertised in the example inventory** — fresh installs previously scored max 5/6 on drills.
+- Payloads compacted under the WinRM UTF-16LE base64 command-line budget (~8191 chars).
+
+## Lateral-movement & persistence additions (2026-08-19, rev 2)
+
+New event coverage in `edges` and `explain`, live-verified on WS1:
+
+- **`edges.explicit_creds` (4648)** — *the* lateral-movement signal: `runas`, `Invoke-Command -Credential`, any explicit-credential logon. Each record shows `who → became → dest` in one line. Live test found 2 uses on WS1 in a 2h window (`EC2AMAZ-8NK9FUP$ → Administrator @ localhost`).
+- **`edges.special_privs` (4672)** — the privilege set granted at each admin logon. `SeDebugPrivilege` = process injection; `SeTcbPrivilege` = act-as-OS. Anomalous grants are now visible.
+- **`edges` logons now carry the auth package** (`NTLM` vs `Kerberos`) — NTLM on a Kerberos-capable box is itself a signal.
+- **`explain.wmi_subscriptions` (5861)** — WMI event subscriptions, the classic fileless persistence (ATT&CK T1546.003), read from `Microsoft-Windows-WMI-Activity/Operational`. Zero is the healthy steady state; any non-zero is an immediate finding.
+- **`explain.identity_changes` now include 4648/4672**, and `hunt.py` fires a Telegram smoke alert naming them.
+- `hunt.py` output and the case `path.json` record `explicit_creds`, `special_privs`, `wmi_subscriptions` as first-class hop fields.
+
+**Audit prerequisite:** 4648/4672 need "Audit Logon" (success) — same subcategory as the 4625 failure auditing. 5861 needs no audit policy; the WMI-Activity operational log writes it when a subscription is created.

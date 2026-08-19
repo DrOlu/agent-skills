@@ -1,0 +1,170 @@
+---
+name: rmagent-windows
+description: >
+  Pull-based remote-witness habit for a Windows estate — the "RMAgent" knock.
+  Ask two workgroup Windows servers (WS1/WS2) five allowlisted named questions
+  (attest, sketch, edges, explain, netedges) over pywinrm/WinRM :5985, tracking the
+  Administrator and SYSTEM accounts. Use for identity-led compromise, lateral
+  movement, living-off-the-land, silent hosts, and honest root-cause on Windows
+  boxes you administer — without building a log lake and without switching off
+  the EDR. Phase 0 is watch only; there is no actuate. Does NOT replace
+  CrowdStrike/Defender. Prefer this skill for the two-box estate and
+  Administrator/SYSTEM tracking; use the parent `security-observatory` skill
+  for multi-plane (identity, cloud, network) hunts.
+---
+
+# RMAgent for Windows
+
+You operate a **pull-based witness habit** on a two-box Windows estate (Windows Server 1 `44.197.31.152`, Windows Server 2 `52.3.242.251`), tracking the **Administrator** and **SYSTEM** accounts. You do not build a log lake. You do not retire Defender or CrowdStrike. You ask each box a small named question over WinRM, write a one-page case, and write a **hole** when a box is silent or a hop is stripped.
+
+RMAgent is the **knock from the jump host**. On the Windows side it is just WinRM with an allowlist; on the jump host it is `scripts/lib.py` (`ask()`) plus four tiny `.ps1` payloads. There is no agent installed on the targets. There is no `actuate`.
+
+Canonical architecture: `Hyperspace_Security_Observatory.pdf` (HT-ARCH-SEC-2026-01). This skill is the estate-specific, Administrator/SYSTEM-scoped child of the `security-observatory` skill.
+
+## Non-negotiables
+
+- **Keep the EDR.** Defender / CrowdStrike stays on. Commodity malware is out of this watch. Say so if anyone asks to switch it off.
+- **Named questions only.** `attest`, `sketch`, `edges`, `explain`. `ask()` refuses anything else, and refuses `actuate` outright. Watch is not actuate. Isolate / disable / revoke is later, dual-controlled, after Phase 0 is proven. Never arbitrary remote script.
+- **Track Administrator and SYSTEM.** Every payload filters to the `track:` principals in the inventory (default `[Administrator, SYSTEM]`). You follow the person/account, not the IP. NAT lies; a hashed LogonId does not.
+- **Credentials never live in the skill, the inventory, or the case.** Read from env (`RMAgent_<ID>_USER` / `RMAgent_<ID>_PASS`) or `~/.rmagent/creds.json` (mode 600). Never print them. Never paste them onto a case.
+- **Do not become a lake.** Every answer is capped at 32 KB. Oversized pulls become holes. Do not copy `Security.evtx`, `Get-WinEvent` dumps, or tenant exports home. The case is a one-page blackboard.
+- **A hole is an answer.** Silent box, stripped ticket, missing field, liar — `{asked, empty, why}`, same shape as a hop. Do not tight-retry a silent host (lockout). Two missed attests = Critical.
+- **Cap the walk.** depth ≤ 8, fan-out ≤ 3, 2 concurrent hunts, 15 min explain, 50 edges, 5 min cooldown on the same identity. Census may knock 3 boxes at once (all-windows budget); Hunter is serial.
+- **Authorised estate only.** Only WS1 and WS2 (or boxes the user is authorised to administer). A partner box, SaaS you do not tenant, an unmanaged phone, NIBSS — those are holes, not witnesses.
+
+## Setup (one time)
+
+### 1. Jump host (this machine)
+
+```bash
+python3 --version          # 3.11+
+pip3 install pywinrm pyyaml
+export SKILL_DIR=~/.claude/skills/rmagent-windows
+ls "$SKILL_DIR/scripts"/{census,hunt,case,lib}.py
+ls "$SKILL_DIR/scripts/questions/windows/"   # attest sketch edges explain netedges
+```
+
+### 2. Open the door on each Windows witness
+
+**NTLM (default, zero-config on AWS):** WinRM is already listening on 5985 on
+EC2 Windows instances. Just confirm the firewall allows the jump host:
+
+```powershell
+Enable-PSRemoting -Force
+Set-Service WinRM -StartupType Automatic; Start-Service WinRM
+New-NetFirewallRule -Name "WinRM-5985-JumpHost" -DisplayName "WinRM HTTP from jump host" `
+  -Enabled True -Direction Inbound -Protocol TCP -LocalPort 5985 -Action Allow
+```
+
+**Basic (alternative — only if you set `transport: basic` in the inventory):**
+also enable Basic auth and allow unencrypted (workgroup, HTTP 5985):
+
+```powershell
+Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true
+Set-Item WSMan:\localhost\Service\AllowUnencrypted -Value $true
+```
+
+> The live validation on WS1/WS2 used NTLM and worked with no server-side
+> changes. For production, prefer HTTPS 5986 or Kerberos in a real domain.
+> The habit — allowlisted named questions — is unchanged either way.
+
+### 3. Credentials (env, recommended)
+
+```bash
+export RMAgent_WS1_USER=Administrator
+export RMAgent_WS1_PASS='...'      # from your vault / the secrets skill — never commit
+export RMAgent_WS2_USER=Administrator
+export RMAgent_WS2_PASS='...'
+```
+
+Or store in `~/.rmagent/creds.json` (mode 600):
+
+```json
+{ "ws1": { "user": "Administrator", "password": "..." },
+  "ws2": { "user": "Administrator", "password": "..." } }
+```
+
+### 4. Inventory
+
+```bash
+cp "$SKILL_DIR/assets/inventory.example.yaml" ./estate.yaml
+# edit only if you add a box you administer. Never add passwords here.
+```
+
+## The four questions (what each returns, Administrator/SYSTEM-scoped)
+
+| Question | Payload | What you get | What you must NOT get |
+|---|---|---|---|
+| **Alive?** (attest) | `attest.ps1` | host, utc, last boot, admin failed logons 60s, admin ok logons 5min, local admin count, SYSTEM remote conns | a full Security log dump |
+| **Anything odd?** (sketch) | `sketch.ps1` | admin failed in window, new local admins 24h, running privileged services, new services/tasks | raw event lists |
+| **Who did they touch?** (edges) | `edges.ps1` | recent Administrator/SYSTEM logons (time, type, src IP, LogonId) + outbound conns owned by them, capped | the whole connection table |
+| **What changed?** (explain) | `explain.ps1` | group/service/task/account changes + process spawns by Administrator/SYSTEM in the window, capped | the whole tenant/ring export |
+| **What connected?** (netedges) | `netedges.ps1` | SYSTEM/Administrator-owned outbound connections from the **Sysmon EID3 ring** (a persisted log, not a point-in-time snapshot) — catches transient connections after they close. Requires Sysmon with `<NetworkConnect onmatch="exclude">` | the full netflow / packet capture |
+
+> `edges` reads *currently-Established* connections — a point-in-time snapshot that misses sub-second connections. `netedges` reads the **Sysmon ring**, which persists them. Use `netedges` when you need to catch transient SYSTEM/Administrator outbound connections (e.g. a short C2 beacon). Both stay pull-only, both capped — no lake.
+
+Engine injects `$Track`, `$SinceHours`, `$Limit` as a preamble; payloads read them. No payload is a god-shell.
+
+## Operating loop
+
+```
+every 1 min ± jitter →  census (attest only; alive + Admin/SYSTEM smoke digest)
+every 5–15 min       →  scout  (sketch: new admins, priv services, new tasks/services)
+on smell/silence     →  hunter (edges → explain on hosts with smoke), serial, capped
+on High case         →  human (Judge) pins, closes, or escalates. No isolate from Phase 0.
+never                →  copy Security.evtx, dump rings, tight-retry silent hosts, actuate
+```
+
+Agents are not a SOC. After hours, a human is still on call for Hunter and any explain that touches a person.
+
+## Scripts
+
+Resolve `$SKILL_DIR` as the folder containing this `SKILL.md`.
+
+| Job | Script | Notes |
+|---|---|---|
+| Minute watch | `scripts/census.py` | pywinrm, max-3 knock budget, 2 misses = Critical |
+| Administrator/SYSTEM walk | `scripts/hunt.py` | serial, depth-capped; writes path.json + holes.jsonl |
+| Write / list / close a case | `scripts/case.py` | one-page blackboard |
+| Allowlisted payloads | `scripts/questions/windows/*.ps1` | attest / sketch / edges / explain |
+| Optional all-pwsh path | `scripts/winrm_pool.ps1` | Invoke-Command + RunspacePool (max 3), creds from env |
+
+```bash
+# Census — are WS1/WS2 alive?
+python3 "$SKILL_DIR/scripts/census.py" --inventory ./estate.yaml
+
+# Open a case, then walk Administrator/SYSTEM across both boxes
+CASE=$(python3 "$SKILL_DIR/scripts/case.py" open --title "admin walk" --principal Administrator)
+python3 "$SKILL_DIR/scripts/hunt.py" --inventory ./estate.yaml --since 2h --case-dir "$CASE"
+
+# All-pwsh alternate (only if every door is winrm)
+pwsh -NoProfile -File "$SKILL_DIR/scripts/winrm_pool.ps1" -Skill attest `
+  -ComputerName '44.197.31.152','52.3.242.251' -Ids ws1,ws2 -MaxRunspaces 3
+```
+
+## Identifier, pin, hole
+
+| Object | Contract |
+|---|---|
+| Hop id | LogonId (hex) or a work/request id for app hops. Same id across hosts = same session. |
+| Ticket / session | Never store Kerberos/NTLM. The LogonId from a 4624 event is the join, not a secret. |
+| If stripped | Idempotency key, then producer child, then **hole**. Never join on public IP. |
+| Pin | Auto on 2 missed attests, Hunter walk, human incident. Days (default 14). |
+| Hole | `{asked, empty, why}` — same shape as a hop. |
+
+## What success looks like (Phase 0)
+
+You can read the case aloud in two minutes: hops for `ws1` and `ws2`, any holes written, `Security.evtx` still on the boxes, EDR still drawing. **Fail:** you exported `Security.evtx`, isolated a host, invented a hop, or called a timeout "nothing happened."
+
+## Examples
+
+- `examples/lab-a-live.md` — Lab A: attest both, silence one, write the hole.
+- `examples/walk-administrator.md` — a full Administrator/SYSTEM hunt across WS1+WS2.
+
+## What this skill will NOT do
+
+- No `actuate`. `ask()` returns a hole for it. Isolate/disable/revoke stays with the EDR/IAM and a human.
+- No log lake. No `Security.evtx` copy. No tenant/ring dump.
+- No inventing a witness for a box you do not administer (NIBSS, a partner, a phone).
+- No tight retry on a silent host.
+- No replacement for the EDR. Commodity malware stays with Defender/CrowdStrike.

@@ -1,0 +1,41 @@
+# RMAgent inventory — YOUR estate only. Doors you hold the keys to.
+# Windows Server 1 & 2 (workgroup, AWS). Tracking Administrator / SYSTEM.
+#
+# Credentials NEVER go here. Set env vars or store in ~/.rmagent/creds.json:
+#   export RMAgent_WS1_USER=Administrator
+#   export RMAgent_WS1_PASS='...'        # from your vault / secrets skill
+#   export RMAgent_WS2_USER=Administrator
+#   export RMAgent_WS2_PASS='...'
+#
+# Transport: 'ntlm' works on AWS Windows with zero server-side changes
+# (WinRM + 5985 open). Use 'basic' only after setting Auth\Basic=true and
+# AllowUnencrypted=true on the targets. See SKILL.md §Setup.
+
+witnesses:
+  - id: ws1
+    name: Windows Server 1
+    plane: endpoint          # identity/endpoint plane
+    os: windows
+    door: winrm
+    transport: ntlm          # zero-config on AWS; or 'basic' (needs server steps)
+    address: 44.197.31.152
+    endpoint: http://44.197.31.152:5985/wsman
+    user: Administrator
+    skills: [attest, sketch, edges, explain, netedges]
+    track: [Administrator, SYSTEM]
+
+  - id: ws2
+    name: Windows Server 2
+    plane: data              # the "share"/data plane in the Ada story
+    os: windows
+    door: winrm
+    transport: ntlm
+    address: 52.3.242.251
+    endpoint: http://52.3.242.251:5985/wsman
+    user: Administrator
+    skills: [attest, sketch, edges, explain, netedges]
+    track: [Administrator, SYSTEM]
+
+# Phase 0 = these two boxes, four questions, watch only.
+# Grow rooms only after a one-tape walk reconstructs in minutes.
+

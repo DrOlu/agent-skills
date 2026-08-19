@@ -30,9 +30,12 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions" / "windows"
 
 # --- scrt secrets (token/chat/windows passwords) -------------------------------
+# Cross-platform: the scrt master password is resolved from SCRT_PASS env var,
+# then macOS Keychain (macOS only), then ~/.scrt_pass file (Linux/Windows fallback).
 SCRT_STORE = os.environ.get(
     "SCRT_STORE", str(Path.home() / ".claude" / "skills" / "secrets" / "connectors.scrt")
 )
+import sys as _sys
 
 def _resolve_store() -> str:
     """Return the first existing scrt store among known locations (env + defaults)."""
@@ -45,11 +48,32 @@ def _resolve_store() -> str:
             return c
     return SCRT_STORE  # last resort; scrt will report the error
 
+def _scrt_master_password() -> str | None:
+    """Resolve the scrt master password cross-platform (env → macOS Keychain → file)."""
+    pw = os.environ.get("SCRT_PASS")
+    if pw:
+        return pw.strip()
+    if _sys.platform == "darwin":
+        try:
+            r = subprocess.run(
+                ["security", "find-generic-password", "-s", "scrt-connectors-store", "-w"],
+                capture_output=True, text=True, timeout=10)
+            v = r.stdout.strip()
+            if v and r.returncode == 0:
+                return v
+        except Exception:
+            pass
+    passfile = Path(os.environ.get("SCRT_PASS_FILE", str(Path.home() / ".scrt_pass")))
+    try:
+        if passfile.exists():
+            return passfile.read_text().splitlines()[0].strip()
+    except Exception:
+        pass
+    return None
+
 def _scrt(key: str) -> str | None:
-    """Read a secret from scrt; SCRT_PASS must be set (Keychain or env)."""
-    pw = os.environ.get("SCRT_PASS") or subprocess.run(
-        ["security", "find-generic-password", "-s", "scrt-connectors-store", "-w"],
-        capture_output=True, text=True).stdout.strip()
+    """Read a secret from scrt; master password from env / Keychain / ~/.scrt_pass."""
+    pw = _scrt_master_password()
     if not pw:
         return None
     try:

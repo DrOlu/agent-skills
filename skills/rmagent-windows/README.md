@@ -4,9 +4,13 @@ Pull-based witness habit for a two-box Windows estate (WS1 `44.197.31.152`, WS2 
 
 ## 1. Install
 
+The jump host runs on **macOS, Linux, or Windows** — `pywinrm` connects to the Windows targets from any of them. PowerShell 7 (`pwsh`) is only needed for the optional `winrm_pool.ps1` RunspacePool path.
+
 ```bash
 pip3 install pywinrm pyyaml
 export SKILL_DIR=~/.claude/skills/rmagent-windows
+# non-macOS jump host: provide the scrt master password via env or file
+#   export SCRT_PASS=...      OR   echo '...' > ~/.scrt_pass  (chmod 600)
 ```
 
 ## 2. Open WinRM on each Windows box (once)

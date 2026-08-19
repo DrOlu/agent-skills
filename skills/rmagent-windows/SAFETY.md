@@ -30,7 +30,7 @@ There is no god-shell. There is no `run_any`. There is no CIM second door. If yo
 - Env (`RMAgent_<ID>_USER` / `RMAgent_<ID>_PASS`) or `~/.rmagent/creds.json` (mode 600).
 - **Never** in the inventory file, the case folder, a slide, or a commit.
 - `creds_for()` resolves them without printing. If absent, it errors loudly rather than prompting inline.
-- `chmod 600 ~/.rmagent/creds.json`. Add `~/.rmagent/` to `.gitignore`.
+- `chmod 600 ~/.rmagent/creds.json` (macOS/Linux) or restrict via Windows ACL (Windows) — only the jump-host user may read it. Add `~/.rmagent/` to `.gitignore`.
 
 ## Holes, not silence
 

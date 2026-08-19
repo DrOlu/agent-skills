@@ -33,6 +33,8 @@ The drill stages the exact kind of movement rmagent is built to catch — **iden
 
 ## Prerequisites
 
+> **Jump host: macOS, Linux, or Windows.** pywinrm connects to the Windows targets from any. On a non-macOS jump host, the `secrets` scrt master password is provided via `SCRT_PASS` env var or a `~/.scrt_pass` file (macOS uses Keychain automatically). The `winrm_pool.ps1` RunspacePool path needs PowerShell 7.
+
 1. The `rmagent-windows` skill works (census passes on WS1/WS2). See its README.
 2. Telegram alerting configured — token `telegram-bot-token` and chat `telegram-chat-id` in the `secrets` scrt store (already present), OR env `RMAgent_TELEGRAM_TOKEN` / `RMAgent_TELEGRAM_CHAT`.
 3. Windows credentials — env `RMAgent_<ID>_PASS`, OR the scrt keys `windows-server1-password` / `windows-server2-password` (auto-loaded if env is missing).

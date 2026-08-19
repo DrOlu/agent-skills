@@ -4,11 +4,17 @@ Token + chat come from the secrets scrt store (telegram-bot-token / telegram-cha
 or env overrides (RMAgent_TELEGRAM_TOKEN / RMAgent_TELEGRAM_CHAT). Disable with
 RMAgent_TELEGRAM_OFF=1.
 
+Cross-platform jump host: works on macOS, Linux, and Windows. The scrt master
+password is resolved in order: SCRT_PASS env var → macOS Keychain (macOS only)
+→ ~/.scrt_pass file (one line, mode 600) — so Linux/Windows jump hosts just
+export SCRT_PASS or write that file.
+
 Never sends credentials, Event Log contents, or full case data — only short summaries.
 """
 from __future__ import annotations
 import os, subprocess, urllib.request, urllib.parse, json
 from pathlib import Path
+import sys
 
 SCRT_STORE = os.environ.get(
     "SCRT_STORE", str(Path.home() / ".claude" / "skills" / "secrets" / "connectors.scrt"))
@@ -26,12 +32,39 @@ def _resolve_store() -> str:
     return SCRT_STORE
 
 
+def _scrt_master_password() -> str | None:
+    """Resolve the scrt master password cross-platform:
+    1. SCRT_PASS env var (everywhere)
+    2. macOS Keychain via `security` (macOS only)
+    3. ~/.scrt_pass file, first line, mode 600 (Linux/Windows fallback)
+    Never logs the value."""
+    pw = os.environ.get("SCRT_PASS")
+    if pw:
+        return pw.strip()
+    if sys.platform == "darwin":
+        try:
+            r = subprocess.run(
+                ["security", "find-generic-password", "-s", "scrt-connectors-store", "-w"],
+                capture_output=True, text=True, timeout=10)
+            v = r.stdout.strip()
+            if v and r.returncode == 0:
+                return v
+        except Exception:
+            pass
+    # Linux / Windows fallback: read the master password from a file
+    passfile = Path(os.environ.get("SCRT_PASS_FILE", str(Path.home() / ".scrt_pass")))
+    try:
+        if passfile.exists():
+            return passfile.read_text().splitlines()[0].strip()
+    except Exception:
+        pass
+    return None
+
+
 def _scrt(key: str) -> str | None:
     if os.environ.get("RMAgent_TELEGRAM_OFF"):
         return None
-    pw = os.environ.get("SCRT_PASS") or subprocess.run(
-        ["security", "find-generic-password", "-s", "scrt-connectors-store", "-w"],
-        capture_output=True, text=True).stdout.strip()
+    pw = _scrt_master_password()
     if not pw:
         return None
     try:

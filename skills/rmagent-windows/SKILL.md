@@ -34,7 +34,9 @@ Canonical architecture: `Hyperspace_Security_Observatory.pdf` (HT-ARCH-SEC-2026-
 
 ## Setup (one time)
 
-### 1. Jump host (this machine)
+### 1. Jump host (macOS, Linux, or Windows)
+
+The jump host is the trusted desk that knocks. It runs on macOS, Linux, or Windows. pywinrm connects over WinRM from any of them; PowerShell 7 (`pwsh`) is only needed if you use the optional `winrm_pool.ps1` RunspacePool path.
 
 ```bash
 python3 --version          # 3.11+
@@ -43,6 +45,8 @@ export SKILL_DIR=~/.claude/skills/rmagent-windows
 ls "$SKILL_DIR/scripts"/{census,hunt,case,lib}.py
 ls "$SKILL_DIR/scripts/questions/windows/"   # attest sketch edges explain netedges
 ```
+
+> The `secrets` scrt store unlocks with a master password resolved cross-platform: **`SCRT_PASS` env var** (everywhere) → macOS Keychain (macOS only) → **`~/.scrt_pass`** file (first line, restricted — the Linux/Windows fallback). On a Linux/Windows jump host, either `export SCRT_PASS=...` or create `~/.scrt_pass`.
 
 ### 2. Open the door on each Windows witness
 

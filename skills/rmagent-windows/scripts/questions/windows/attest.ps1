@@ -1,7 +1,19 @@
 # Allowlisted: alive + Administrator/SYSTEM smoke. Digest only. No dump.
 # Engine injects: $ErrorActionPreference='SilentlyContinue'; $Track; $SinceHours; $Limit
-function Match-Track($ev) {
-  foreach ($v in $ev.Properties.Value) { if ($Track -contains $v) { return $true } }
+# BUG FIX (2026-08-19): Match-Track used to match ANY event field equal to a tracked
+# name — including SubjectUserName (the account that PERFORMED the action). A service
+# running as SYSTEM touching any user would light up "admin activity". We now match
+# only the TARGET user of the event (TargetUserName for 4624/4625).
+function Get-EvField($ev, $name) {
+  $x = [xml]$ev.ToXml()
+  $ns = New-Object System.Xml.XmlNamespaceManager($x.NameTable)
+  $ns.AddNamespace('e', 'http://schemas.microsoft.com/win/2004/08/events/event')
+  $n = $x.SelectSingleNode("//e:Data[@Name='$name']", $ns)
+  if ($n) { $n.'#text' } else { $null }
+}
+function Match-TargetTrack($ev) {
+  $t = Get-EvField $ev 'TargetUserName'
+  if ($t) { foreach ($tr in $Track) { if ($t -like "*$tr*") { return $true } } }
   return $false
 }
 $now = [DateTime]::UtcNow
@@ -11,11 +23,11 @@ $failed = 0
 $ok = 0
 try {
   $failed = @(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625; StartTime=$now.AddSeconds(-60)} |
-              Where-Object { Match-Track $_ }).Count
+              Where-Object { Match-TargetTrack $_ }).Count
 } catch {}
 try {
   $ok = @(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4624; StartTime=$now.AddMinutes(-5)} |
-          Where-Object { Match-Track $_ }).Count
+          Where-Object { Match-TargetTrack $_ }).Count
 } catch {}
 
 $lac = 0

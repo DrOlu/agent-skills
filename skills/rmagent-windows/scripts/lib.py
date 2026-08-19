@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -68,8 +69,72 @@ def find(inv: dict, wid: str) -> dict | None:
 
 
 # ---------------------------------------------------------------- credentials
+# scrt secrets store support (BUG FIX 2026-08-19): census.py / hunt.py used to fail
+# with "no credential for ws1" because creds_for() only looked at env + creds.json.
+# The runbook (and redteam.py) expect passwords to flow from the scrt store
+# (windows-server1-password / windows-server2-password), so we add that fallback
+# here too. Master password: SCRT_PASS env → macOS Keychain → ~/.scrt_pass.
+SCRT_STORE = os.environ.get(
+    "SCRT_STORE", str(Path.home() / ".claude" / "skills" / "secrets" / "connectors.scrt")
+)
+
+def _resolve_store() -> str:
+    """First existing scrt store among env + known locations."""
+    cands = [SCRT_STORE,
+             str(Path.home() / ".claude" / "skills" / "secrets" / "connectors.scrt"),
+             str(Path.home() / ".pi" / "agent" / "skills" / "secrets" / "connectors.scrt"),
+             str(Path.home() / ".pi" / "agent" / "skills-2" / "secrets" / "connectors.scrt")]
+    for c in cands:
+        if c and Path(c).exists():
+            return c
+    return SCRT_STORE
+
+def _scrt_master_password() -> str | None:
+    pw = os.environ.get("SCRT_PASS")
+    if pw:
+        return pw.strip()
+    if sys.platform == "darwin":
+        try:
+            r = subprocess.run(
+                ["security", "find-generic-password", "-s", "scrt-connectors-store", "-w"],
+                capture_output=True, text=True, timeout=10)
+            v = r.stdout.strip()
+            if v and r.returncode == 0:
+                return v
+        except Exception:
+            pass
+    passfile = Path(os.environ.get("SCRT_PASS_FILE", str(Path.home() / ".scrt_pass")))
+    try:
+        if passfile.exists():
+            return passfile.read_text().splitlines()[0].strip()
+    except Exception:
+        pass
+    return None
+
+def _scrt(key: str) -> str | None:
+    """Read a secret from scrt; never raises, never prints the value."""
+    pw = _scrt_master_password()
+    if not pw:
+        return None
+    try:
+        r = subprocess.run(
+            ["scrt", "get", "--password", pw, "--storage", "local",
+             "--local-path", _resolve_store(), key],
+            capture_output=True, text=True, timeout=15)
+        v = r.stdout.strip()
+        return v if v and "Error" not in v else None
+    except Exception:
+        return None
+
+# witness id → scrt key for the Windows password (extend when you add boxes)
+_SCRT_KEY_MAP = {
+    "ws1": "windows-server1-password",
+    "ws2": "windows-server2-password",
+}
+
 def creds_for(row: dict) -> dict:
-    """Resolve credentials WITHOUT ever printing them. Env first, then creds file."""
+    """Resolve credentials WITHOUT ever printing them.
+    Order: env → ~/.rmagent/creds.json → scrt store."""
     rid = (row.get("id") or "").upper()
     user = os.environ.get(f"RMAgent_{rid}_USER") or row.get("user") or "Administrator"
     pw = os.environ.get(f"RMAgent_{rid}_PASS")
@@ -86,9 +151,16 @@ def creds_for(row: dict) -> dict:
         except (json.JSONDecodeError, OSError):
             pass
     if not pw:
+        # last resort: the scrt secrets store (same source redteam.py uses)
+        sec = _scrt(_SCRT_KEY_MAP.get((row.get("id") or "").lower(), ""))
+        if sec:
+            pw = sec
+            os.environ[f"RMAgent_{rid}_PASS"] = pw   # cache for later calls in this process
+    if not pw:
         raise SystemExit(
             f"No credential for {row.get('id')}. Set RMAgent_{rid}_PASS / RMAgent_{rid}_USER "
-            f"in env, or store {row.get('id')} in {_CREDS_FILE} (mode 600). "
+            f"in env, or store {row.get('id')} in {_CREDS_FILE} (mode 600), "
+            f"or add key '{_SCRT_KEY_MAP.get((row.get('id') or '').lower(), '?')}' to the scrt store. "
             f"Never put the password in the inventory file."
         )
     return {"user": user, "password": pw}

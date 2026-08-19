@@ -52,8 +52,12 @@ def main():
                 results.append(f.result())
 
     miss_count = {r.get("id"): 0 for r in rows}
-    # track misses across runs via a tiny state file
-    state = case_dir / ".census_miss.json" if case_dir else Path(".census_miss.json")
+    # BUG FIX (2026-08-19): the miss-state file used to live in CWD (or the case dir),
+    # so consecutive runs from different directories / different case dirs never saw
+    # each other's misses — "2 misses = Critical" could never trigger across runs.
+    # It now lives in a stable per-user location.
+    state = Path.home() / ".rmagent" / ".census_miss.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
     try:
         prev = json.loads(state.read_text()) if state.exists() else {}
     except Exception:

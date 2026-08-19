@@ -172,3 +172,14 @@ You can read the case aloud in two minutes: hops for `ws1` and `ws2`, any holes 
 - No inventing a witness for a box you do not administer (NIBSS, a partner, a phone).
 - No tight retry on a silent host.
 - No replacement for the EDR. Commodity malware stays with Defender/CrowdStrike.
+
+## Hardening changelog (2026-08-19)
+
+Live-verified bug fixes from a purple-team drill on WS1/WS2:
+
+- **`creds_for()` now falls back to the scrt store** (env → `~/.rmagent/creds.json` → scrt `windows-server1-password`/`windows-server2-password`). Previously `census.py`/`hunt.py` failed with "no credential" unless env vars were manually exported.
+- **Census miss-state is now stable** at `~/.rmagent/.census_miss.json` (was CWD/case-dir — "2 misses = Critical" could never trigger across runs).
+- **`attest`/`sketch` match only `TargetUserName`** on 4624/4625 — matching any event field counted SYSTEM-subject events as admin failures (false positives).
+- **`sketch.new_local_admins` only reports members still in the group** — a deleted user's 4732 lingers 24h and its SID no longer resolves; the old code reported those stale SIDs as new admins forever.
+- **`netedges` is advertised in the example inventory** — fresh installs previously scored max 5/6 on drills because the question was never asked.
+- Payloads are compacted to fit the WinRM UTF-16LE base64 command-line budget (~8191 chars).

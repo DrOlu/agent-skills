@@ -149,6 +149,11 @@ def telegram_send(text: str) -> bool:
         return False
 
 # --- scoring: did rmagent see the staged artifacts? -----------------------------
+# BUG FIX (2026-08-19): the scorer used to count ANY 4625 / ANY new service / ANY new
+# task as "detected" — including real attack traffic (ws1 is brute-forced every ~2min
+# from 95.142.115.12) and drill leftovers from earlier runs. It now (a) only scores
+# signals the drill VERIFIED it staged on that box, and (b) for new_local_admin only
+# counts names containing RMAgentDrill (not leftover SIDs of already-deleted users).
 EXPECTED = {
     "failed_admin_logons":   "attest/sketch  (4625 admin failed)",
     "new_local_admin":       "explain.identity_changes / sketch.new_local_admins (4720+4732)",
@@ -158,47 +163,68 @@ EXPECTED = {
     "system_outbound_conn":  "netedges (Sysmon EID3 ring: SYSTEM-owned to 1.1.1.1:80)",
 }
 
-def score(rows: list[dict], census_out: str, hunt_case_dir: Path) -> dict:
-    """Ask rmagent's OWN questions what it saw, vs what we staged.
-    Uses sketch (the 'anything odd' question) per box + the hunt's explain hops + census."""
-    found = {}
+def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
+          staged_verified: dict[str, set[str]] | None = None) -> dict:
+    """Ask rmagent's OWN questions what it saw, vs what we VERIFIED we staged.
 
-    # --- census: attest caught a SYSTEM outbound conn? ---
-    for part in census_out.splitlines():
-        if "sys_conns=" in part and not part.split("sys_conns=")[1].strip().startswith("0"):
-            found["system_outbound_conn"] = True
+    staged_verified maps signal -> set of witness ids where the drill confirmed the
+    artifact actually landed. Signals not in it (or not staged on that box) can never
+    be counted as detected — that was the old false-positive path."""
+    found = {}
+    staged_verified = staged_verified or {}
+
+    # EXPECTED signal name → key the drill's `verified` dict uses (they differ:
+    # 'failed_admin_logons' vs drill's 'failed_logons', 'new_scheduled_task' vs
+    # drill's 'scheduled_task'). system_outbound_conn is derived from the task.
+    DRILL_KEY = {
+        "failed_admin_logons": "failed_logons",
+        "new_local_admin": "new_local_admin",
+        "new_scheduled_task": "scheduled_task",
+        "new_service": "new_service",
+        "powershell_spawns": "powershell_spawns",
+        "system_outbound_conn": "scheduled_task",
+    }
+
+    def staged_on(sig: str, wid: str) -> bool:
+        """Was this signal verified as staged on this witness?"""
+        return wid in staged_verified.get(DRILL_KEY.get(sig, sig), set())
 
     # --- sketch per box: the 'anything odd' question catches new admins/services/tasks/failures ---
     print("[redteam] scoring: asking rmagent sketch on each box...")
     for r in rows:
+        wid = r.get("id")
         try:
             creds = rma.creds_for(r)
         except SystemExit:
-            print(f"  {r['id']:6} sketch: no creds")
+            print(f"  {wid:6} sketch: no creds")
             continue
         sk = rma.ask(r, "sketch", since_hours=1, limit=50, creds=creds)
         if not (sk.get("ok") and sk.get("data")):
-            print(f"  {r['id']:6} sketch: HOLE — {(sk.get('error') or '')[:60]}")
+            print(f"  {wid:6} sketch: HOLE — {(sk.get('error') or '')[:60]}")
             continue
         d = sk["data"]
         nla = d.get("new_local_admins") or []
         nsv = d.get("new_services") or 0
         ntk = d.get("new_tasks") or 0
         nfl = d.get("admin_failed") or 0
-        print(f"  {r['id']:6} sketch: failed={nfl} new_admins={nla} new_svcs={nsv} new_tasks={ntk}")
-        if [a for a in nla if "RMAgentDrill" in str(a)]:
-            found["new_local_admin"] = True
-        if nfl:
+        print(f"  {wid:6} sketch: failed={nfl} new_admins={nla} new_svcs={nsv} new_tasks={ntk}")
+        # only count names that are actually the drill user (not leftover SIDs of
+        # already-deleted users from earlier runs — those resolve to raw SIDs)
+        if staged_on("failed_admin_logons", wid) and nfl:
             found["failed_admin_logons"] = True
-        if nsv:
+        if staged_on("new_local_admin", wid) and \
+                [a for a in nla if "RMAgentDrill" in str(a)]:
+            found["new_local_admin"] = True
+        if staged_on("new_service", wid) and nsv:
             found["new_service"] = True
-        if ntk:
+        if staged_on("new_scheduled_task", wid) and ntk:
             found["new_scheduled_task"] = True
 
     # --- netedges per box: the Sysmon EID3 RING catches transient SYSTEM-owned conns ---
     # (edges is point-in-time and misses sub-second connections; netedges reads the ring)
     print("[redteam] scoring: asking rmagent netedges (Sysmon ring) on each box...")
     for r in rows:
+        wid = r.get("id")
         if "netedges" not in (r.get("skills") or []):
             continue
         try:
@@ -207,52 +233,69 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path) -> dict:
             continue
         ne = rma.ask(r, "netedges", since_hours=1, limit=100, creds=creds)
         if not (ne.get("ok") and ne.get("data")):
-            print(f"  {r['id']:6} netedges: HOLE — {(ne.get('error') or '')[:60]}")
+            print(f"  {wid:6} netedges: HOLE — {(ne.get('error') or '')[:60]}")
             continue
         conns = ne["data"].get("conns") or []
         drill_conns = [c for c in conns if "1.1.1.1" in str(c.get("dest")) or "RMAgentDrill" in str(c.get("proc"))]
-        print(f"  {r['id']:6} netedges: {len(conns)} SYSTEM/Admin-owned conns in ring "
+        print(f"  {wid:6} netedges: {len(conns)} SYSTEM/Admin-owned conns in ring "
               f"({len(drill_conns)} to 1.1.1.1 or drill-tagged)")
         if drill_conns:
             found["system_outbound_conn"] = True
 
     # --- hunt explain hops: proc_spawns + service/task/group events ---
+    # (only signals we verified we staged — otherwise real background activity
+    #  like routine service restarts would count as drill detections)
     pj = hunt_case_dir / "path.json"
     if pj.exists():
         try:
             for h in json.loads(pj.read_text()):
+                wid = h.get("witness")
                 if h.get("skill") == "explain":
-                    if h.get("service_events", 0):
+                    if staged_on("new_service", wid) and h.get("service_events", 0):
                         found["new_service"] = True
-                    if h.get("task_events", 0):
+                    if staged_on("new_scheduled_task", wid) and h.get("task_events", 0):
                         found["new_scheduled_task"] = True
-                    if h.get("group_changes", 0) or h.get("identity_changes", 0):
+                    if staged_on("new_local_admin", wid) and \
+                            (h.get("group_changes", 0) or h.get("identity_changes", 0)):
                         found["new_local_admin"] = True
-                    if h.get("proc_spawns", 0):
+                    if staged_on("powershell_spawns", wid) and h.get("proc_spawns", 0):
                         found["powershell_spawns"] = True
-                if h.get("skill") == "edges" and h.get("conns", 0):
-                    found["system_outbound_conn"] = True
         except Exception:
             pass
     return found
 
 # --- modes ---------------------------------------------------------------------
 def stage(rows):
+    """Stage the drill and return {signal -> set(witness ids)} for signals VERIFIED staged."""
     print(f"[redteam] staging drill on {len(rows)} box(es): {[r['id'] for r in rows]}")
     results = []
+    verified: dict[str, set[str]] = {}
     for r in rows:
-        res = run_payload(r, "drill", timeout=90)
+        res = run_payload(r, "drill", timeout=120)
         ok = res.get("ok")
-        print(f"  {r['id']:6} {'ok' if ok else 'FAIL'} — {(res.get('data') or {}).get('staged', res.get('error'))}")
+        data = res.get("data") or {}
+        v = data.get("verified") or {}
+        print(f"  {r['id']:6} {'ok' if ok else 'FAIL'} — staged={data.get('staged', res.get('error'))}")
+        print(f"  {r['id']:6}          verified={v}")
+        for sig, landed in (v.items() if isinstance(v, dict) else []):
+            if landed:
+                verified.setdefault(sig, set()).add(r["id"])
         results.append((r["id"], res))
-    return results
+    return results, verified
 
 def clean(rows):
     print(f"[redteam] cleaning drill artifacts on {len(rows)} box(es)")
+    all_clean = True
     for r in rows:
-        res = run_payload(r, "clean", timeout=60)
+        res = run_payload(r, "clean", timeout=90)
         ok = res.get("ok")
-        print(f"  {r['id']:6} {'cleaned' if ok else 'FAIL'} — {(res.get('data') or {}).get('cleaned', res.get('error'))}")
+        data = res.get("data") or {}
+        still = data.get("still_present") or []
+        if still:
+            all_clean = False
+        print(f"  {r['id']:6} {'cleaned' if ok else 'FAIL'} — {data.get('cleaned', res.get('error'))}"
+              + (f"  ⚠ STILL PRESENT: {still}" if still else ""))
+    return all_clean
 
 def run_full(rows, inventory, keep_dirty: bool):
     case_root = Path("./cases")
@@ -264,7 +307,7 @@ def run_full(rows, inventory, keep_dirty: bool):
                   f"{len(rows)} box(es): {[r['id'] for r in rows]}\n"
                   f"Expect: {', '.join(EXPECTED.keys())}")
 
-    stage(rows)
+    _, staged_verified = stage(rows)
     print("[redteam] waiting 8s for events to settle in the logs...")
     time.sleep(8)
 
@@ -282,31 +325,57 @@ def run_full(rows, inventory, keep_dirty: bool):
         capture_output=True, text=True)
     print("--- hunt ---"); print(hunt.stdout)
 
-    found = score(rows, census_out, case_dir)
+    found = score(rows, census_out, case_dir, staged_verified)
     detected = list(found.keys())
     missed = [k for k in EXPECTED if k not in found]
 
+    # distinguish "not staged" (drill couldn't create it — env limitation) from
+    # "not detected" (rmagent missed something that WAS staged). A signal counts
+    # as staged if it landed on at least one box.
+    _DRILL_KEY = {
+        "failed_admin_logons": "failed_logons",
+        "new_local_admin": "new_local_admin",
+        "new_scheduled_task": "scheduled_task",
+        "new_service": "new_service",
+        "powershell_spawns": "powershell_spawns",
+        "system_outbound_conn": "scheduled_task",
+    }
+    def _staged_anywhere(sig: str) -> bool:
+        return bool(staged_verified.get(_DRILL_KEY.get(sig, sig)))
+
+    not_staged = [k for k in EXPECTED if not _staged_anywhere(k)]
+    not_detected = [k for k in missed if _staged_anywhere(k)]
+
     WHY = {
-        "new_local_admin": "4732 needs 'Audit Account Management' on; sketch's regex may miss workgroup-format names",
+        "new_local_admin": "4732 needs 'Audit Security Group Management' on; sketch's regex may miss workgroup-format names",
         "new_scheduled_task": "4698 needs 'Audit Other Object Access Events' on (off by default)",
         "powershell_spawns": "4688 needs 'Audit Process Creation' on (off by default)",
         "system_outbound_conn": "netedges (Sysmon EID3 ring) missed it — check Sysmon NetworkConnect config is on",
-        "failed_admin_logons": "4625 may not log for loopback/self-targeted attempts",
+        "failed_admin_logons": "4625 needs 'Audit Logon' failure auditing ON (ws2 has it OFF — run: auditpol /set /subcategory:\"Logon\" /failure:enable)",
+        "new_service": "7045 needs no extra audit policy; check the service was created",
     }
     summary = (f"✅ RMAgent drill — detection report\n"
                f"Detected ({len(detected)}/{len(EXPECTED)}):\n"
-               + ("".join(f"  • {k} — {EXPECTED[k]}\n" for k in detected) or "  (none)\n")
-               + (f"\nNot detected ({len(missed)}):\n"
-                  + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in missed) if missed else "\nFull coverage. 🎯")
-               + f"\nCase: {case_dir.name}")
+               + ("".join(f"  • {k} — {EXPECTED[k]}\n" for k in detected) or "  (none)\n"))
+    if not_staged:
+        summary += (f"\nNot staged ({len(not_staged)}) — environment limitation, not a rmagent miss:\n"
+                    + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in not_staged))
+    if not_detected:
+        summary += (f"\nNot detected ({len(not_detected)}) — staged but rmagent missed:\n"
+                    + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in not_detected))
+    if not missed:
+        summary += "\nFull coverage. 🎯"
+    summary += f"\nCase: {case_dir.name}"
     print("\n" + summary)
     ok = telegram_send(summary)
     print(f"[telegram] report sent: {ok}")
 
     if not keep_dirty:
         print("\n[redteam] cleaning up staged artifacts...")
-        clean(rows)
-        telegram_send("🧹 Drill artifacts cleaned. Estate restored.")
+        all_clean = clean(rows)
+        telegram_send("🧹 Drill artifacts cleaned. Estate restored."
+                      if all_clean else
+                      "⚠️ Drill cleanup INCOMPLETE — artifacts still present! Check still_present in output.")
     else:
         print("\n[redteam] keeping artifacts (--keep). Clean later with: redteam.py clean")
 
@@ -338,7 +407,9 @@ def main():
     if args.mode == "stage":
         stage(rows)
     elif args.mode == "clean":
-        clean(rows)
+        ok = clean(rows)
+        if not ok:
+            sys.exit(1)
     elif args.mode == "run":
         run_full(rows, args.inventory, args.keep)
 

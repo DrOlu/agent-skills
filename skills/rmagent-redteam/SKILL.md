@@ -96,4 +96,18 @@ After a run, state plainly:
 
 - `proc_spawns` (4688) needs Process Creation auditing on the target. If it shows 0, check `auditpol /get /subcategory:"Process Creation"`.
 - `system_outbound_conn` needs the Sysmon NetworkConnect ring enabled (`<NetworkConnect onmatch="exclude">`). The point-in-time `edges` snapshot misses a sub-second connection that already closed; the Sysmon ring persists it. If it shows 0, confirm Sysmon's NetworkConnect config is on.
+- `failed_admin_logons` (4625) needs **Logon failure auditing** on the target (`auditpol /set /subcategory:"Logon" /failure:enable`). The drill stages it via the `LogonUser` Win32 API with a bad password — a real failed network logon, but Windows only writes 4625 when that subcategory is audited. On this estate ws1 has it on, ws2 does not.
 - The drill runs as Administrator over WinRM, so the staged "failed Administrator logon" events are real 4625s for the local Administrator account.
+
+## Hardening changelog (2026-08-19)
+
+Live-verified bug fixes — the drill previously scored **6/6 with false positives**; it now scores honestly (6/6 only when every signal is genuinely staged AND detected):
+
+- **`net.exe` is called by full path** (`$env:SystemRoot\System32\net.exe`). On ws1, Impacket's `net.py` shadows `net.exe` in PATH, so `net user ... /add` silently failed while the drill still reported "ok" — the new-local-admin artifact was never created (false negative).
+- **`failed_logons` now stages via the `LogonUser` Win32 API** with a bad password. The old `net use \\HOST\IPC$ /user:... badpw` trick generates **zero** 4625 events on loopback (verified live on both boxes) — the "detected" score was actually counting real attack traffic (ws1 is brute-forced from `95.142.115.12` every ~2 min).
+- **Every artifact is verified after staging**; the JSON reports `verified={signal: bool}` so the scorer can't count a silent failure as staged.
+- **The scorer only counts signals verified as staged on that box** — real background activity (routine service restarts, live brute-force traffic, drill leftovers from earlier runs) no longer inflates the score.
+- **"Not staged" and "Not detected" are separate report categories** — an environment limitation (audit policy off) is no longer confused with a defender miss, and each gap names the exact `auditpol` command that fixes it.
+- **`clean.ps1` self-verifies** and reports `still_present`; `redteam.py clean` exits non-zero if anything remains.
+- **Signal-name mapping fixed** (`failed_logons` ↔ `failed_admin_logons`, `scheduled_task` ↔ `new_scheduled_task`) — verified signals were previously never matched to the expected keys, so genuine detections were dropped.
+- Payloads compacted under the WinRM UTF-16LE base64 command-line budget (~8191 chars).

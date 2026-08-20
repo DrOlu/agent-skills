@@ -105,6 +105,7 @@ cp "$SKILL_DIR/assets/inventory.example.yaml" ./estate.yaml
 | **What changed?** (explain) | `explain.ps1` | group/service/task/account changes + **4648/4672** (explicit creds, special privs) + **WMI event subscriptions (5861 — fileless persistence, ATT&CK T1546.003)** + **audit-log-cleared (1102 — anti-forensics)** + **LOLBin spawns with command line (4688)** + process spawns by Administrator/SYSTEM in the window, capped | the whole tenant/ring export |
 | **What connected?** (netedges) | `netedges.ps1` | SYSTEM/Administrator-owned outbound connections from the **Sysmon EID3 ring** (a persisted log, not a point-in-time snapshot) — catches transient connections after they close. Requires Sysmon with `<NetworkConnect onmatch="exclude">` | the full netflow / packet capture |
 | **What code ran?** (pslogs) | `pslogs.ps1` | **PowerShell script blocks (4104) — the actual code being executed**, decompiled. An `-enc` payload appears here as readable text. Requires script-block logging (was already ON on both boxes). NOTE: 4104's UserId field is often empty; blocks are returned unfiltered (capped) because every block is worth reading | the whole PowerShell operational log |
+| **What if Sysmon is gone?** (kernring) | `kernring.ps1` | Process + network events from the **built-in kernel analytic channels** (`Kernel-Process/Analytic`, `Kernel-Network/Analytic`) — the no-Sysmon fallback. Also reports `sysmon_status` (the tripwire). Requires setup step D3. **Degraded mode**: no process names on net events, no command lines, short ring (minutes not days) | the whole ETW stream |
 
 > `edges` reads *currently-Established* connections — a point-in-time snapshot that misses sub-second connections. `netedges` reads the **Sysmon ring**, which persists them. Use `netedges` when you need to catch transient SYSTEM/Administrator outbound connections (e.g. a short C2 beacon). Both stay pull-only, both capped — no lake.
 
@@ -210,3 +211,29 @@ Driven by a live probe of what sources actually exist on WS1/WS2:
 - `hunt.py` prints and records all of it; Telegram smoke alerts name the new signals (audit-cleared gets an explicit "anti-forensics!" flag).
 
 **Prerequisites for the new signals:** 4688 command lines need `auditpol /set /subcategory:"Process Creation" /success:enable` **plus** the registry key `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit\ProcessCreationIncludeCmdLine_Enabled = 1`. 4104 needs script-block logging (Group Policy: Administrative Templates → Windows Components → Windows PowerShell → PowerShell Script Block Logging; or the registry equivalent under `HKLM\SOFTWARE\Wow6432Node\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging`). Sysmon 22 needs the DnsQuery rule in the config.
+
+## Rev 4 — kernring: the no-Sysmon fallback (2026-08-20)
+
+**Why:** sophisticated attackers target Sysmon specifically — `Stop-Service Sysmon64; sc.exe delete Sysmon64` — and if Sysmon is your only process/network ring, that one command blinds you. The kernel analytic channels are built into Windows, have no obvious service to stop, and give you a degraded but functional ring when Sysmon is gone.
+
+**What was added:**
+
+- **New seventh question `kernring`** — reads `Microsoft-Windows-Kernel-Process/Analytic` (process start/stop with PID, image, parent PID, and command line where available) and `Microsoft-Windows-Kernel-Network/Analytic` (TCP/UDP connect with PID, dest IP, dest port). Also reports `sysmon_status` in every response.
+- **`sysmon_status` tripwire in `attest`** — every census now reports whether Sysmon is Running, Stopped, or not-installed. A change from Running to anything else is a finding: either the sensor died or someone stripped it. This is the signal that tells you when to fall back to kernring.
+- **`hunt.py` fires a Telegram smoke alert when Sysmon is not running** — "the primary ring is down; kernring is the fallback."
+- **Setup step D3** — `wevtutil sl Microsoft-Windows-Kernel-Process/Analytic /e:true` and the Network equivalent, wired into the setup docs alongside D1 (auditpol) and D2 (Sysmon ring).
+
+**The honest fidelity gap** (documented, not hidden):
+
+| | netedges (Sysmon) | kernring (kernel channels) |
+|---|---|---|
+| Process name on network events | ✅ | ❌ PID only — must join |
+| Command lines | ✅ | ⚠️ version-dependent |
+| Process hashes | ✅ | ❌ |
+| Stable GUIDs / parent chains | ✅ | ❌ PID-based, PIDs recycle |
+| Ring depth | Days (configurable) | **Minutes** (small fixed buffer) |
+| Survives Sysmon deletion | ❌ | ✅ |
+
+**Design decision:** kernring is a *separate question*, not a silent fallback inside `netedges`. If `netedges` silently degraded, the operator would think they're getting Sysmon-quality data when they're not — a lie by omission that violates the "a hole is an answer" principle. The operator asks the question that matches the fidelity they need.
+
+**Status: implemented, payload verified under the WinRM budget, NOT yet live-validated.** The estate was unreachable at implementation time (both boxes down / security group changed). When the boxes are back: enable the channels (setup D3), run a hunt, confirm events appear and field names match (`ProcessID`/`ImageName`/`CommandLine` on Process; `PID`/`daddr`/`dport` on Network), and measure the actual ring depth.

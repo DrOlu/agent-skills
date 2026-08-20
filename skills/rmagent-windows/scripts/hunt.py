@@ -86,8 +86,13 @@ def main():
                                  "special_privs": n_privs, "conns": n_conns,
                                  "t": d.get("utc")})
             # explain only where there is smoke (budget: depth-capped)
+            # NOTE: explain payloads are far denser than edges (lolbin entries
+            # carry full command lines), so use a tighter limit to stay under
+            # the 32 KB anti-lake cap. 4688 auditing ON makes proc/lolbin
+            # lists grow fast on busy boxes.
             if n_logons > 0 or n_conns > 0 or n_expl > 0:
-                ex = lib.ask(r, "explain", since_hours=since_h, limit=args.limit)
+                ex = lib.ask(r, "explain", since_hours=since_h,
+                             limit=max(3, args.limit // 4))
                 lib.record_ask(case_dir, r, "explain", ex)
                 if ex.get("ok") and ex.get("data"):
                     ed = ex["data"]
@@ -137,6 +142,32 @@ def main():
                     h = pl.get("hole") or lib.hole(f"{wid} pslogs", pl.get("error") or "empty")
                     write_hole(case_dir, h)
                     print(f"  {wid:8} pslogs: HOLE — {h['why']}")
+
+            # kernring — kernel analytic channels (the no-Sysmon fallback)
+            if "kernring" in (r.get("skills") or []):
+                kr = lib.ask(r, "kernring", since_hours=since_h, limit=args.limit)
+                lib.record_ask(case_dir, r, "kernring", kr)
+                if kr.get("ok") and kr.get("data"):
+                    d = kr["data"]
+                    np_ = len(d.get("procs") or [])
+                    nn_ = len(d.get("nets") or [])
+                    ss = d.get("sysmon_status") or "unknown"
+                    print(f"  {wid:8} kernring: {np_} proc events, {nn_} net events "
+                          f"(sysmon={ss})")
+                    write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
+                                         "witness": wid, "skill": "kernring",
+                                         "procs": np_, "nets": nn_,
+                                         "sysmon_status": ss,
+                                         "t": d.get("utc")})
+                    # Tripwire: Sysmon not running is a finding
+                    if ss in ("not-installed", "stopped", "unknown"):
+                        notify.alert_smoke(wid, [f"Sysmon is {ss} — "
+                                                f"the primary ring is down; kernring is the fallback"],
+                                           case_dir.name)
+                else:
+                    h = kr.get("hole") or lib.hole(f"{wid} kernring", kr.get("error") or "empty")
+                    write_hole(case_dir, h)
+                    print(f"  {wid:8} kernring: HOLE — {h['why']}")
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             write_hole(case_dir, h)

@@ -44,6 +44,15 @@ try {
                Select-Object -Unique RemoteAddress).Count
 } catch {}
 
+# Sysmon health — the tripwire that tells you when to fall back to kernring.
+# An attacker who deletes Sysmon (Stop-Service Sysmon64; sc.exe delete Sysmon64)
+# changes this from "Running" to "not-installed". That change is a finding.
+$sysmon = 'unknown'
+try {
+  $svc = Get-Service Sysmon64,Sysmon -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($svc) { $sysmon = "$($svc.Name)=$($svc.Status)" } else { $sysmon = 'not-installed' }
+} catch {}
+
 [pscustomobject]@{
   skill               = 'attest'
   host                = $env:COMPUTERNAME
@@ -55,4 +64,5 @@ try {
   admin_ok_5min       = $ok
   local_admin_count   = $lac
   system_remote_conns = $sysconn
+  sysmon_status       = $sysmon
 } | ConvertTo-Json -Compress

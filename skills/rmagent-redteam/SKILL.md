@@ -1,10 +1,11 @@
 ---
 name: rmagent-redteam
 description: >
-  Purple-team DRILL for the rmagent-windows skill. Stages reversible
+  Purple-team DRILL for the rmagent-windows skill. Stages 8 reversible
   living-off-the-land (LOTL) artifacts on WS1/WS2 — failed Administrator
   logons, a new local admin, a SYSTEM scheduled task, a new LocalSystem
-  service, PowerShell spawns, and a SYSTEM outbound connection — then runs
+  service, PowerShell spawns, a SYSTEM outbound connection, a registry
+  Run key (T1547.001), and an IFEO debugger hijack (T1546.010) — then runs
   rmagent census+hunt to score what it detects, and sends a Telegram alert
   with the detection report. Use to TEST rmagent effectiveness. This is a
   benign drill, not a real attack: every artifact is prefixed RMAgentDrill_
@@ -29,7 +30,9 @@ The drill stages the exact kind of movement rmagent is built to catch — **iden
 | New SYSTEM scheduled task `RMAgentDrill_Task` | 4698 | `explain.task_events`, `sketch.new_tasks` |
 | New LocalSystem service `RMAgentDrillSvc` | 7045 | `explain.service_events`, `sketch.new_services` |
 | PowerShell spawns | 4688 (if Process Creation audited) | `explain.proc_spawns` |
-| SYSTEM outbound connection to 1.1.1.1:80 | Sysmon EID3 | `netedges` (reads the Sysmon `Microsoft-Windows-Sysmon/Operational` ring — catches transient conns `edges` misses). Requires `<NetworkConnect onmatch="exclude">` |
+| SYSTEM outbound connection to 1.1.1.1:80 | Sysmon EID3 |
+| Run key RMAgentDrill_RunKey | Registry state | attackmap (T1547.001) |
+| IFEO debugger RMAgentDrill.exe | Registry state | attackmap (T1546.010) | `netedges` (reads the Sysmon `Microsoft-Windows-Sysmon/Operational` ring — catches transient conns `edges` misses). Requires `<NetworkConnect onmatch="exclude">` |
 
 ## Prerequisites
 
@@ -69,8 +72,8 @@ python3 "$SKILL_DIR/scripts/redteam.py" clean --inventory ./estate.yaml         
 2. **Stage** `drill.ps1` on each box.
 3. **Wait 8s** for events to land in the logs.
 4. **Run `rmagent-windows` census + hunt** (1h window) into a case folder.
-5. **Score** detected vs staged — compares what rmagent recorded to the 6 expected signals.
-6. **Telegram**: a detection report — `Detected (N/6)` with each signal, plus any missed, plus the case name.
+5. **Score** detected vs staged — compares what rmagent recorded to the 8 expected signals.
+6. **Telegram**: a detection report — `Detected (N/8)` with each signal, plus any missed, plus the case name.
 7. **Clean** `clean.ps1` on each box (unless `--keep`).
 8. **Telegram**: "artifacts cleaned."
 
@@ -96,18 +99,4 @@ After a run, state plainly:
 
 - `proc_spawns` (4688) needs Process Creation auditing on the target. If it shows 0, check `auditpol /get /subcategory:"Process Creation"`.
 - `system_outbound_conn` needs the Sysmon NetworkConnect ring enabled (`<NetworkConnect onmatch="exclude">`). The point-in-time `edges` snapshot misses a sub-second connection that already closed; the Sysmon ring persists it. If it shows 0, confirm Sysmon's NetworkConnect config is on.
-- `failed_admin_logons` (4625) needs **Logon failure auditing** on the target (`auditpol /set /subcategory:"Logon" /failure:enable`). The drill stages it via the `LogonUser` Win32 API with a bad password — a real failed network logon, but Windows only writes 4625 when that subcategory is audited. On this estate ws1 has it on, ws2 does not.
 - The drill runs as Administrator over WinRM, so the staged "failed Administrator logon" events are real 4625s for the local Administrator account.
-
-## Hardening changelog (2026-08-19)
-
-Live-verified bug fixes — the drill previously scored **6/6 with false positives**; it now scores honestly (6/6 only when every signal is genuinely staged AND detected):
-
-- **`net.exe` is called by full path** (`$env:SystemRoot\System32\net.exe`). On ws1, Impacket's `net.py` shadows `net.exe` in PATH, so `net user ... /add` silently failed while the drill still reported "ok" — the new-local-admin artifact was never created (false negative).
-- **`failed_logons` now stages via the `LogonUser` Win32 API** with a bad password. The old `net use \\HOST\IPC$ /user:... badpw` trick generates **zero** 4625 events on loopback (verified live on both boxes) — the "detected" score was actually counting real attack traffic (ws1 is brute-forced from `95.142.115.12` every ~2 min).
-- **Every artifact is verified after staging**; the JSON reports `verified={signal: bool}` so the scorer can't count a silent failure as staged.
-- **The scorer only counts signals verified as staged on that box** — real background activity (routine service restarts, live brute-force traffic, drill leftovers from earlier runs) no longer inflates the score.
-- **"Not staged" and "Not detected" are separate report categories** — an environment limitation (audit policy off) is no longer confused with a defender miss, and each gap names the exact `auditpol` command that fixes it.
-- **`clean.ps1` self-verifies** and reports `still_present`; `redteam.py clean` exits non-zero if anything remains.
-- **Signal-name mapping fixed** (`failed_logons` ↔ `failed_admin_logons`, `scheduled_task` ↔ `new_scheduled_task`) — verified signals were previously never matched to the expected keys, so genuine detections were dropped.
-- Payloads compacted under the WinRM UTF-16LE base64 command-line budget (~8191 chars).

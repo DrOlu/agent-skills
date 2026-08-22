@@ -161,6 +161,8 @@ EXPECTED = {
     "new_service":           "explain.service_events / sketch.new_services (7045)",
     "powershell_spawns":     "explain.proc_spawns (4688, if audited)",
     "system_outbound_conn":  "netedges (Sysmon EID3 ring: SYSTEM-owned to 1.1.1.1:80)",
+    "run_key":               "attackmap (T1547.001: registry Run key persistence)",
+    "ifeo_hijack":           "attackmap (T1546.010: IFEO debugger hijack)",
 }
 
 def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
@@ -183,6 +185,8 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
         "new_service": "new_service",
         "powershell_spawns": "powershell_spawns",
         "system_outbound_conn": "scheduled_task",
+        "run_key": "run_key",
+        "ifeo_hijack": "ifeo_hijack",
     }
 
     def staged_on(sig: str, wid: str) -> bool:
@@ -241,6 +245,32 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
               f"({len(drill_conns)} to 1.1.1.1 or drill-tagged)")
         if drill_conns:
             found["system_outbound_conn"] = True
+
+    # --- attackmap per box: the STATE check catches registry persistence (T1547.001, T1546.010) ---
+    print("[redteam] scoring: asking rmagent attackmap (state check) on each box...")
+    for r in rows:
+        wid = r.get("id")
+        if "attackmap" not in (r.get("skills") or []):
+            continue
+        try:
+            creds = rma.creds_for(r)
+        except SystemExit:
+            continue
+        am = rma.ask(r, "attackmap", since_hours=1, limit=20, creds=creds)
+        if not (am.get("ok") and am.get("data")):
+            print(f"  {wid:6} attackmap: HOLE — {(am.get('error') or '')[:60]}")
+            continue
+        findings = am["data"].get("findings") or []
+        run_key_hit = [f for f in findings if f.get("n") == "run_keys"
+                       and any("RMAgentDrill" in str(v) for v in (f.get("v") or []))]
+        ifeo_hit = [f for f in findings if f.get("n") == "ifeo_dbg"
+                    and any("RMAgentDrill" in str(v) for v in (f.get("v") or []))]
+        print(f"  {wid:6} attackmap: {len(findings)} techniques with findings "
+              f"(run_key drill: {bool(run_key_hit)}, ifeo drill: {bool(ifeo_hit)})")
+        if run_key_hit:
+            found["run_key"] = True
+        if ifeo_hit:
+            found["ifeo_hijack"] = True
 
     # --- hunt explain hops: proc_spawns + service/task/group events ---
     # (only signals we verified we staged — otherwise real background activity
@@ -321,7 +351,7 @@ def run_full(rows, inventory, keep_dirty: bool):
 
     hunt = subprocess.run(
         [sys.executable, str(RMA / "hunt.py"), "--inventory", inventory,
-         "--since", "1h", "--case-dir", str(case_dir)],
+         "--since", "1h", "--case-dir", str(case_dir), "--limit", "8"],
         capture_output=True, text=True)
     print("--- hunt ---"); print(hunt.stdout)
 
@@ -339,6 +369,8 @@ def run_full(rows, inventory, keep_dirty: bool):
         "new_service": "new_service",
         "powershell_spawns": "powershell_spawns",
         "system_outbound_conn": "scheduled_task",
+        "run_key": "run_key",
+        "ifeo_hijack": "ifeo_hijack",
     }
     def _staged_anywhere(sig: str) -> bool:
         return bool(staged_verified.get(_DRILL_KEY.get(sig, sig)))
@@ -353,6 +385,8 @@ def run_full(rows, inventory, keep_dirty: bool):
         "system_outbound_conn": "netedges (Sysmon EID3 ring) missed it — check Sysmon NetworkConnect config is on",
         "failed_admin_logons": "4625 needs 'Audit Logon' failure auditing ON (ws2 has it OFF — run: auditpol /set /subcategory:\"Logon\" /failure:enable)",
         "new_service": "7045 needs no extra audit policy; check the service was created",
+        "run_key": "attackmap needs the run_key check; verify the registry value was created (HKLM Run key)",
+        "ifeo_hijack": "attackmap needs the ifeo_dbg check; verify the IFEO Debugger value was created",
     }
     summary = (f"✅ RMAgent drill — detection report\n"
                f"Detected ({len(detected)}/{len(EXPECTED)}):\n"

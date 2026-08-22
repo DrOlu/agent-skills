@@ -106,6 +106,7 @@ cp "$SKILL_DIR/assets/inventory.example.yaml" ./estate.yaml
 | **What connected?** (netedges) | `netedges.ps1` | SYSTEM/Administrator-owned outbound connections from the **Sysmon EID3 ring** (a persisted log, not a point-in-time snapshot) — catches transient connections after they close. Requires Sysmon with `<NetworkConnect onmatch="exclude">` | the full netflow / packet capture |
 | **What code ran?** (pslogs) | `pslogs.ps1` | **PowerShell script blocks (4104) — the actual code being executed**, decompiled. An `-enc` payload appears here as readable text. Requires script-block logging (was already ON on both boxes). NOTE: 4104's UserId field is often empty; blocks are returned unfiltered (capped) because every block is worth reading | the whole PowerShell operational log |
 | **What if Sysmon is gone?** (kernring) | `kernring.ps1` | Process + network events from the **built-in kernel analytic channels** (`Kernel-Process/Analytic`, `Kernel-Network/Analytic`) — the no-Sysmon fallback. Also reports `sysmon_status` (the tripwire). Requires setup step D3. **Degraded mode**: no process names on net events, no command lines, short ring (minutes not days) | the whole ETW stream |
+| **What persistence already exists?** (attackmap) | `attackmap.ps1` | **ATT&CK-mapped persistence STATE check** — reads the registry locations BLUESPAWN enumerated (Run keys, IFEO debuggers, AppCert/AppInit DLLs, SSPs, Winlogon hijack, Netsh helpers, port monitors, logon scripts). Every finding carries its technique ID (T1547.001, T1546.010, etc.). Catches persistence that predates our monitoring window | the whole registry |
 
 > `edges` reads *currently-Established* connections — a point-in-time snapshot that misses sub-second connections. `netedges` reads the **Sysmon ring**, which persists them. Use `netedges` when you need to catch transient SYSTEM/Administrator outbound connections (e.g. a short C2 beacon). Both stay pull-only, both capped — no lake.
 
@@ -237,3 +238,28 @@ Driven by a live probe of what sources actually exist on WS1/WS2:
 **Design decision:** kernring is a *separate question*, not a silent fallback inside `netedges`. If `netedges` silently degraded, the operator would think they're getting Sysmon-quality data when they're not — a lie by omission that violates the "a hole is an answer" principle. The operator asks the question that matches the fidelity they need.
 
 **Status: implemented, payload verified under the WinRM budget, NOT yet live-validated.** The estate was unreachable at implementation time (both boxes down / security group changed). When the boxes are back: enable the channels (setup D3), run a hunt, confirm events appear and field names match (`ProcessID`/`ImageName`/`CommandLine` on Process; `PID`/`daddr`/`dport` on Network), and measure the actual ring depth.
+
+## Rev 5 — attackmap + ATT&CK tagging + expanded LOLBins (2026-08-21)
+
+**Source:** BLUESPAWN's ATT&CK-mapped hunt registry (github.com/ION28/BLUESPAWN, MIT license). We took the *knowledge* — the registry locations, the technique mappings, the LOLBin list — and reimplemented it pull-only. We did not take the agent, the YARA scanning, the process-memory scanning, or the mitigation system. Those violate the architecture.
+
+**What was added:**
+
+- **New eighth question `attackmap`** — an ATT&CK-mapped persistence STATE check. Reads 13 registry locations BLUESPAWN enumerated: Run keys (T1547.001), IFEO debuggers (T1546.010), AppCert DLLs (T1546.009), AppInit DLLs (T1546.010), Security Support Providers (T1547.005), Notification packages (T1547.002), Winlogon hijack (T1547.004), Netsh helpers (T1546.007), port monitors (T1547.010), logon scripts (T1037.001), recent accounts (T1136.001), disabled firewall profiles (T1562.004). Every finding carries its technique ID.
+- **Why state, not events:** `explain` catches when persistence is CREATED (4698, 7045, 4720). `attackmap` catches persistence that ALREADY EXISTS — including anything that predates our monitoring window or was staged before rmagent was installed. This is the "what was already on the box when we started" check.
+- **ATT&CK tags on existing findings.** `sketch` now returns `admin_failed_attack='T1110'`, `new_local_admins_attack='T1136.001'`, `new_services_attack='T1543.003'`, `new_tasks_attack='T1053.005'`. The operator sees not just "a task was created" but "T1053.005: Scheduled Task persistence."
+- **LOLBin list expanded 18 → 80** (from BLUESPAWN's curated list). Adds `msxsl`, `installutil`, `msbuild`, `forfiles`, `diskshadow`, `dnscmd`, `cmstp`, `msdt`, `odbcconf`, `pcalua`, `rasautou`, `regasm`, `regsvcs`, `runscripthelper`, `scriptrunner`, `syncappvpublishing`, `tttracer`, `verclsid`, `wab`, `xwizard`, `appvlp`, `bginfo`, `cdb`, `csi`, `devtoolslauncher`, `dnx`, `dotnet`, `dxcap`, `mftrace`, `msdeploy`, `rcsi`, `sqlps`, `sqltoolsps`, `squirrel`, `te`, `tracker`, `update`, `vsjitdebugger`, `wsl`, and more.
+- **`hunt.py` integration:** attackmap prints `N/13 ATT&CK techniques with findings`, lists each technique found, records `checked`/`found` as hop fields, and fires a Telegram smoke alert for high-severity techniques (IFEO hijack, SSP, Winlogon hijack, AppCert, firewall disabled).
+
+**What we deliberately did NOT take from BLUESPAWN:**
+
+| Left out | Why |
+|---|---|
+| The agent | Installs a service on every box. We are agentless by design. |
+| YARA file scanning | Requires reading file contents off the box. Violates the no-lake rule. |
+| Process memory scanning | Needs kernel access or an agent. Out of scope. |
+| Their mitigation system | 20+ hardcoded registry changes with no dry-run, no journal, no undo. The Actuator does this properly. |
+| Real-time ETW monitoring | Requires a persistent consumer process = an agent. kernring is our answer. |
+| The C++ implementation | ~16 hunt files, thousands of lines. We took the knowledge, not the code. |
+
+**Status: implemented, payload verified under the WinRM budget, NOT yet live-validated** (estate still unreachable). When the boxes are back: run a hunt, confirm attackmap returns findings for the known Run keys, verify the ATT&CK tags appear in sketch output, and confirm the expanded LOLBin list doesn't over-match.

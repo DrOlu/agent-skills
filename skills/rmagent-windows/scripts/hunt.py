@@ -143,31 +143,61 @@ def main():
                     write_hole(case_dir, h)
                     print(f"  {wid:8} pslogs: HOLE — {h['why']}")
 
-            # kernring — kernel analytic channels (the no-Sysmon fallback)
-            if "kernring" in (r.get("skills") or []):
-                kr = lib.ask(r, "kernring", since_hours=since_h, limit=args.limit)
-                lib.record_ask(case_dir, r, "kernring", kr)
-                if kr.get("ok") and kr.get("data"):
-                    d = kr["data"]
-                    np_ = len(d.get("procs") or [])
-                    nn_ = len(d.get("nets") or [])
-                    ss = d.get("sysmon_status") or "unknown"
-                    print(f"  {wid:8} kernring: {np_} proc events, {nn_} net events "
-                          f"(sysmon={ss})")
-                    write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
-                                         "witness": wid, "skill": "kernring",
-                                         "procs": np_, "nets": nn_,
-                                         "sysmon_status": ss,
-                                         "t": d.get("utc")})
-                    # Tripwire: Sysmon not running is a finding
-                    if ss in ("not-installed", "stopped", "unknown"):
-                        notify.alert_smoke(wid, [f"Sysmon is {ss} — "
-                                                f"the primary ring is down; kernring is the fallback"],
-                                           case_dir.name)
-                else:
-                    h = kr.get("hole") or lib.hole(f"{wid} kernring", kr.get("error") or "empty")
-                    write_hole(case_dir, h)
-                    print(f"  {wid:8} kernring: HOLE — {h['why']}")
+        # kernring — kernel analytic channels (the no-Sysmon fallback)
+        if "kernring" in (r.get("skills") or []):
+            kr = lib.ask(r, "kernring", since_hours=since_h, limit=args.limit)
+            lib.record_ask(case_dir, r, "kernring", kr)
+            if kr.get("ok") and kr.get("data"):
+                d = kr["data"]
+                np_ = len(d.get("procs") or [])
+                nn_ = len(d.get("nets") or [])
+                ss = d.get("sysmon_status") or "unknown"
+                print(f"  {wid:8} kernring: {np_} proc events, {nn_} net events "
+                      f"(sysmon={ss})")
+                write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
+                                     "witness": wid, "skill": "kernring",
+                                     "procs": np_, "nets": nn_,
+                                     "sysmon_status": ss,
+                                     "t": d.get("utc")})
+                # Tripwire: Sysmon not running is a finding
+                if ss in ("not-installed", "stopped", "unknown"):
+                    notify.alert_smoke(wid, [f"Sysmon is {ss} — "
+                                            f"the primary ring is down; kernring is the fallback"],
+                                       case_dir.name)
+            else:
+                h = kr.get("hole") or lib.hole(f"{wid} kernring", kr.get("error") or "empty")
+                write_hole(case_dir, h)
+                print(f"  {wid:8} kernring: HOLE — {h['why']}")
+
+        # attackmap — ATT&CK-mapped persistence state (registry locations)
+        if "attackmap" in (r.get("skills") or []):
+            am = lib.ask(r, "attackmap", since_hours=since_h, limit=args.limit)
+            lib.record_ask(case_dir, r, "attackmap", am)
+            if am.get("ok") and am.get("data"):
+                d = am["data"]
+                nf = d.get("found") or 0
+                nc = d.get("checked") or 0
+                print(f"  {wid:8} attackmap: {nf}/{nc} ATT&CK techniques with findings")
+                write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
+                                     "witness": wid, "skill": "attackmap",
+                                     "checked": nc, "found": nf,
+                                     "t": d.get("utc")})
+                # Report the techniques found
+                for f_ in (d.get("findings") or []):
+                    print(f"    {f_.get('t')}: {f_.get('n')} ({f_.get('c')} values)")
+                # High-severity techniques warrant a smoke alert
+                high = [f_ for f_ in (d.get("findings") or [])
+                        if f_.get("t") in ("T1546.010", "T1547.005", "T1547.004",
+                                           "T1546.009", "T1562.004")]
+                if high:
+                    findings = [f"{f_.get('t')} {f_.get('n')} — {f_.get('c')} value(s)"
+                                for f_ in high]
+                    notify.alert_smoke(wid, findings, case_dir.name)
+            else:
+                h = am.get("hole") or lib.hole(f"{wid} attackmap", am.get("error") or "empty")
+                write_hole(case_dir, h)
+                print(f"  {wid:8} attackmap: HOLE — {h['why']}")
+
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             write_hole(case_dir, h)

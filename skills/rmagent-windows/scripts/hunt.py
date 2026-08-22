@@ -143,26 +143,26 @@ def main():
                     write_hole(case_dir, h)
                     print(f"  {wid:8} pslogs: HOLE — {h['why']}")
 
-        # kernring — kernel analytic channels (the no-Sysmon fallback)
+        # kernring — kernel ETW burst capture (10s window, not a ring)
         if "kernring" in (r.get("skills") or []):
             kr = lib.ask(r, "kernring", since_hours=since_h, limit=args.limit)
             lib.record_ask(case_dir, r, "kernring", kr)
             if kr.get("ok") and kr.get("data"):
                 d = kr["data"]
                 np_ = len(d.get("procs") or [])
-                nn_ = len(d.get("nets") or [])
                 ss = d.get("sysmon_status") or "unknown"
-                print(f"  {wid:8} kernring: {np_} proc events, {nn_} net events "
+                bs = d.get("burst_seconds") or 10
+                print(f"  {wid:8} kernring: {np_} proc events in {bs}s burst "
                       f"(sysmon={ss})")
                 write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                      "witness": wid, "skill": "kernring",
-                                     "procs": np_, "nets": nn_,
+                                     "procs": np_, "burst_seconds": bs,
                                      "sysmon_status": ss,
                                      "t": d.get("utc")})
                 # Tripwire: Sysmon not running is a finding
                 if ss in ("not-installed", "stopped", "unknown"):
                     notify.alert_smoke(wid, [f"Sysmon is {ss} — "
-                                            f"the primary ring is down; kernring is the fallback"],
+                                            f"the primary ring is down; kernring burst is the fallback"],
                                        case_dir.name)
             else:
                 h = kr.get("hole") or lib.hole(f"{wid} kernring", kr.get("error") or "empty")

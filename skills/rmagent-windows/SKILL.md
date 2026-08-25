@@ -263,3 +263,31 @@ Driven by a live probe of what sources actually exist on WS1/WS2:
 | The C++ implementation | ~16 hunt files, thousands of lines. We took the knowledge, not the code. |
 
 **Status: LIVE-VALIDATED 2026-08-25.** Ran against both WS1 and WS2: `attackmap` returns findings with ATT&CK tags on both boxes (ws1: T1547.001 run_keys ×1, T1546.007 netsh ×17; ws2: T1547.001 ×2, T1546.007 ×17). The full 8-signal redteam drill confirmed attackmap catches the staged drill artifacts: `run_key drill: True, ifeo drill: True` on both boxes (the two new Rev 5 signals). Drill artifacts cleaned up cleanly afterwards (0 remaining).
+
+## Rev 6 — RTerm observability integration notes (2026-08-25)
+
+**No skill changes required.** Documented so operators know what's already available.
+
+RTerm (v3.2.14+) now ships OpenLLMetry-style LLM tracing: every model call the
+agent makes while running an rmagent hunt (the `explain`/`sketch` analysis
+passes, the completion audits) is recorded as an APM span in RTerm's trace
+store, grouped per agent run. That means:
+
+- **Hunt latency is already observable.** `rterm call observability:apmSummary`
+  shows `llm.chat` / `llm.thinking` / `llm.audit.*` spans with p50/p95 latency —
+  how long the LLM analysis of each hunt took, per run, with zero config.
+- **No new question needed.** The skill's job is asking the *boxes* questions;
+  RTerm's tracing covers the *agent's own* work automatically. Adding a
+  `trace` question would duplicate what the platform already does.
+- **The skill stays dependency-free.** It deliberately has no RTerm/OTel
+  imports — it runs standalone with just pywinrm. Tracing happens around it,
+  not inside it.
+- **If you want hunt results in an external APM** (Jaeger/Tempo/Datadog), set
+  `OTEL_EXPORTER_OTLP_ENDPOINT` on the RTerm backend — LLM spans forward with
+  standard `gen_ai.*` attributes. Host metrics push on the same endpoint.
+  This is RTerm configuration, not a skill change.
+
+**What is NOT traced:** the WinRM knocks themselves (they're pywinrm calls
+made by the skill's scripts, outside RTerm's agent loop). Their timing lives
+in the case hops (`asked`/`answered` timestamps) — by design, the case file is
+the record.

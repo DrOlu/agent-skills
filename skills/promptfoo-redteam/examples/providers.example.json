@@ -1,0 +1,20 @@
+[
+  {
+    "name": "kimi-k3",
+    "model": "moonshotai/kimi-k3",
+    "baseUrl": "https://api.superagent.ng/v1",
+    "apiKey": "YOUR_API_KEY_HERE"
+  },
+  {
+    "name": "glm-5.1",
+    "model": "z-ai/glm-5.1",
+    "baseUrl": "https://api.superagent.ng/v1",
+    "apiKey": "YOUR_API_KEY_HERE"
+  },
+  {
+    "name": "sonnet-4.6",
+    "model": "anthropic/claude-sonnet-4.6",
+    "baseUrl": "https://api.superagent.ng/v1",
+    "apiKey": "YOUR_API_KEY_HERE"
+  }
+]

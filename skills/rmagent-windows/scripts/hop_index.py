@@ -25,7 +25,8 @@ HOP_KINDS = {"4624", "4648", "4672", "conn", "task", "service", "wmi", "file", "
 
 def record(case: str, entry_id: int, host: str, principal: str,
            logonid: str | None = None, hop_kind: str = "4624",
-           t: str | None = None, detail: str = "") -> dict:
+           t: str | None = None, detail: str = "",
+           src_ip: str | None = None) -> dict:
     """Append one hop to the index. Returns the entry."""
     INDEX.parent.mkdir(parents=True, exist_ok=True)
     e = {
@@ -35,6 +36,7 @@ def record(case: str, entry_id: int, host: str, principal: str,
         "host": host,
         "principal": principal,
         "logonid": logonid,
+        "src_ip": src_ip,
         "kind": hop_kind,
         "detail": str(detail)[:200],
     }

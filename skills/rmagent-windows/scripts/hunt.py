@@ -395,10 +395,14 @@ def main():
         pass
 
     # --- rev 6: record hops to the index (cross-case memory) ---
+    # src_ip + logonid must propagate: session_correlation joins on
+    # (account, src_ip) across hosts, and by_logonid queries the index.
     for h in hops:
         hop_index.record(
             case=case_dir.name, entry_id=h.get("seq", 0), host=h.get("witness", "?"),
-            principal=",".join(track), logonid=None,
+            principal=",".join(track),
+            logonid=h.get("logonid"),
+            src_ip=h.get("src_ip"),
             hop_kind=h.get("skill", "?"), t=h.get("t"),
             detail=f"logons={h.get('logons', 0)} conns={h.get('conns', 0)}")
 

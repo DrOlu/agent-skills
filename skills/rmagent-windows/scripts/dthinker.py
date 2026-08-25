@@ -143,7 +143,10 @@ def _session_correlation(parsed: list[dict]) -> list[dict]:
         acct = p.get("principal")
         src = p.get("src_ip") or ""
         host = p.get("host")
-        if acct and host:
+        # FP guard: without a real source IP there is no join — (account, "")
+        # would match across hosts and flag any same-account activity as
+        # lateral movement. Skip entries with no source.
+        if acct and host and src:
             key = (str(acct).lower(), str(src))
             sessions[key]["hosts"].add(host)
             sessions[key]["ts"].append(p.get("_ts"))

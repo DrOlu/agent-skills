@@ -61,7 +61,7 @@ def _resolve_dest(dest_str, rows):
     return None
 
 
-def _walk_witness(row, stc, T, case_dir, since_h, args, visited):
+def _walk_witness(row, stc, T, case_dir, since_h, args, visited, rows=None):
     """Recursively walk a witness reached via a 4648 hop. Budget-capped by the STC."""
     wid = row.get("id")
     T.think(f"following hop to {wid} (depth {stc.depth}, fanout {stc.fanout})")
@@ -75,12 +75,26 @@ def _walk_witness(row, stc, T, case_dir, since_h, args, visited):
                                     f"{n_expl} explicit-creds")
             print(f"  {wid:8} edges (depth {stc.depth}): {n_logons} logons, "
                   f"{n_expl} explicit-cred uses")
+            # record each logon hop with its REAL kind + join keys
+            for lg in (d.get("logons") or [])[:args.limit]:
+                hop_index.record(
+                    case=case_dir.name, entry_id=T._next_id - 1, host=wid,
+                    principal=lg.get("user") or stc.principal,
+                    logonid=lg.get("lid"), src_ip=lg.get("src"),
+                    hop_kind="4624", t=lg.get("t"))
+            for ec in (d.get("explicit_creds") or [])[:args.limit]:
+                hop_index.record(
+                    case=case_dir.name, entry_id=T._next_id - 1, host=wid,
+                    principal=ec.get("who") or stc.principal,
+                    logonid=None, src_ip=ec.get("src"),
+                    hop_kind="4648", t=ec.get("t"),
+                    detail=f"became={ec.get('became')} dest={ec.get('dest')}")
             # recurse further if more hops and budget remains
             for ec in (d.get("explicit_creds") or []):
-                dest = _resolve_dest(ec.get("dest"), None)
-                # note: we need rows for resolution — pass through args if needed
-                if dest and stc.can_descend:
-                    _walk_witness(dest, stc.child(), T, case_dir, since_h, args, visited)
+                dest = _resolve_dest(ec.get("dest"), rows)
+                if dest and stc.can_descend and dest.get("id") not in visited:
+                    visited.add(dest.get("id"))
+                    _walk_witness(dest, stc.child(), T, case_dir, since_h, args, visited, rows)
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             T.hole(wid, h["why"])
@@ -141,7 +155,8 @@ def main():
             print(f"[thinker] history unavailable: {e}")
 
     # --- rev 6: Security Trace Context — context propagates, data does not ---
-    S = stc_mod.STC(case=case_dir.name, principal=",".join(track), window_h=since_h)
+    S = stc_mod.STC(case=case_dir.name, principal=(track[0] if track else "unknown"),
+                    window_h=since_h)
     T.think(f"STC: {S}")
 
     # --- rev 6: clock-skew detection (the silent killer of cross-host timelines) ---
@@ -198,12 +213,12 @@ def main():
             # --- rev 8: FOLLOW the 4648 hop — the recursive cross-host walk ---
             for ec in (d.get("explicit_creds") or []):
                 dest = _resolve_dest(ec.get("dest"), rows)
-                if dest and dest.get("id") != wid and S.can_descend and wid not in _visited:
+                if dest and dest.get("id") != wid and S.can_descend and dest.get("id") not in _visited:
                     child_stc = S.child()
                     _visited.add(dest.get("id"))
                     T.think(f"4648 hop: {ec.get('who')} became {ec.get('became')} "
                             f"on {dest.get('id')} — following (depth {child_stc.depth})")
-                    _walk_witness(dest, child_stc, T, case_dir, since_h, args, _visited)
+                    _walk_witness(dest, child_stc, T, case_dir, since_h, args, _visited, rows)
             write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                  "witness": wid, "skill": "edges",
                                  "logons": n_logons, "explicit_creds": n_expl,
@@ -395,15 +410,18 @@ def main():
         pass
 
     # --- rev 6: record hops to the index (cross-case memory) ---
-    # src_ip + logonid must propagate: session_correlation joins on
-    # (account, src_ip) across hosts, and by_logonid queries the index.
+    # hop_kind must be a REAL kind (4624/4648/conn) — dthinker's session_correlation
+    # and cross_host_chain join on these, and causal builds edges from them.
+    # Recording "edges"/"explain" (skill names) made those detectors dead on real data.
+    principal0 = track[0] if track else "unknown"
     for h in hops:
         hop_index.record(
             case=case_dir.name, entry_id=h.get("seq", 0), host=h.get("witness", "?"),
-            principal=",".join(track),
+            principal=principal0,
             logonid=h.get("logonid"),
             src_ip=h.get("src_ip"),
-            hop_kind=h.get("skill", "?"), t=h.get("t"),
+            hop_kind=h.get("hop_kind") or h.get("skill", "?"),
+            t=h.get("t"),
             detail=f"logons={h.get('logons', 0)} conns={h.get('conns', 0)}")
 
     # --- rev 6: emit the whole trajectory as OTel spans (best-effort) ---

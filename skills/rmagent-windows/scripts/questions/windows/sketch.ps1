@@ -17,7 +17,7 @@ try{
    $mn=F $_ 'MemberName';$r=$null
    if($mn -and $mn -ne '-'){$r=$mn}
    else{$s=F $_ 'MemberSid';if($s -and $s -ne '-'){try{$r=[System.Security.Principal.SecurityIdentifier]::new($s).Translate([System.Security.Principal.NTAccount]).Value}catch{}}}
-   if($r -and @($cur|Where-Object{$_.Name -eq $r}).Count){$r}
+   if($r -and @($cur|Where-Object{$_.Name -eq $r -or $_.Name -match "\\$r`$"}).Count){$r}
  }|Select-Object -Unique)
 }catch{}
 

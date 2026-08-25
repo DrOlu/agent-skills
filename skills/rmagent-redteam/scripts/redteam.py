@@ -267,9 +267,11 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
                     and any("RMAgentDrill" in str(v) for v in (f.get("v") or []))]
         print(f"  {wid:6} attackmap: {len(findings)} techniques with findings "
               f"(run_key drill: {bool(run_key_hit)}, ifeo drill: {bool(ifeo_hit)})")
-        if run_key_hit:
+        # R1 fix: gate on staged_on — a leftover Run key from a PREVIOUS drill
+        # must not count as a detection of THIS drill
+        if run_key_hit and staged_on("run_key", wid):
             found["run_key"] = True
-        if ifeo_hit:
+        if ifeo_hit and staged_on("ifeo_hijack", wid):
             found["ifeo_hijack"] = True
 
     # --- hunt explain hops: proc_spawns + service/task/group events ---

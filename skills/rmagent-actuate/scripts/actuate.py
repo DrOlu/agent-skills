@@ -60,7 +60,9 @@ def run_action(row: dict, action: str, target: str) -> dict:
     creds = rma.creds_for(row)
     script = load_action_script(action)
     # every action payload reads $Target
-    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{target}'\n"
+    # A1 fix: escape single quotes — a target like "x'; rm C:\ -Recurse; '" was RCE
+    safe_target = str(target).replace("'", "''")
+    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{safe_target}'\n"
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
     s = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
                       transport=row.get("transport") or "ntlm")
@@ -84,7 +86,9 @@ def verify_action(row: dict, action: str, target: str) -> bool:
         return True  # no verifier = assume ok (journal marks verified=False)
     import winrm
     creds = rma.creds_for(row)
-    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{target}'\n"
+    # A1 fix: same escaping in the verifier
+    safe_target = str(target).replace("'", "''")
+    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{safe_target}'\n"
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
     s = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
                       transport=row.get("transport") or "ntlm")

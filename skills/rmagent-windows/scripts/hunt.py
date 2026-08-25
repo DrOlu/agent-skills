@@ -329,6 +329,58 @@ def main():
                 write_hole(case_dir, h)
                 print(f"  {wid:8} attackmap: HOLE — {h['why']}")
 
+        # rev 9: netedges — Sysmon ring (conns, DNS, LSASS, injection, files, registry)
+        if "netedges" in (r.get("skills") or []):
+            ne = lib.ask(r, "netedges", since_hours=since_h, limit=args.limit)
+            lib.record_ask(case_dir, r, "netedges", ne)
+            if ne.get("ok") and ne.get("data"):
+                nd = ne["data"]
+                n_conn = len(nd.get("conns") or [])
+                n_dns = len(nd.get("dns_queries") or [])
+                n_ls = len(nd.get("lsass_access") or [])
+                n_inj = len(nd.get("thread_injection") or [])
+                n_fc = len(nd.get("file_creates") or [])
+                n_rs = len(nd.get("registry_sets") or [])
+                print(f"  {wid:8} netedges: {n_conn} conns, {n_dns} DNS, "
+                      f"{n_ls} LSASS, {n_inj} inject, {n_fc} files, {n_rs} reg")
+                T.observe(wid, "netedges", f"{n_conn} conns, {n_dns} DNS, {n_ls} LSASS, "
+                                          f"{n_inj} inject, {n_fc} files, {n_rs} reg")
+                if n_ls:
+                    T.think(f"{wid}: LSASS access detected (T1003 credential dumping) — "
+                            f"immediate escalation")
+                if n_inj:
+                    T.think(f"{wid}: remote thread injection detected (T1055)")
+                # DNS tunneling detection
+                dns_queries = nd.get("dns_queries") or []
+                if dns_queries:
+                    for q in dns_queries:
+                        q.setdefault("host", wid)
+                    tun = thinker._dns_tunneling(dns_queries)
+                    for f in tun:
+                        T.think(f"[{f['severity']}] {f['what']}")
+                    if tun:
+                        print(f"  {wid:8} dns_tunneling: {len(tun)} indicator(s)")
+                        notify.alert_smoke(wid, [f["what"] for f in tun], case_dir.name)
+            else:
+                h = ne.get("hole") or lib.hole(f"{wid} netedges", ne.get("error") or "empty")
+                write_hole(case_dir, h)
+                print(f"  {wid:8} netedges: HOLE — {h['why']}")
+
+        # rev 9: flowstats — volume baseline for T1041 exfiltration detection
+        if "flowstats" in (r.get("skills") or []):
+            fs = lib.ask(r, "flowstats", since_hours=since_h, limit=args.limit)
+            lib.record_ask(case_dir, r, "flowstats", fs)
+            if fs.get("ok") and fs.get("data"):
+                fd = fs["data"]
+                n_ad = len(fd.get("adapters") or [])
+                n_dst = len(fd.get("top_destinations") or [])
+                print(f"  {wid:8} flowstats: {n_ad} adapters, {n_dst} top destinations")
+                T.observe(wid, "flowstats", f"{n_ad} adapters, {n_dst} destinations")
+            else:
+                h = fs.get("hole") or lib.hole(f"{wid} flowstats", fs.get("error") or "empty")
+                write_hole(case_dir, h)
+                print(f"  {wid:8} flowstats: HOLE — {h['why']}")
+
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             write_hole(case_dir, h)

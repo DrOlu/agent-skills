@@ -11,6 +11,9 @@ This is NOT the full Headlong runtime (no LLM loop, no persistent mind, no
 $1-2/hour thinking). It is a deterministic pattern-recognition pass over the
 last N census results, run between knocks. It looks for:
 
+  dns_tunneling    — DNS covert channel indicators (T1071.004): high query volume
+                     to one domain, or labels exceeding the 63-char DNS max
+
   acceleration   — a metric that is rising across consecutive censuses
   cliff          — a metric that jumped suddenly between two censuses
   persistence    — a condition that has held for N consecutive censuses
@@ -29,6 +32,8 @@ Usage (from hunt.py or the watchdog):
 """
 from __future__ import annotations
 from typing import Any
+from collections import defaultdict
+from datetime import datetime
 
 # Metrics from census attest that are worth reasoning about.
 # (key, direction, human name, threshold for "concerning")
@@ -186,6 +191,70 @@ def think(history: list[dict]) -> list[dict]:
                             f"({', '.join(rising)}) — coordinated activity, not coincidence",
                     "severity": "critical",
                 })
+
+    return findings
+
+
+def _dns_tunneling(dns_queries: list[dict]) -> list[dict]:
+    """DNS covert channel indicators (T1071.004).
+
+    Two signals from Sysmon EID 22 queries:
+      1. High query volume to a single domain in a short window (tunneling
+         encodes data in subdomains, so you see many queries to one zone)
+      2. Any single label exceeding the 63-char DNS maximum (encoded payload)
+    """
+    findings = []
+    if not dns_queries:
+        return findings
+
+    # --- signal 1: volume to one domain ---
+    by_domain = defaultdict(list)
+    for q in dns_queries:
+        name = str(q.get("query") or q.get("QueryName") or "").lower().rstrip(".")
+        if name:
+            parts = name.split(".")
+            domain = ".".join(parts[-2:]) if len(parts) >= 2 else name
+            by_domain[domain].append(q)
+
+    for domain, queries in by_domain.items():
+        if len(queries) >= 50:
+            ts = []
+            for q in queries:
+                try:
+                    ts.append(datetime.fromisoformat(
+                        str(q.get("t", "")).replace("Z", "+00:00")))
+                except ValueError:
+                    continue
+            if len(ts) >= 50:
+                ts.sort()
+                span = (ts[-1] - ts[0]).total_seconds()
+                if span <= 300:
+                    findings.append({
+                        "kind": "dns_tunneling",
+                        "witness": str(queries[0].get("host", "?")),
+                        "what": f"{len(queries)} DNS queries to '{domain}' within {span:.0f}s — "
+                                f"volume consistent with DNS tunneling (T1071.004)",
+                        "severity": "critical",
+                        "domain": domain,
+                        "query_count": len(queries),
+                    })
+
+    # --- signal 2: oversized labels (encoded payload) ---
+    for q in dns_queries:
+        name = str(q.get("query") or q.get("QueryName") or "")
+        if not name:
+            continue
+        for label in name.rstrip(".").split("."):
+            if len(label) > 63:
+                findings.append({
+                    "kind": "dns_tunneling",
+                    "witness": str(q.get("host", "?")),
+                    "what": f"DNS label of {len(label)} chars exceeds the 63-char maximum — "
+                            f"encoded payload in query '{name[:60]}...' (T1071.004)",
+                    "severity": "critical",
+                    "domain": name,
+                })
+                break
 
     return findings
 

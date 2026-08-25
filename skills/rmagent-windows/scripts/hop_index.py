@@ -43,12 +43,15 @@ def record(case: str, entry_id: int, host: str, principal: str,
         "principal": principal,
         "kind": hop_kind,
     }
-    if sample == "full":
+    # BUG FIX: anything that is not explicitly "summary" records FULL fields.
+    # Previously an invalid sample value fell into the else-branch and recorded
+    # NEITHER full fields NOR the summary tag — silent data loss.
+    if sample != "summary":
         e["logonid"] = logonid
         e["src_ip"] = src_ip
         e["detail"] = str(detail)[:200]
     else:
-        e["sample"] = sample
+        e["sample"] = "summary"
     with INDEX.open("a") as f:
         f.write(json.dumps(e) + "\n")
     _trim()

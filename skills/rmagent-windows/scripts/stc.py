@@ -39,6 +39,18 @@ class STC:
     ticket: str | None = None
     trigger: str = "manual"
 
+    def __post_init__(self):
+        # INJECTION FIX: the STC is a delimiter-based format ("; k=v"). A ticket
+        # or trigger containing ';' or '=' can inject/override arbitrary fields
+        # on decode — including principal and depth (the walk budget). Reject
+        # them at construction rather than trying to escape.
+        for field_name in ("ticket", "trigger", "case", "principal", "origin"):
+            v = getattr(self, field_name, None)
+            if v and (";" in str(v) or "=" in str(v)):
+                raise ValueError(
+                    f"STC {field_name} contains the delimiter ';' or '=' and "
+                    f"would corrupt the trace context: {v!r}")
+
     # ---------------------------------------------------------------- encode
     def encode(self) -> str:
         out = (f"case={self.case}; principal={self.principal}; "
@@ -51,15 +63,32 @@ class STC:
 
     @classmethod
     def decode(cls, s: str) -> "STC":
-        """Parse an encoded STC. Raises ValueError on malformed input."""
+        """Parse an encoded STC. Raises ValueError on malformed input.
+
+        INJECTION FIX: duplicate keys are rejected. The attack is not
+        delimiter-in-value (values are split cleanly) but KEY DUPLICATION —
+        'case=C1; principal=Admin; ticket=X; principal=root; depth=9' has a
+        clean ticket but principal appears twice and the last one wins. A
+        crafted ticket could rewrite principal or depth (the walk budget).
+        """
         parts = {}
         for tok in s.replace("stc:", "").split(";"):
             tok = tok.strip()
             if "=" in tok:
                 k, v = tok.split("=", 1)
-                parts[k.strip()] = v.strip()
+                k = k.strip()
+                if k in parts:
+                    raise ValueError(
+                        f"STC duplicate key {k!r} — possible injection: {s!r}")
+                parts[k] = v.strip()
         if "case" not in parts or "principal" not in parts:
             raise ValueError(f"STC missing case/principal: {s!r}")
+        # INJECTION FIX: reject values containing the delimiters — a crafted
+        # ticket like "X; principal=root; depth=9" would override fields
+        for k in ("ticket", "trigger", "case", "principal", "origin"):
+            v = parts.get(k)
+            if v and (";" in v or "=" in v):
+                raise ValueError(f"STC {k} contains delimiters: {v!r}")
         w = parts.get("window", "2h")
         window = float(w.rstrip("h")) if w else 2.0
         return cls(

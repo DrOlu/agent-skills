@@ -146,7 +146,12 @@ def find_by_principal(principal: str) -> list[dict]:
 
 
 def list_cases() -> list[dict]:
-    """All cases known to the hop index, with hop counts."""
+    """All cases: hop-index entries PLUS case directories with no hops.
+
+    BUG FIX: this used to read only the hop index, so a case where every
+    witness was silent (0 hops) was invisible. Now the cases dir is scanned
+    too and merged in with hops=0.
+    """
     all_e = hop_index.read_all()
     by_case = {}
     for e in all_e:
@@ -156,6 +161,11 @@ def list_cases() -> list[dict]:
             by_case[c]["hops"] += 1
             if e.get("host"):
                 by_case[c]["hosts"].add(e["host"])
+    # also include case directories the index doesn't know about
+    if CASES_DIR.exists():
+        for d in CASES_DIR.iterdir():
+            if d.is_dir() and d.name not in by_case:
+                by_case[d.name] = {"hops": 0, "hosts": set()}
     return [{"case": c, "hops": v["hops"], "hosts": sorted(v["hosts"])}
             for c, v in sorted(by_case.items())]
 

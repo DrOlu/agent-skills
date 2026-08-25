@@ -422,10 +422,13 @@ def main():
     # A clean hunt still records the join keys (host/principal/kind/case) so
     # cross-case correlation works, but drops logonid/src_ip/detail — stretching
     # the 5000-entry index window from weeks to months.
+    # FN FIX: [high] findings (clock skew, cross-host chains) are real findings
+    # too — they must trigger full sampling, not just [critical]
     found_smoke = any(e.get("kind") == "thought" and
                       ("smoke" in str(e.get("content", "")).lower() or
                        "critical" in str(e.get("content", "")).lower() or
-                       "escalation" in str(e.get("content", "")).lower())
+                       "escalation" in str(e.get("content", "")).lower() or
+                       "[high]" in str(e.get("content", "")).lower())
                       for e in T.entries())
     sample_mode = "full" if found_smoke else "summary"
     for h in hops:

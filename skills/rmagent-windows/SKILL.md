@@ -2,8 +2,8 @@
 name: rmagent-windows
 description: >
   Pull-based remote-witness habit for a Windows estate — the "RMAgent" knock.
-  Ask two workgroup Windows servers (WS1/WS2) five allowlisted named questions
-  (attest, sketch, edges, explain, netedges) over pywinrm/WinRM :5985, tracking the
+  Ask two workgroup Windows servers (WS1/WS2) eight allowlisted named questions
+  (attest, sketch, edges, explain, netedges, pslogs, kernring, attackmap) over pywinrm/WinRM :5985, tracking the
   Administrator and SYSTEM accounts. Use for identity-led compromise, lateral
   movement, living-off-the-land, silent hosts, and honest root-cause on Windows
   boxes you administer — without building a log lake and without switching off
@@ -237,7 +237,7 @@ Driven by a live probe of what sources actually exist on WS1/WS2:
 
 **Design decision:** kernring is a *separate question*, not a silent fallback inside `netedges`. If `netedges` silently degraded, the operator would think they're getting Sysmon-quality data when they're not — a lie by omission that violates the "a hole is an answer" principle. The operator asks the question that matches the fidelity they need.
 
-**Status: implemented, payload verified under the WinRM budget, NOT yet live-validated.** The estate was unreachable at implementation time (both boxes down / security group changed). When the boxes are back: enable the channels (setup D3), run a hunt, confirm events appear and field names match (`ProcessID`/`ImageName`/`CommandLine` on Process; `PID`/`daddr`/`dport` on Network), and measure the actual ring depth.
+**Status: LIVE-VALIDATED 2026-08-25.** Ran against both WS1 and WS2 (estate reachable): `kernring` returns process events from the kernel analytic channels with the expected fields, and reports `sysmon_status` on every call (Sysmon64=Running on ws1, Sysmon=Running on ws2). **Reality check discovered in live testing:** on this estate the kernel channels are NOT enabled as a persistent ring — the payload works as a **10-second burst capture** (`burst_seconds: 10`, note: "burst capture - 10s window, not a ring. Sysmon is the ring."), not the minutes-deep ring the design assumed. To get a persistent ring, setup step D3 (`wevtutil sl Microsoft-Windows-Kernel-Process/Analytic /e:true`) must be run on each box first; until then kernring is a spot-check, not a fallback ring.
 
 ## Rev 5 — attackmap + ATT&CK tagging + expanded LOLBins (2026-08-21)
 
@@ -262,4 +262,4 @@ Driven by a live probe of what sources actually exist on WS1/WS2:
 | Real-time ETW monitoring | Requires a persistent consumer process = an agent. kernring is our answer. |
 | The C++ implementation | ~16 hunt files, thousands of lines. We took the knowledge, not the code. |
 
-**Status: implemented, payload verified under the WinRM budget, NOT yet live-validated** (estate still unreachable). When the boxes are back: run a hunt, confirm attackmap returns findings for the known Run keys, verify the ATT&CK tags appear in sketch output, and confirm the expanded LOLBin list doesn't over-match.
+**Status: LIVE-VALIDATED 2026-08-25.** Ran against both WS1 and WS2: `attackmap` returns findings with ATT&CK tags on both boxes (ws1: T1547.001 run_keys ×1, T1546.007 netsh ×17; ws2: T1547.001 ×2, T1546.007 ×17). The full 8-signal redteam drill confirmed attackmap catches the staged drill artifacts: `run_key drill: True, ifeo drill: True` on both boxes (the two new Rev 5 signals). Drill artifacts cleaned up cleanly afterwards (0 remaining).

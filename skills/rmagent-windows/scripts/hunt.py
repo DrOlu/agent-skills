@@ -15,6 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib  # noqa: E402
 import notify  # noqa: E402 — Telegram smoke alerts
+import traj as trajectory  # noqa: E402 — the case trajectory (fork/merge DAG)
+import thinker  # noqa: E402 — persistent reasoning between knocks
 
 
 def write_hop(case_dir: Path, hop: dict):
@@ -64,10 +66,33 @@ def main():
     track = (rows[0].get("track") if rows else None) or ["Administrator", "SYSTEM"]
 
     print(f"[hunt] tracking {track} across {len(rows)} witnesses, since {args.since}")
+
+    # --- the case trajectory: a DAG of observations, thoughts, actions ---
+    T = trajectory.Trajectory(case_dir / "trajectory.jsonl")
+    T.think(f"Hunt started: tracking {track} across {len(rows)} witnesses since {args.since}")
+
+    # --- the thinker: reason over recent census history if available ---
+    census_hist_path = Path.home() / ".rmagent" / "census_history.jsonl"
+    if census_hist_path.exists():
+        try:
+            hist = [json.loads(l) for l in census_hist_path.read_text().splitlines() if l.strip()]
+            findings = thinker.think(hist[-20:])  # last 20 censuses
+            for f in findings:
+                T.think(f"[{f['severity']}] {f['what']}")
+            if findings:
+                print(f"[thinker] {len(findings)} pattern(s) detected across recent censuses:")
+                print(thinker.render(findings))
+                critical = [f for f in findings if f.get("severity") == "critical"]
+                if critical:
+                    notify.alert_smoke("thinker", [f["what"] for f in critical], case_dir.name)
+        except Exception as e:
+            print(f"[thinker] history unavailable: {e}")
+
     seq = 0
     for r in rows:
         seq += 1
         wid = r.get("id")
+        T.think(f"Asking {wid}: edges — who did they touch?")
 
         # edges — who did this witness touch?
         res = lib.ask(r, "edges", since_hours=since_h, limit=args.limit)
@@ -80,6 +105,8 @@ def main():
             n_privs = len(d.get("special_privs") or [])
             print(f"  {wid:8} edges: {n_logons} tracked logons, {n_expl} explicit-cred uses, "
                   f"{n_privs} special-priv grants, {n_conns} outbound conns")
+            T.observe(wid, "edges", f"{n_logons} logons, {n_expl} explicit-creds, "
+                                    f"{n_privs} priv-grants, {n_conns} conns")
             write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                  "witness": wid, "skill": "edges",
                                  "logons": n_logons, "explicit_creds": n_expl,
@@ -105,6 +132,13 @@ def main():
                     lol = len(ed.get("lolbin_spawns") or [])
                     print(f"  {wid:8} explain: groups={g} svc={sv} tasks={tk} wmi={wm} "
                           f"procs={pr} lolbins={lol} audit-cleared={ac}")
+                    T.observe(wid, "explain", f"groups={g} svc={sv} tasks={tk} wmi={wm} "
+                                              f"procs={pr} lolbins={lol} audit-cleared={ac}")
+                    if ac:
+                        T.think(f"{wid}: audit log was cleared (1102) — anti-forensics, immediate escalation")
+                    if wm:
+                        T.think(f"{wid}: WMI subscription present (5861) — fileless persistence, "
+                                f"consider disable_wmi_sub via actuate")
                     write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                          "witness": wid, "skill": "explain",
                                          "group_changes": g, "service_events": sv,
@@ -201,7 +235,11 @@ def main():
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             write_hole(case_dir, h)
+            T.hole(wid, h["why"])
             print(f"  {wid:8} edges: HOLE — {h['why']}")
+
+    T.think(f"Hunt complete. Trajectory: {T.stats()['total']} entries, "
+            f"{T.stats()['branches']} branch(es).")
 
     # readable one-page summary
     hops = []

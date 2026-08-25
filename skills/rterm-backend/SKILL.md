@@ -498,6 +498,36 @@ See `examples/` for runnable programs.
 **Artifacts to collect:** the run-ledger entry (status+error), the session log for
 the terminal, the gateway boot log, and a minimal RPC repro (a websocat one-liner).
 
+### v3.2.14 — OTLP metrics push fix + OpenLLMetry-style LLM tracing
+
+- **OTLP push fixed:** the pusher was sending the empty boot-time registry while the Prometheus renderer
+  rebuilt a fresh one — collectors received zero metrics. Both now share `buildHostMetricsRegistry()`.
+- **LLM tracing:** every model call (chat pass, thinking audits like `task_completion_guard`, failures)
+  becomes an APM span grouped per agent run (traceId from the gateway runId). Spans carry model,
+  operation (`chat`/`thinking`/`audit.*`), duration, token usage, finish reason, error status.
+  `observability:apmSummary` shows per-run LLM waterfalls + per-model latency/error stats with zero
+  config. With `OTEL_EXPORTER_OTLP_ENDPOINT` set, spans also forward as OTLP/HTTP JSON with standard
+  `gen_ai.*` attributes (provider inferred from the model id) for Jaeger/Tempo/Datadog. Fire-and-forget
+  — tracing can never break or slow a run. New module: `services/observability/llmTrace.ts`.
+
+### v3.2.15 — offensive security plugins (promptfoo, mitmproxy, NetExec)
+
+Three plugins (11 → 14, 61 wired plugin tools), each behind explicit governance:
+
+- **promptfoo-redteam** — `promptfoo_redteam` tool runs LLM red-team evals (builtin 6-test suite:
+  jailbreak, prompt injection, credential exfiltration, PII leakage, destructive commands, roleplay).
+  A model complying with a harmful prompt = critical finding.
+- **mitmproxy-bridge** — `mitm_start`/`mitm_stop`/`mitm_flows`: traffic capture for agent
+  self-inspection + authorized interception. Secret-pattern detection on bodies (6 kinds) with redacted
+  previews. Reverse mode requires a host allowlist.
+- **netexec-bridge** — `netexec_check` (target allowlist required on every call: exact IPs + CIDRs, no
+  batch bypass, denies by default) + `netexec_spray_plan` (rate-limited jittered SLOW schedule, does not
+  execute). Passwords pass as `env:<vaultRef>`. Trigger: `netexec_auth_success`.
+
+Governance: promptfoo low (own endpoints), mitm medium (allowlist for reverse), netexec high (allowlist
+every call). All follow the rmagent rule: authorized estate only. See the `rterm-plugin` skill for the
+governance-gate pattern and `offensivePlugins.extreme.spec.ts` (47 tests) for the FP/FN coverage.
+
 ---
 
 ## Supporting files

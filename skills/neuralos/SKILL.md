@@ -129,7 +129,7 @@ node scripts/neuralos.mjs install-service     # prints the right unit + enable c
 | `gyshell-changes.sqlite` | change ledger (MOP records + step events) |
 | `session-logs/` | recorded terminal sessions (plain files) |
 | `skills/` | agent skills |
-| `plugins/` | user-installed plugins (auto-discovered on startup; the 6 official plugins ship in the npm package / desktop app bundle) |
+| `plugins/` | user-installed plugins (auto-discovered on startup; the 14 official plugins ship in the npm package / desktop app bundle) |
 | `policy.yaml` | optional custom AGT policy document (overrides the built-in default policy) |
 | `access-tokens.json` | gateway access tokens |
 
@@ -268,7 +268,7 @@ Anyone can develop a custom plugin and have it auto-integrate. A plugin is a fol
 3. `{bundle}/../plugins` (npm package)
 4. `{resourcesPath}/plugins` (desktop app)
 
-The backend **ships with 6 official plugins** out of the box (21 tools, 10 triggers, 6 panels):
+The backend **ships with 14 official plugins** out of the box (61 tools, 12 triggers, 14 panels):
 
 | Plugin | What it does |
 |---|---|
@@ -501,6 +501,21 @@ See `examples/` for runnable programs.
 the terminal, the gateway boot log, and a minimal RPC repro (a websocat one-liner).
 
 ---
+
+## v3.2.14–v3.2.15 — OTel push fix, LLM tracing, offensive security plugins
+
+- **OTLP metrics push fixed (v3.2.14):** the pusher was sending the empty boot-time registry — collectors
+  received zero metrics. Both the Prometheus renderer and the OTel pusher now share
+  `buildHostMetricsRegistry()`.
+- **OpenLLMetry-style LLM tracing (v3.2.14):** every model call (chat pass, thinking audits, failures)
+  becomes an APM span grouped per agent run. `observability:apmSummary` shows per-run LLM waterfalls +
+  per-model latency/error stats with zero config. With `OTEL_EXPORTER_OTLP_ENDPOINT` set, spans forward
+  as OTLP/HTTP JSON with `gen_ai.*` attributes for Jaeger/Tempo/Datadog.
+- **Offensive security plugins (v3.2.15):** promptfoo-redteam (LLM red-team evals — a model complying
+  with a harmful prompt = critical finding), mitmproxy-bridge (traffic capture + secret-pattern detection
+  with redacted previews; reverse mode requires a host allowlist), netexec-bridge (external attack
+  simulation; target allowlist required on every call, denies by default). All follow the rmagent rule:
+  authorized estate only. See the `rterm-plugin` skill for the governance-gate pattern.
 
 ## Supporting files
 

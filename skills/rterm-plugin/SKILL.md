@@ -208,6 +208,38 @@ A production-grade example of an HTTP-backed plugin in the RTerm repo at `plugin
 
 Copy this structure for any plugin that talks to an external HTTP service.
 
+### Reference plugins: the offensive security suite (v3.2.15)
+
+Three plugins in the RTerm repo at `plugins/` that wrap external **security** CLIs.
+They show the pattern for wrapping a binary (via `ctx.spawnProcess`) plus a
+**governance gate** — critical when the tool can attack things:
+
+- **`promptfoo-redteam/`** — LLM red-team evals. `buildPromptfooConfig()` (pure) generates the config;
+  `builtinRedteamTests()` ships a 6-test suite (jailbreak, prompt injection, credential exfiltration,
+  PII leakage, destructive commands, roleplay). `parsePromptfooResults()` turns a failed test (the model
+  COMPLIED with a harmful prompt) into a **critical finding**; errored tests are warnings (FP guard);
+  `success=true` with score < 0.5 counts as failed (FN guard). Tool: `promptfoo_redteam`.
+- **`mitmproxy-bridge/`** — traffic capture. `buildMitmCommand()` (pure) builds the mitmdump args;
+  `parseFlows()` summarizes per-host/method/status; `detectSecrets()` scans request bodies for 6 secret
+  pattern kinds with **redacted previews** (8-char prefix — the secret never lands in output).
+  `isHostAllowed()` does exact + `*.wildcard` matching and rejects suffix tricks. Reverse mode
+  **requires** a host allowlist. Tools: `mitm_start`, `mitm_stop`, `mitm_flows`.
+- **`netexec-bridge/`** — external attack simulation. `validateTargets()` is the governance gate:
+  allowlist required on **every** call, exact IPs + CIDR membership (bit-mask), each comma-separated
+  target validated individually (no batch bypass), empty/null allowlists deny everything. Passwords pass
+  as `env:<vaultRef>` — never the secret. `buildSprayPlan()` makes a rate-limited, jittered, SLOW spray
+  schedule without executing it. Tools: `netexec_check`, `netexec_spray_plan`; trigger
+  `netexec_auth_success`.
+
+**The governance pattern to copy:** put the authorization check at the very top of the tool handler,
+before any command is built or spawned. Return `{ error }` with a reason that names what was denied.
+Test the gate with: no allowlist, empty allowlist, null allowlist, mixed allowed+denied targets, and
+whitespace-only targets — all must refuse.
+
+**Tests:** `packages/backend/src/services/offensivePlugins.extreme.spec.ts` (47 tests) covers every
+builder, parser, and gate — including FP/FN guards (benign traffic must produce zero secret findings;
+short-header JWTs must be caught).
+
 ---
 
 ## Supporting files

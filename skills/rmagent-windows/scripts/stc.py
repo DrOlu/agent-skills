@@ -22,18 +22,32 @@ MAX_FANOUT = 3         # max children spawned from one hop
 
 @dataclass(frozen=True)
 class STC:
-    """Security Trace Context. Immutable; child() returns a new one at depth+1."""
+    """Security Trace Context. Immutable; child() returns a new one at depth+1.
+
+    ticket: an optional business identifier (payment id, incident number, change
+    reference). This is the Flight Recorder join — the same tape serves security
+    ("who walked?") and reliability ("why did it feel slow?").
+    trigger: what started this hunt (scheduled | alert | manual | drill | backfill).
+    Propagated so a human reading the trace months later knows the context.
+    """
     case: str
     principal: str
     window_h: float = 2.0
     origin: str = "jh1"
     depth: int = 0
     fanout: int = 0
+    ticket: str | None = None
+    trigger: str = "manual"
 
     # ---------------------------------------------------------------- encode
     def encode(self) -> str:
-        return (f"case={self.case}; principal={self.principal}; "
-                f"window={self.window_h}h; origin={self.origin}; depth={self.depth}")
+        out = (f"case={self.case}; principal={self.principal}; "
+               f"window={self.window_h}h; origin={self.origin}; depth={self.depth}")
+        if self.ticket:
+            out += f"; ticket={self.ticket}"
+        if self.trigger and self.trigger != "manual":
+            out += f"; trigger={self.trigger}"
+        return out
 
     @classmethod
     def decode(cls, s: str) -> "STC":
@@ -54,6 +68,8 @@ class STC:
             window_h=window,
             origin=parts.get("origin", "jh1"),
             depth=int(parts.get("depth", "0")),
+            ticket=parts.get("ticket") or None,
+            trigger=parts.get("trigger", "manual"),
         )
 
     # ---------------------------------------------------------------- lineage

@@ -195,3 +195,21 @@ def build_from_hop_index(case: str, index_entries: list[dict]) -> CausalGraph:
             if kind == "conn" and detail:
                 g.add_edge(host, principal, detail, principal, "conn", e.get("t", ""), detail)
     return g
+
+
+def render_png(dot: str, out_path) -> bool:
+    """Render DOT to PNG via graphviz if available. Best-effort; returns success."""
+    import subprocess, shutil, tempfile
+    if not shutil.which("dot"):
+        return False
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".dot", delete=False) as f:
+            f.write(dot)
+            dotfile = f.name
+        r = subprocess.run(["dot", "-Tpng", dotfile, "-o", str(out_path)],
+                           capture_output=True, timeout=15)
+        import os
+        os.unlink(dotfile)
+        return r.returncode == 0
+    except Exception:
+        return False

@@ -46,6 +46,9 @@ def span_from_entry(entry: dict, stc) -> dict:
             "rmagent.case": stc.case,
             "rmagent.depth": stc.depth,
             "rmagent.content": str(entry.get("content", ""))[:200],
+            # enrichment: why this hunt exists, and what business object it touches
+            "rmagent.trigger": getattr(stc, "trigger", "manual"),
+            "rmagent.ticket": getattr(stc, "ticket", None) or "",
         },
     }
 

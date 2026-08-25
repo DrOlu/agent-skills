@@ -109,6 +109,8 @@ def main():
     ap.add_argument("--since", default="2h", help="window, e.g. 2h or 30m")
     ap.add_argument("--principal", default=None, help="override track (default: inventory track)")
     ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--ticket", default=None, help="business ticket — the Flight Recorder join")
+    ap.add_argument("--trigger", default="manual", choices=["manual","scheduled","alert","drill","backfill"], help="what started this hunt")
     args = ap.parse_args()
 
     def to_hours(s):
@@ -156,7 +158,9 @@ def main():
 
     # --- rev 6: Security Trace Context — context propagates, data does not ---
     S = stc_mod.STC(case=case_dir.name, principal=(track[0] if track else "unknown"),
-                    window_h=since_h)
+                    window_h=since_h,
+                    ticket=getattr(args, "ticket", None),
+                    trigger=getattr(args, "trigger", "manual"))
     T.think(f"STC: {S}")
 
     # --- rev 6: clock-skew detection (the silent killer of cross-host timelines) ---
@@ -414,6 +418,16 @@ def main():
     # and cross_host_chain join on these, and causal builds edges from them.
     # Recording "edges"/"explain" (skill names) made those detectors dead on real data.
     principal0 = track[0] if track else "unknown"
+    # adaptive sampling: full detail when the hunt found smoke, summary when clean.
+    # A clean hunt still records the join keys (host/principal/kind/case) so
+    # cross-case correlation works, but drops logonid/src_ip/detail — stretching
+    # the 5000-entry index window from weeks to months.
+    found_smoke = any(e.get("kind") == "thought" and
+                      ("smoke" in str(e.get("content", "")).lower() or
+                       "critical" in str(e.get("content", "")).lower() or
+                       "escalation" in str(e.get("content", "")).lower())
+                      for e in T.entries())
+    sample_mode = "full" if found_smoke else "summary"
     for h in hops:
         hop_index.record(
             case=case_dir.name, entry_id=h.get("seq", 0), host=h.get("witness", "?"),
@@ -422,7 +436,8 @@ def main():
             src_ip=h.get("src_ip"),
             hop_kind=h.get("hop_kind") or h.get("skill", "?"),
             t=h.get("t"),
-            detail=f"logons={h.get('logons', 0)} conns={h.get('conns', 0)}")
+            detail=f"logons={h.get('logons', 0)} conns={h.get('conns', 0)}",
+            sample=sample_mode)
 
     # --- rev 6: emit the whole trajectory as OTel spans (best-effort) ---
     try:
@@ -438,6 +453,9 @@ def main():
             (case_dir / "causal_graph.dot").write_text(g.render_dot())
             T.think(f"causal graph: {len(g.nodes)} nodes, {len(g.edges)} edges — "
                     f"written to causal_graph.dot")
+            # rendered PNG for humans (best-effort; needs graphviz on the jump host)
+            if causal.render_png(g.render_dot(), case_dir / "causal_graph.png"):
+                T.think(f"causal graph rendered to causal_graph.png")
     except Exception:
         pass
 

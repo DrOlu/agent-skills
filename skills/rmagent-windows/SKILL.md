@@ -291,3 +291,29 @@ store, grouped per agent run. That means:
 made by the skill's scripts, outside RTerm's agent loop). Their timing lives
 in the case hops (`asked`/`answered` timestamps) — by design, the case file is
 the record.
+
+## Rev 7 — external half: netexec-bridge closes the purple-team loop (2026-08-25)
+
+RTerm v3.2.15 ships **netexec-bridge**, the outside view that rmagent lacked.
+The drill previously staged artifacts *on* the boxes; now you can also
+simulate the *external* attack (credential spray from outside) and verify
+`attest` catches the resulting 4625s.
+
+**How the two halves fit:**
+
+| | rmagent (inside) | netexec-bridge (outside) |
+|---|---|---|
+| Direction | pull from the boxes | push at the boxes |
+| Sees | 4625s, 4720s, new services/tasks, registry state | auth success/failure per host |
+| Governance | allowlisted questions, authorized estate | target allowlist required per call (CIDRs ok) |
+| Credential handling | env / creds.json / scrt | `env:<vaultRef>` — never the secret |
+
+**Recommended drill extension:** use `netexec_spray_plan` (rate-limited,
+jittered, SLOW — does not execute) to review the schedule first, then
+`netexec_check` against the SAME authorized estate. Immediately after, run
+`attest` on each box and confirm `admin_fail_60s` rose. That is the full
+outside→inside detection loop, scored end to end.
+
+**Same rule as always:** authorized estate only. netexec denies by default —
+empty or missing allowlists are refused, and every comma-separated target is
+validated individually (no batch bypass).

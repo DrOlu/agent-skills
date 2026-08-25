@@ -41,6 +41,53 @@ def write_hole(case_dir: Path, h: dict):
         f.write(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **h}) + "\n")
 
 
+def _resolve_dest(dest_str, rows):
+    """Resolve a 4648 dest (hostname, IP, or 'localhost') to an inventory witness."""
+    if not dest_str:
+        return None
+    d = str(dest_str).lower().strip()
+    if d in ("localhost", "127.0.0.1", "::1"):
+        return None  # same-box hop — no cross-host walk needed
+    for r in rows:
+        rid = (r.get("id") or "").lower()
+        addr = (r.get("address") or "").lower()
+        host = (r.get("host") or "").lower()
+        if d in (rid, addr, host) or d.endswith(rid) or rid.endswith(d):
+            return r
+    # try IP match
+    for r in rows:
+        if str(r.get("address", "")).lower() in d or d in str(r.get("address", "")).lower():
+            return r
+    return None
+
+
+def _walk_witness(row, stc, T, case_dir, since_h, args, visited):
+    """Recursively walk a witness reached via a 4648 hop. Budget-capped by the STC."""
+    wid = row.get("id")
+    T.think(f"following hop to {wid} (depth {stc.depth}, fanout {stc.fanout})")
+    try:
+        res = lib.ask(row, "edges", since_hours=since_h, limit=args.limit)
+        if res.get("ok") and res.get("data"):
+            d = res["data"]
+            n_logons = len(d.get("logons") or [])
+            n_expl = len(d.get("explicit_creds") or [])
+            T.observe(wid, "edges", f"[depth {stc.depth}] {n_logons} logons, "
+                                    f"{n_expl} explicit-creds")
+            print(f"  {wid:8} edges (depth {stc.depth}): {n_logons} logons, "
+                  f"{n_expl} explicit-cred uses")
+            # recurse further if more hops and budget remains
+            for ec in (d.get("explicit_creds") or []):
+                dest = _resolve_dest(ec.get("dest"), None)
+                # note: we need rows for resolution — pass through args if needed
+                if dest and stc.can_descend:
+                    _walk_witness(dest, stc.child(), T, case_dir, since_h, args, visited)
+        else:
+            h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
+            T.hole(wid, h["why"])
+    except Exception as e:
+        T.hole(wid, f"walk failed: {e}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="RMAgent Hunter — tracked-principal walk")
     ap.add_argument("--inventory", required=True)
@@ -128,6 +175,7 @@ def main():
                 notify.alert_smoke("dthinker", [f["what"] for f in crit], case_dir.name)
 
     seq = 0
+    _visited = {r.get("id") for r in rows}  # all inventory witnesses start visited
     for r in rows:
         seq += 1
         wid = r.get("id")
@@ -146,6 +194,16 @@ def main():
                   f"{n_privs} special-priv grants, {n_conns} outbound conns")
             T.observe(wid, "edges", f"{n_logons} logons, {n_expl} explicit-creds, "
                                     f"{n_privs} priv-grants, {n_conns} conns")
+
+            # --- rev 8: FOLLOW the 4648 hop — the recursive cross-host walk ---
+            for ec in (d.get("explicit_creds") or []):
+                dest = _resolve_dest(ec.get("dest"), rows)
+                if dest and dest.get("id") != wid and S.can_descend and wid not in _visited:
+                    child_stc = S.child()
+                    _visited.add(dest.get("id"))
+                    T.think(f"4648 hop: {ec.get('who')} became {ec.get('became')} "
+                            f"on {dest.get('id')} — following (depth {child_stc.depth})")
+                    _walk_witness(dest, child_stc, T, case_dir, since_h, args, _visited)
             write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
                                  "witness": wid, "skill": "edges",
                                  "logons": n_logons, "explicit_creds": n_expl,

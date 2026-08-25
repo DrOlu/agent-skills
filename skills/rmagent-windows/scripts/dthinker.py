@@ -9,10 +9,14 @@ spot the pattern no single question reveals.
    connection from WS1 at 14:05 — three findings, one window, one story."
 
 Correlations detected:
-  temporal_cluster  — multiple distinct hop kinds within a short window
-  cross_host_chain  — the same principal hopping hosts in sequence
-  repeat_offender   — a principal/host pair seen in multiple different cases
-  logonid_reuse     — the same LogonId appearing on multiple hosts (the join!)
+  temporal_cluster    — multiple distinct hop kinds within a short window
+  cross_host_chain    — the same principal hopping hosts in sequence
+  repeat_offender     — a principal/host pair seen in multiple different cases
+  session_correlation — same account + same source IP on multiple hosts (the REAL join)
+
+NOTE: LogonIds (LUIDs) are only unique WITHIN a host. Two hosts showing the same
+LogonId is coincidence, not correlation. The real cross-host join is account +
+source IP + timestamp window.
 """
 from __future__ import annotations
 from datetime import datetime, timedelta
@@ -33,7 +37,7 @@ def think_distributed(index_entries: list[dict]) -> list[dict]:
     findings += _temporal_cluster(parsed)
     findings += _cross_host_chain(parsed)
     findings += _repeat_offender(parsed)
-    findings += _logonid_reuse(parsed)
+    findings += _session_correlation(parsed)
 
     return findings
 
@@ -125,24 +129,38 @@ def _repeat_offender(parsed: list[dict]) -> list[dict]:
     return findings
 
 
-def _logonid_reuse(parsed: list[dict]) -> list[dict]:
-    """The same LogonId on multiple hosts — THE join. Same session, multiple boxes."""
+def _session_correlation(parsed: list[dict]) -> list[dict]:
+    """Same account + same source IP on multiple hosts — the REAL cross-host join.
+
+    LogonIds are per-host only, so they cannot join across boxes. What CAN join:
+    the same account authenticating from the same source IP to multiple hosts
+    within a short window. That is one actor moving laterally, and it is the
+    strongest cross-host correlation available from event data alone.
+    """
     findings = []
-    by_lid = defaultdict(set)
+    sessions = defaultdict(lambda: {"hosts": set(), "ts": []})
     for p in parsed:
-        lid = p.get("logonid")
-        if lid:
-            by_lid[lid].add(p.get("host"))
-    for lid, hosts in by_lid.items():
-        if len(hosts) >= 2:
-            findings.append({
-                "kind": "logonid_reuse",
-                "witness": "+".join(sorted(str(h) for h in hosts)),
-                "what": f"LogonId {lid} appears on {len(hosts)} hosts "
-                        f"({', '.join(sorted(str(h) for h in hosts))}) — "
-                        f"one session hopping between boxes",
-                "severity": "critical",
-            })
+        acct = p.get("principal")
+        src = p.get("src_ip") or ""
+        host = p.get("host")
+        if acct and host:
+            key = (str(acct).lower(), str(src))
+            sessions[key]["hosts"].add(host)
+            sessions[key]["ts"].append(p.get("_ts"))
+    for (acct, src), info in sessions.items():
+        if len(info["hosts"]) >= 2:
+            ts_sorted = sorted(t for t in info["ts"] if t)
+            span_s = (ts_sorted[-1] - ts_sorted[0]).total_seconds() if len(ts_sorted) >= 2 else 0
+            if span_s <= CHAIN_WINDOW_S:
+                hosts = sorted(str(h) for h in info["hosts"])
+                findings.append({
+                    "kind": "session_correlation",
+                    "witness": "+".join(hosts),
+                    "what": f"account '{acct}' from source '{src or '?'}' authenticated to "
+                            f"{len(hosts)} hosts ({', '.join(hosts)}) within {span_s:.0f}s — "
+                            f"one actor moving laterally",
+                    "severity": "critical",
+                })
     return findings
 
 

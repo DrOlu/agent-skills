@@ -17,6 +17,11 @@ import lib  # noqa: E402
 import notify  # noqa: E402 — Telegram smoke alerts
 import traj as trajectory  # noqa: E402 — the case trajectory (fork/merge DAG)
 import thinker  # noqa: E402 — persistent reasoning between knocks
+import stc as stc_mod  # noqa: E402 — Security Trace Context (rev 6)
+import hop_index  # noqa: E402 — cross-case hop index (rev 6)
+import otel_emit  # noqa: E402 — OTel span emission (rev 6)
+import causal  # noqa: E402 — causal graph / blast radius (rev 6)
+import dthinker  # noqa: E402 — distributed thinker (rev 6)
 
 
 def write_hop(case_dir: Path, hop: dict):
@@ -87,6 +92,40 @@ def main():
                     notify.alert_smoke("thinker", [f["what"] for f in critical], case_dir.name)
         except Exception as e:
             print(f"[thinker] history unavailable: {e}")
+
+    # --- rev 6: Security Trace Context — context propagates, data does not ---
+    S = stc_mod.STC(case=case_dir.name, principal=",".join(track), window_h=since_h)
+    T.think(f"STC: {S}")
+
+    # --- rev 6: clock-skew detection (the silent killer of cross-host timelines) ---
+    for r in rows:
+        wid = r.get("id")
+        att = lib.ask(r, "attest", since_hours=0.05, limit=5)
+        if att.get("ok") and att.get("data"):
+            host_utc = att["data"].get("utc")
+            try:
+                from datetime import datetime, timezone
+                skew = (datetime.fromisoformat(host_utc.replace("Z", "+00:00"))
+                        - datetime.now(timezone.utc)).total_seconds()
+                if abs(skew) > 1.0:
+                    msg = f"{wid} clock skew {skew:+.1f}s — cross-host timelines unreliable until NTP is fixed"
+                    T.think(f"[high] {msg}")
+                    print(f"  [thinker] {msg}")
+            except (ValueError, AttributeError):
+                pass
+
+    # --- rev 6: distributed thinker — correlation ACROSS hosts via the hop index ---
+    idx_entries = hop_index.read_all()
+    if len(idx_entries) >= 2:
+        df = dthinker.think_distributed(idx_entries[-200:])
+        for f in df:
+            T.think(f"[{f['severity']}] {f['what']}")
+        if df:
+            print(f"[dthinker] {len(df)} cross-host correlation(s):")
+            print(dthinker.render(df))
+            crit = [f for f in df if f.get("severity") == "critical"]
+            if crit:
+                notify.alert_smoke("dthinker", [f["what"] for f in crit], case_dir.name)
 
     seq = 0
     for r in rows:
@@ -238,15 +277,40 @@ def main():
             T.hole(wid, h["why"])
             print(f"  {wid:8} edges: HOLE — {h['why']}")
 
-    T.think(f"Hunt complete. Trajectory: {T.stats()['total']} entries, "
-            f"{T.stats()['branches']} branch(es).")
-
     # readable one-page summary
     hops = []
     try:
         hops = json.loads((case_dir / "path.json").read_text())
     except Exception:
         pass
+
+    # --- rev 6: record hops to the index (cross-case memory) ---
+    for h in hops:
+        hop_index.record(
+            case=case_dir.name, entry_id=h.get("seq", 0), host=h.get("witness", "?"),
+            principal=",".join(track), logonid=None,
+            hop_kind=h.get("skill", "?"), t=h.get("t"),
+            detail=f"logons={h.get('logons', 0)} conns={h.get('conns', 0)}")
+
+    # --- rev 6: emit the whole trajectory as OTel spans (best-effort) ---
+    try:
+        spans = [otel_emit.span_from_entry(e, S) for e in T.entries()]
+        otel_emit.emit(spans)
+    except Exception:
+        pass  # never block a hunt on telemetry
+
+    # --- rev 6: build the causal graph + blast radius ---
+    try:
+        g = causal.build_from_hop_index(case_dir.name, hop_index.read_all())
+        if g.nodes:
+            (case_dir / "causal_graph.dot").write_text(g.render_dot())
+            T.think(f"causal graph: {len(g.nodes)} nodes, {len(g.edges)} edges — "
+                    f"written to causal_graph.dot")
+    except Exception:
+        pass
+
+    T.think(f"Hunt complete. Trajectory: {T.stats()['total']} entries, "
+            f"{T.stats()['branches']} branch(es).")
     summary = case_dir / "CASE.md"
     lines = [f"# Case {case_dir.name}", "", f"Track: {track}",
              f"Window: {args.since}", "", "## Hops", ""]

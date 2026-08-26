@@ -528,6 +528,25 @@ Governance: promptfoo low (own endpoints), mitm medium (allowlist for reverse), 
 every call). All follow the rmagent rule: authorized estate only. See the `rterm-plugin` skill for the
 governance-gate pattern and `offensivePlugins.extreme.spec.ts` (47 tests) for the FP/FN coverage.
 
+### v3.3.0–v3.3.2 — model failover configurable + settings-UI coverage complete
+
+- **Model failover is now configurable** (v3.3.0): `fallbackModels: string[]` on each model profile
+  (Settings → Models → "Fallback Models (failover chain)"). When the primary provider errors with an
+  eligible failure (429/5xx/network/auth/model-unavailable) the same request retries the chain in order;
+  context-length/400/abort never fail over. Fallbacks re-bind the tool set. Also settable via
+  `settings:set` `models.profiles[].fallbackModels`.
+- **v3.2.18–19 features**: cross-session history search (`GET /api/v1/history/search?q=…`), REST API
+  (`/api/v1/*` over the same gateway port), gateway rate limiting (token bucket + auth lockout),
+  settings backup/restore (`settings-backup-*.json`, keep 20), idle terminal timeout, sub-agent fan-out.
+- **Scheduler UI** (v3.3.1): Connections → Scheduled Tasks now edits timezone/catchUp/playbook-mode/
+  retry/alertAfterFailures/pausedUntil/onSuccess/onFailure + a Run-now button. Agent actions:
+  `manage_scheduled_task` `validate|runNow|history|drift` (v3.2.16).
+- **Playbook UI** (v3.3.2): step timeout/retry/when/env + playbook onTargetError/maxParallelTargets/
+  maxRuntimeMinutes + Dry-run button. `run_playbook` accepts `dryRun: true`.
+- **Trigger manager UI** (v3.3.2): Connections → Triggers — pattern/threshold/webhook/schedule kinds,
+  run-playbook or propose-MOP actions, cooldown, enable/disable.
+- **Plugins settings** (v3.3.1): Settings → Plugins — forms for webIntel / NATS / Synapse / Numbat.
+
 ---
 
 ## Supporting files

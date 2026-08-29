@@ -29,7 +29,7 @@ except ImportError:
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
-ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap", "flowstats"}
+ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap"}
 PHASE0_SKILLS = ALLOWED
 MAX_PULL_BYTES = 32 * 1024
 WALK_DEPTH = 8
@@ -213,16 +213,79 @@ def _parse(stdout: str) -> dict:
 
 
 # ---------------------------------------------------------------- preamble + ask
-def _preamble(row: dict, since_hours: float, limit: int) -> str:
+# Rev 8 FP allowlist: OS-default registry values that are NOT persistence.
+# Applied ENGINE-SIDE to attackmap answers (the payload itself cannot grow —
+# it must fit the ~8191-char WinRM UTF-16LE base64 budget).
+FP_ALLOWLIST = {
+    "T1546.007": (  # netsh helper DLLs — OS default on every Windows box
+        # names (older list)
+        "dotnet", "wfpdiag", "dhcp", "whhelper", "rpc", "authhost", "napmon",
+        "trace", "console", "lanhelper", "wshelper", "elshelper", "rasmontr",
+        "hnetmon", "remoteaccess", "nshipsec", "dot3svc", "vmms", "wlan",
+        "wwancfg", "dot3cfg", "authhelper", "wcn", "mbn", "nshipsec6", "p2p",
+        "rpc", "winhttp", "wwanapi", "hnsdiag", "trace", "wfpdiag",
+        # live-observed 2026-08-29 (WS1/WS2 Server 2022): value=name=dll pairs
+        "ifmon", "authfwcfg", "fwcfg", "netiohlp", "netprofm", "nshhttp",
+        "nshwfp", "peerdistsh",
+    ),
+    "T1547.005": (  # default SecurityPackages (SSPs)
+        "kerberos", "msv1_0", "schannel", "wdigest", "tspkg", "pku2u",
+        "cloudap", "negotiate", "credssp", "ntlmssp",
+    ),
+    "T1547.002": (  # default LSA notification packages
+        "scecli", "rasman", "rasauto", "rdpws", "samsrv", "kdcsvc", "certprop",
+        "wdigest", "security",
+    ),
+}
+
+
+def _filter_attackmap_fps(data: dict) -> dict:
+    """Drop OS-default values from attackmap findings. Pure. A non-default
+    value (a real attacker netsh helper / SSP) still fires."""
+    findings = data.get("findings")
+    if not isinstance(findings, list):
+        return data
+    kept = []
+    for f in findings:
+        t = f.get("t")
+        allowed = FP_ALLOWLIST.get(t)
+        if not allowed:
+            kept.append(f)
+            continue
+        vals = [v for v in (f.get("v") or [])
+                if not any(a in str(v).lower() for a in allowed)]
+        if vals:
+            kept.append({**f, "c": len(vals), "v": vals})
+    out = {**data, "findings": kept, "found": len(kept)}
+    return out
+
+
+def _strip_payload(text: str) -> str:
+    """Drop comment lines / blank lines before sending. They cost WinRM
+    command-line budget (UTF-16LE base64 ~2.7x) but carry no semantics.
+    Rev 8 bug fix: attackmap's payload crossed the ~8191-char budget after
+    the preamble grew ($Track/$SinceHours/$Limit) — every ask returned
+    'The command line is too long.'"""
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        out.append(line.rstrip())
+    return "\n".join(out)
+
+
+def _preamble(row: dict, since_hours: float, limit: int, skill: str = "") -> str:
     track = row.get("track") or ["Administrator", "SYSTEM"]
     # build a proper PowerShell array: @('Administrator','SYSTEM')
     track_items = "','".join(str(t).replace("'", "''") for t in track)
-    return (
+    out = (
         "$ErrorActionPreference='SilentlyContinue'\n"
         f"$Track = @('{track_items}')\n"
         f"$SinceHours = {float(since_hours)}\n"
         f"$Limit = {int(limit)}\n"
     )
+    return out
 
 
 def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
@@ -255,7 +318,7 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
     except SystemExit as e:
         return {"ok": False, "error": str(e), "hole": hole(f"{row.get('id')} {skill}", "no credential")}
 
-    script = _preamble(row, since_hours, limit) + payload.read_text()
+    script = _preamble(row, since_hours, limit, skill) + _strip_payload(payload.read_text())
     timeout = _clamp_timeout(skill, timeout)
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
     transport = row.get("transport") or "basic"
@@ -272,7 +335,10 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
             err = err.decode("utf-8", "replace")
         if r.status_code != 0:
             return _cap({"ok": False, "error": (err or out or "")[-500:] or f"exit {r.status_code}"}, row, skill)
-        return _cap(_parse(out), row, skill)
+        parsed = _parse(out)
+        if skill == "attackmap" and parsed.get("ok") and isinstance(parsed.get("data"), dict):
+            parsed["data"] = _filter_attackmap_fps(parsed["data"])
+        return _cap(parsed, row, skill)
     except Exception as e:  # noqa: BLE001 — any transport failure is a hole, not a crash
         msg = str(e).split("\n")[0][:300]
         kind = "timeout" if "timed out" in msg.lower() else "unreachable"
@@ -294,6 +360,16 @@ def record_ask(case_dir: Path | None, row: dict, skill: str, result: dict) -> No
     }
     with (case_dir / "asks.jsonl").open("a") as f:
         f.write(json.dumps(line) + "\n")
+    # Rev 8: also persist the full answer payload so correlate.py can join
+    # across witnesses without re-pulling. One file per witness+skill.
+    try:
+        adir = case_dir / "answers"
+        adir.mkdir(parents=True, exist_ok=True)
+        wid = (row.get("id") or "witness").replace("/", "_")
+        (adir / f"{wid}__{skill}.json").write_text(
+            json.dumps(result.get("data") or {}, default=str, indent=2))
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------- concurrency

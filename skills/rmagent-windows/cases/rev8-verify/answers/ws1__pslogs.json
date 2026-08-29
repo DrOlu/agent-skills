@@ -1,0 +1,262 @@
+{
+  "skill": "pslogs",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-08-29T17:37:10.9211351Z",
+  "since": "2026-08-29T15:37:10.5561724+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "blocks": [
+    {
+      "t": "2026-08-29T17:37:06.4459498+00:00",
+      "path": null,
+      "msg": "{ $cl=(F $_ 'CommandLine'); if($cl -and $cl.Length -gt 200){$cl=$cl.Substring(0,200)}; [pscustomobject]@{t=$_.TimeCreated.ToString('o');u=$_.Properties[1].Value;p=$_.Properties[5].Value;c=$cl} }"
+    },
+    {
+      "t": "2026-08-29T17:37:06.4442177+00:00",
+      "path": null,
+      "msg": "{MT $_ -and $_.Properties[5].Value -match $LOL}"
+    },
+    {
+      "t": "2026-08-29T17:37:06.2573428+00:00",
+      "path": null,
+      "msg": "{ [pscustomobject]@{t=$_.TimeCreated.ToString('o');u=$_.Properties[1].Value;p=$_.Properties[5].Value} }"
+    },
+    {
+      "t": "2026-08-29T17:37:05.7580794+00:00",
+      "path": null,
+      "msg": "$ErrorActionPreference='SilentlyContinue'\n$Track = @('Administrator','SYSTEM')\n$SinceHours = 2.0\n$Limit = 12\nfunction MT($e){ foreach($v in $e.Properties.Value){ if($Track -contains $v){return $true} }; return $false }\nfunction F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode(\"//e:Data[@Name='$n']\",$m);if($o){$o.'#text'}}\nfunction E($ids,$log){\n  try{ @(Get-Wi"
+    },
+    {
+      "t": "2026-08-29T17:32:46.2094469+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetGPO'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Function "
+    },
+    {
+      "t": "2026-08-29T17:32:46.1984421+00:00",
+      "path": null,
+      "msg": "h\n        {\n            throw\n        }\n    }\n\n    # .EXTERNALHELP NetFirewallDynamicKeywordAddress.cmdletDefinition.cdxml-Help.xml\n}\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Function 'Update-NetFirewallDynamicKeywordAddress' -Alias '*'\n        \n\nfunction Get-NetFirewallDynamicKeywordAddress\n{\n    [CmdletBinding(DefaultParameterSetName='GetAll', PositionalBinding=$false)]\n    \n    [OutputType([Microsoft.Management.Infrastructure.CimInstance])]\n[OutputType('Microsoft.Management.Infrastructu"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1984188+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetFirewallDynamicKeywordAddress'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Expo"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1858362+00:00",
+      "path": null,
+      "msg": "_value = ${RemoteMachineTunnelAuthorizationList}\n            $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'RemoteMachineTunnelAuthorizationList'; ParameterType = 'System.String'; Bindings = 'In'; Value = $__cmdletization_value; IsValuePresent = $true}\n          } else {\n            $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'RemoteMachineTunnelAuthorizationList'; ParameterType = 'System.String"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1858039+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetSecuritySettingData'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleM"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1707865+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetQuickModeSA'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -F"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1593130+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetMainModeSA'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Fu"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1471224+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetIPsecIdentity'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember "
+    },
+    {
+      "t": "2026-08-29T17:32:46.1354863+00:00",
+      "path": null,
+      "msg": "Parameter(ParameterSetName='GetAll')]\n    [Parameter(ParameterSetName='InputObject (cdxml)')]\n    [switch]\n    ${AsJob},\n\n    [Parameter(ParameterSetName='ByName')]\n    [Parameter(ParameterSetName='GetAll')]\n    [Parameter(ParameterSetName='InputObject (cdxml)')]\n    [switch]\n    ${PassThru})\n\n    DynamicParam {\n        try \n        {\n            if (-not $__cmdletization_exceptionHasBeenThrown)\n            {\n                $__cmdletization_objectModelWrapper = $script:ObjectModelWrapper::new()"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1354739+00:00",
+      "path": null,
+      "msg": "uthDscp'; ParameterType = 'System.UInt32'; Bindings = 'In'; Value = $__cmdletization_defaultValue; IsValuePresent = $__cmdletization_defaultValueIsPresent}\n          }\n          $__cmdletization_methodParameters.Add($__cmdletization_methodParameter)\n\n          [object]$__cmdletization_defaultValue = $null\n          [object]$__cmdletization_defaultValueIsPresent = $false\n          if ($PSBoundParameters.ContainsKey('IpV6IPsecUnauthRateLimitBytesPerSec')) {\n            [object]$__cmdletization_val"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1354364+00:00",
+      "path": null,
+      "msg": "Parameter]@{Name = 'MaxPerIPRateLimitQueues'; ParameterType = 'System.UInt32'; Bindings = 'In'; Value = $__cmdletization_value; IsValuePresent = $true}\n        } else {\n          $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'MaxPerIPRateLimitQueues'; ParameterType = 'System.UInt32'; Bindings = 'In'; Value = $__cmdletization_defaultValue; IsValuePresent = $__cmdletization_defaultValueIsPresent}\n        }\n        $__cmdletization_methodParameters."
+    },
+    {
+      "t": "2026-08-29T17:32:46.1353978+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetIPsecDoSPSetting'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMemb"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1157800+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetSecDeltaCollection'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMe"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1082686+00:00",
+      "path": null,
+      "msg": " = 'Microsoft.PowerShell.Cmdletization.GeneratedTypes.NetSecurity.GpoBoolean'; Bindings = 'In'; Value = $__cmdletization_value; IsValuePresent = $true}\n          } else {\n            $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'LogIgnored'; ParameterType = 'Microsoft.PowerShell.Cmdletization.GeneratedTypes.NetSecurity.GpoBoolean'; Bindings = 'In'; Value = $__cmdletization_defaultValue; IsValuePresent = $__cmdletization_defaultValueIsPresent}\n  "
+    },
+    {
+      "t": "2026-08-29T17:32:46.1082580+00:00",
+      "path": null,
+      "msg": "})\n        $__cmdletization_queryBuilder.FilterByProperty('Name', $__cmdletization_values, $true, 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('All') -and (@('GetAll') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.AddQueryOption('All', ${All})\n    }\n    if ($PSBoundParameters.ContainsKey('PolicyStore') -and (@('ByName', 'GetAll') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.AddQueryOption('PolicyStore', ${PolicyStore})\n    }"
+    },
+    {
+      "t": "2026-08-29T17:32:46.1082291+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetFirewallProfile'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMembe"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0927540+00:00",
+      "path": null,
+      "msg": "_values = @(${PolicyStoreSourceType})\n        $__cmdletization_queryBuilder.FilterByProperty('PolicyStoreSourceType', $__cmdletization_values, $false, 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('AssociatedNetIPsecRule') -and (@('ByAssociatedNetIPsecRule') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.FilterByAssociatedInstance(${AssociatedNetIPsecRule}, 'MSFT_NetConSecRuleQMCryptoSet', 'GroupComponent', 'PartComponent', 'Default')\n    }\n    if ($PSBound"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0927404+00:00",
+      "path": null,
+      "msg": "ment.Automation.IDynamicParameters])\n                {\n                    ([System.Management.Automation.IDynamicParameters]$__cmdletization_objectModelWrapper).GetDynamicParameters()\n                }\n            }\n        }\n        catch\n        {\n            $__cmdletization_exceptionHasBeenThrown = $true\n            throw\n        }\n    }\n\n    Begin {\n        $__cmdletization_exceptionHasBeenThrown = $false\n        try \n        {\n            __cmdletization_BindCommonParameters $__cmdletizat"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0927056+00:00",
+      "path": null,
+      "msg": "  {\n            throw\n        }\n    }\n\n    # .EXTERNALHELP NetIPsecQuickModeCryptoSet.cmdletDefinition.cdxml-Help.xml\n}\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Function 'Set-NetIPsecQuickModeCryptoSet' -Alias '*'\n        \n\nfunction Remove-NetIPsecQuickModeCryptoSet\n{\n    [CmdletBinding(DefaultParameterSetName='GetAll', SupportsShouldProcess=$true, ConfirmImpact='Medium', PositionalBinding=$false)]\n    \n    [OutputType([Microsoft.Management.Infrastructure.CimInstance])]\n[OutputType('Micros"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0926718+00:00",
+      "path": null,
+      "msg": "\n            throw\n        }\n    }\n\n    Begin {\n        $__cmdletization_exceptionHasBeenThrown = $false\n        try \n        {\n            __cmdletization_BindCommonParameters $__cmdletization_objectModelWrapper $PSBoundParameters\n            $__cmdletization_objectModelWrapper.BeginProcessing()\n        }\n        catch\n        {\n            $__cmdletization_exceptionHasBeenThrown = $true\n            throw\n        }\n    }\n        \n\n    Process {\n        try \n        {\n            if (-not $__cmd"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0926337+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetIKEQMCryptoSet'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0677831+00:00",
+      "path": null,
+      "msg": "nParameters $__cmdletization_objectModelWrapper $PSBoundParameters\n            $__cmdletization_objectModelWrapper.BeginProcessing()\n        }\n        catch\n        {\n            $__cmdletization_exceptionHasBeenThrown = $true\n            throw\n        }\n    }\n        \n\n    Process {\n        try \n        {\n            if (-not $__cmdletization_exceptionHasBeenThrown)\n            {\n    $__cmdletization_queryBuilder = $__cmdletization_objectModelWrapper.GetQueryBuilder()\n    if ($PSBoundParameters"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0677565+00:00",
+      "path": null,
+      "msg": "T_NetMainModeRuleMMCryptoSet', 'GroupComponent', 'PartComponent', 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('All') -and (@('GetAll') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.AddQueryOption('All', ${All})\n    }\n    if ($PSBoundParameters.ContainsKey('PolicyStore') -and (@('ByName', 'ByDisplayName', 'ByQuery', 'ByAssociatedNetIPsecMainModeRule', 'GetAll') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.AddQueryOption('Pol"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0677355+00:00",
+      "path": null,
+      "msg": "ainModeCryptoSet.cmdletDefinition.cdxml-Help.xml\n}\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Function 'Remove-NetIPsecMainModeCryptoSet' -Alias '*'\n        \n\nfunction Rename-NetIPsecMainModeCryptoSet\n{\n    [CmdletBinding(DefaultParameterSetName='GetAll', SupportsShouldProcess=$true, ConfirmImpact='Medium', PositionalBinding=$false)]\n    \n    [OutputType([Microsoft.Management.Infrastructure.CimInstance])]\n[OutputType('Microsoft.Management.Infrastructure.CimInstance#root/standardcimv2/MSFT_Ne"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0677146+00:00",
+      "path": null,
+      "msg": "nstance#root/standardcimv2/MSFT_NetMainModeRule')]\n    [ValidateNotNull()]\n    [ciminstance]\n    ${AssociatedNetIPsecMainModeRule},\n\n    [Parameter(ParameterSetName='GetAll')]\n    [switch]\n    ${All},\n\n    [Parameter(ParameterSetName='ByName')]\n    [Parameter(ParameterSetName='ByDisplayName')]\n    [Parameter(ParameterSetName='ByQuery')]\n    [Parameter(ParameterSetName='ByAssociatedNetIPsecMainModeRule')]\n    [Parameter(ParameterSetName='GetAll')]\n    [string]\n    ${PolicyStore},\n\n    [Parameter("
+    },
+    {
+      "t": "2026-08-29T17:32:46.0676855+00:00",
+      "path": null,
+      "msg": "('ByName') -contains $PSCmdlet.ParameterSetName )) {\n        $__cmdletization_values = @(${Name})\n        $__cmdletization_queryBuilder.FilterByProperty('InstanceID', $__cmdletization_values, $true, 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('DisplayName') -and (@('ByDisplayName') -contains $PSCmdlet.ParameterSetName )) {\n        $__cmdletization_values = @(${DisplayName})\n        $__cmdletization_queryBuilder.FilterByProperty('DisplayName', $__cmdletization_values, $true, 'Default'"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0676648+00:00",
+      "path": null,
+      "msg": "(@('ByQuery') -contains $PSCmdlet.ParameterSetName )) {\n        $__cmdletization_values = @(${DisplayGroup})\n        $__cmdletization_queryBuilder.FilterByProperty('DisplayGroup', $__cmdletization_values, $true, 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('Group') -and (@('ByQuery') -contains $PSCmdlet.ParameterSetName )) {\n        $__cmdletization_values = @(${Group})\n        $__cmdletization_queryBuilder.FilterByProperty('RuleGroup', $__cmdletization_values, $true, 'Default')\n    }"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0676429+00:00",
+      "path": null,
+      "msg": "      [object]$__cmdletization_value = ${MaxMinutes}\n          $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'MaxLifetimeMinutes'; ParameterType = 'System.UInt32'; Bindings = 'In'; Value = $__cmdletization_value; IsValuePresent = $true}\n        } else {\n          $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'MaxLifetimeMinutes'; ParameterType = 'System.UInt32'; Bindings = 'In'; Value = $__cmdleti"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0676143+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetIKEMMCryptoSet'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0418909+00:00",
+      "path": null,
+      "msg": "$__cmdletization_methodParameters, $__cmdletization_returnValue)\n      $__cmdletization_passThru = $PSBoundParameters.ContainsKey('PassThru') -and $PassThru\n            if ($PSBoundParameters.ContainsKey('InputObject')) {\n                foreach ($x in $InputObject) { $__cmdletization_objectModelWrapper.ProcessRecord($x, $__cmdletization_methodInvocationInfo, $__cmdletization_PassThru) }\n            } else {\n                $__cmdletization_objectModelWrapper.ProcessRecord($__cmdletization_query"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0418564+00:00",
+      "path": null,
+      "msg": "    {\n                $__cmdletization_objectModelWrapper = $script:ObjectModelWrapper::new()\n                $__cmdletization_objectModelWrapper.Initialize($PSCmdlet, $script:ClassName, $script:ClassVersion, $script:ModuleVersion, $script:PrivateData)\n\n                if ($__cmdletization_objectModelWrapper -is [System.Management.Automation.IDynamicParameters])\n                {\n                    ([System.Management.Automation.IDynamicParameters]$__cmdletization_objectModelWrapper).GetDynamic"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0418126+00:00",
+      "path": null,
+      "msg": "on_values = @(${PrimaryStatus})\n        $__cmdletization_queryBuilder.FilterByProperty('PrimaryStatus', $__cmdletization_values, $false, 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('Status') -and (@('ByQuery') -contains $PSCmdlet.ParameterSetName )) {\n        $__cmdletization_values = @(${Status})\n        $__cmdletization_queryBuilder.FilterByProperty('Status', $__cmdletization_values, $true, 'Default')\n    }\n    if ($PSBoundParameters.ContainsKey('PolicyStoreSource') -and (@('ByQuer"
+    },
+    {
+      "t": "2026-08-29T17:32:46.0417762+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetIKEP2AuthSet'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8883876+00:00",
+      "path": null,
+      "msg": "ery', 'ByAssociatedNetIPsecRule', 'ByAssociatedNetIPsecMainModeRule', 'GetAll') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.AddQueryOption('PolicyStore', ${PolicyStore})\n    }\n    if ($PSBoundParameters.ContainsKey('GPOSession') -and (@('ByName', 'ByDisplayName', 'ByQuery', 'ByAssociatedNetIPsecRule', 'ByAssociatedNetIPsecMainModeRule', 'GetAll') -contains $PSCmdlet.ParameterSetName )) {\n    $__cmdletization_queryBuilder.AddQueryOption('GPOSession', ${GPOSession})"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8883693+00:00",
+      "path": null,
+      "msg": "u)\n            }\n        }\n    }\n\n            }\n        }\n        catch\n        {\n            $__cmdletization_exceptionHasBeenThrown = $true\n            throw\n        }\n    }\n        \n\n    End {\n        try\n        {\n            if (-not $__cmdletization_exceptionHasBeenThrown)\n            {\n                $__cmdletization_objectModelWrapper.EndProcessing()\n            }\n        }\n        catch\n        {\n            throw\n        }\n    }\n\n    # .EXTERNALHELP NetIPsecPhase1AuthSet.cmdletDefinit"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8883311+00:00",
+      "path": null,
+      "msg": "rameter(ParameterSetName='ByAssociatedNetIPsecRule', Mandatory=$true, ValueFromPipeline=$true)]\n    [PSTypeName('Microsoft.Management.Infrastructure.CimInstance#root/standardcimv2/MSFT_NetConSecRule')]\n    [ValidateNotNull()]\n    [ciminstance]\n    ${AssociatedNetIPsecRule},\n\n    [Parameter(ParameterSetName='ByAssociatedNetIPsecMainModeRule', Mandatory=$true, ValueFromPipeline=$true)]\n    [PSTypeName('Microsoft.Management.Infrastructure.CimInstance#root/standardcimv2/MSFT_NetMainModeRule')]\n    ["
+    },
+    {
+      "t": "2026-08-29T17:32:45.8883010+00:00",
+      "path": null,
+      "msg": "[Parameter(ParameterSetName='ByDisplayName')]\n    [Parameter(ParameterSetName='ByQuery')]\n    [Parameter(ParameterSetName='ByAssociatedNetIPsecRule')]\n    [Parameter(ParameterSetName='ByAssociatedNetIPsecMainModeRule')]\n    [Parameter(ParameterSetName='GetAll')]\n    [string]\n    ${PolicyStore},\n\n    [Parameter(ParameterSetName='ByName')]\n    [Parameter(ParameterSetName='ByDisplayName')]\n    [Parameter(ParameterSetName='ByQuery')]\n    [Parameter(ParameterSetName='ByAssociatedNetIPsecRule')]\n    ["
+    },
+    {
+      "t": "2026-08-29T17:32:45.8882704+00:00",
+      "path": null,
+      "msg": "    [Parameter(ParameterSetName='ByGroup')]\n    [string]\n    ${GPOSession},\n\n    [Parameter(ParameterSetName='InputObject (cdxml)', Mandatory=$true, ValueFromPipeline=$true)]\n    [PSTypeName('Microsoft.Management.Infrastructure.CimInstance#MSFT_NetIKEP1AuthSet')]\n    [ValidateNotNull()]\n    [ciminstance[]]\n    ${InputObject},\n\n    [Parameter(ParameterSetName='ByName')]\n    [Parameter(ParameterSetName='ByDisplayName')]\n    [Parameter(ParameterSetName='ByDisplayGroup')]\n    [Parameter(ParameterSet"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8882389+00:00",
+      "path": null,
+      "msg": "et-NetIPsecPhase1AuthSet\n{\n    [CmdletBinding(DefaultParameterSetName='GetAll', PositionalBinding=$false)]\n    \n    [OutputType([Microsoft.Management.Infrastructure.CimInstance])]\n[OutputType('Microsoft.Management.Infrastructure.CimInstance#root/standardcimv2/MSFT_NetIKEP1AuthSet')]\n\n    param(\n    \n    [Parameter(ParameterSetName='ByName', Mandatory=$true, Position=0)]\n    [Alias('ID')]\n    [ValidateNotNull()]\n    [string[]]\n    ${Name},\n\n    [Parameter(ParameterSetName='ByDisplayName', Mandato"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8881806+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetIKEP1AuthSet'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8552973+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetServiceFilter'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember "
+    },
+    {
+      "t": "2026-08-29T17:32:45.8422754+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetProtocolPortFilter'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMe"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8261107+00:00",
+      "path": null,
+      "msg": "oteMachine')) {\n            [object]$__cmdletization_value = ${RemoteMachine}\n            $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'RemoteMachines'; ParameterType = 'System.String'; Bindings = 'In'; Value = $__cmdletization_value; IsValuePresent = $true}\n          } else {\n            $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'RemoteMachines'; ParameterType = 'System.String'; Bindings = '"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8260942+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetNetworkLayerSecurityFilter'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-"
+    },
+    {
+      "t": "2026-08-29T17:32:45.8090565+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetInterfaceTypeFilter'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleM"
+    },
+    {
+      "t": "2026-08-29T17:32:45.7956704+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetInterfaceFilter'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMembe"
+    }
+  ]
+}

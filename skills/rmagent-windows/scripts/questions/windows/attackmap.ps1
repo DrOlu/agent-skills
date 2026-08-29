@@ -2,6 +2,7 @@
 # BLUESPAWN's hunt registry, reimplemented pull-only). Catches persistence that
 # ALREADY EXISTS — predates our monitoring window. Each finding carries its ATT&CK ID.
 # Engine injects: $ErrorActionPreference; $Track; $SinceHours; $Limit
+# Rev 8: OS-default netsh/SSP values are filtered engine-side in lib.py.
 $H='HKLM:\';$U='HKCU:\'
 $R="SOFTWARE\Microsoft\Windows\CurrentVersion\Run";$L="SYSTEM\CurrentControlSet\Control\Lsa"
 $W="SOFTWARE\Microsoft\Windows NT\CurrentVersion"

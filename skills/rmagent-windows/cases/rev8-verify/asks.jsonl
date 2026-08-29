@@ -1,0 +1,9 @@
+{"t": "2026-08-29T17:37:03Z", "witness": "ws1", "plane": "endpoint", "skill": "edges", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:07Z", "witness": "ws1", "plane": "endpoint", "skill": "explain", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:12Z", "witness": "ws1", "plane": "endpoint", "skill": "pslogs", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:26Z", "witness": "ws1", "plane": "endpoint", "skill": "kernring", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:30Z", "witness": "ws1", "plane": "endpoint", "skill": "attackmap", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:34Z", "witness": "ws2", "plane": "data", "skill": "edges", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:38Z", "witness": "ws2", "plane": "data", "skill": "pslogs", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:52Z", "witness": "ws2", "plane": "data", "skill": "kernring", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-29T17:37:56Z", "witness": "ws2", "plane": "data", "skill": "attackmap", "ok": true, "error": null, "hole": null}

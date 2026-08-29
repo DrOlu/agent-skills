@@ -1,0 +1,21 @@
+{
+  "skill": "kernring",
+  "host": "EC2AMAZ-C69VULQ",
+  "utc": "2026-08-29T17:37:52.0113602Z",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "sysmon_status": "Sysmon=Running",
+  "burst_seconds": 10,
+  "procs": [
+    {
+      "t": "2026-08-29T17:37:41.8472613+00:00",
+      "eid": 2,
+      "pid": "3656",
+      "img": "logman.exe",
+      "cmd": null
+    }
+  ],
+  "note": "burst capture - 10s window, not a ring. Sysmon is the ring."
+}

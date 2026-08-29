@@ -1,0 +1,20 @@
+# Case rev8-verify
+
+Track: ['Administrator', 'SYSTEM']
+Window: 2h
+
+## Hops
+
+- 01 ws1 · edges → {'plane': 'endpoint', 'witness': 'ws1', 'skill': 'edges', 'logons': 50, 'explicit_creds': 0, 'special_privs': 0, 'conns': 0, 't': '2026-08-29T17:37:02.0941705Z'}
+- 01 ws1 · explain → {'plane': 'endpoint', 'witness': 'ws1', 'skill': 'explain', 'group_changes': 12, 'service_events': 12, 'task_events': 12, 'wmi_subscriptions': 1, 'audit_cleared': 0, 'proc_spawns': 20, 'lolbin_spawns': 20, 't': '2026-08-29T17:37:06.6454467Z'}
+- 01 ws1 · pslogs → {'plane': 'endpoint', 'witness': 'ws1', 'skill': 'pslogs', 'blocks': 50, 't': '2026-08-29T17:37:10.9211351Z'}
+- 01 ws1 · kernring → {'plane': 'endpoint', 'witness': 'ws1', 'skill': 'kernring', 'procs': 1, 'burst_seconds': 10, 'sysmon_status': 'Sysmon64=Running', 't': '2026-08-29T17:37:25.3488298Z'}
+- 01 ws1 · attackmap → {'plane': 'endpoint', 'witness': 'ws1', 'skill': 'attackmap', 'checked': 13, 'found': 1, 't': '2026-08-29T17:37:29.7938907Z'}
+- 02 ws2 · edges → {'plane': 'data', 'witness': 'ws2', 'skill': 'edges', 'logons': 0, 'explicit_creds': 0, 'special_privs': 0, 'conns': 0, 't': '2026-08-29T17:37:33.8235473Z'}
+- 02 ws2 · pslogs → {'plane': 'data', 'witness': 'ws2', 'skill': 'pslogs', 'blocks': 50, 't': '2026-08-29T17:37:37.7297603Z'}
+- 02 ws2 · kernring → {'plane': 'data', 'witness': 'ws2', 'skill': 'kernring', 'procs': 1, 'burst_seconds': 10, 'sysmon_status': 'Sysmon=Running', 't': '2026-08-29T17:37:52.0113602Z'}
+- 02 ws2 · attackmap → {'plane': 'data', 'witness': 'ws2', 'skill': 'attackmap', 'checked': 13, 'found': 1, 't': '2026-08-29T17:37:56.1988413Z'}
+
+## Holes
+
+(none — every door answered)

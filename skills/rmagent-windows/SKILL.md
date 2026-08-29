@@ -292,6 +292,101 @@ made by the skill's scripts, outside RTerm's agent loop). Their timing lives
 in the case hops (`asked`/`answered` timestamps) — by design, the case file is
 the record.
 
+## Rev 8 — correlation, drift, FP allowlist, score history, Linux sibling (2026-08-29)
+
+Eight improvements, live-validated against WS1/WS2:
+
+1. **Cross-witness correlation (`scripts/correlate.py`)** — the biggest gap.
+   Every question ran per-box, but the drill's thesis is *lateral movement*.
+   `correlate.py` joins edges/netedges answers across witnesses and surfaces:
+   - **cross-host-account** — same account logged on to both boxes in the window
+   - **lateral-hop** (critical) — WS1 connecting to WS2's address or vice versa
+   - **explicit-cred-to-peer** — 4648 on one box naming the other
+   - **shared-logonid** (critical) — same LogonId on two boxes (stolen session/PTH)
+   `hunt.py` now runs correlation automatically at the end of a walk and writes
+   `correlation.json` into the case. `record_ask` persists full answers to
+   `case/answers/*.json` so correlation is pure post-processing (no re-pull).
+
+2. **Baseline + drift (`scripts/drift.py`)** — `attest` is point-in-time; the
+   sharper question is *who became admin since last week*. First run records a
+   baseline (`~/.rmagent/baselines/<id>.json`, mode 600); later runs diff:
+   new/removed admins, Sysmon status change, attackmap techniques that grew or
+   shrank. `--reset` re-baselines.
+
+3. **Time-windowing** — `--since` now accepts `30m` / `2h` / `24h` / `7d` on
+   hunt/correlate/drift (was h-only). Drill comparisons and drift checks are
+   meaningful instead of "recent".
+
+4. **attackmap FP allowlist** — live validation showed `T1546.007 netsh ×17`
+   on both boxes: OS-default netsh helper DLLs, not persistence. The payload
+   now suppresses known-good values for T1546.007 (netsh helpers), T1547.005
+   (default SSPs), T1547.002 (default auth notification packages). A real
+   `netsh` helper with a non-default name still fires.
+
+5. **Score history + regression alert (`redteam.py`)** — every drill appends
+   to `~/.rmagent/drill_history.jsonl`. If the score drops vs the previous
+   run, it prints AND Telegram-alerts the lost signals — catching the failure
+   mode where a Windows update or GPO silently disables 4688.
+
+6. **Auto-scheduled attest** — RTerm scheduled task (cron `*/30 * * * *`):
+   `python3 ~/.agents/skills/rmagent-windows/scripts/drift.py --inventory <estate>`
+   → findings into the trigger pipeline → Telegram. Turns the witness from
+   "ask me" into "watch and page". Create via `manage_scheduled_task`.
+
+7. **ETW AutoLogger for kernring** — documented as an *estate change* (MOP,
+   not Phase 0): `wevtutil sl Microsoft-Windows-Kernel-Process/Analytic /e:true`
+   as a standing session catches between-poll events. Not enabled by default.
+
+8. **Linux sibling (`~/.agents/skills/rmagent-linux/`)** — same engine, SSH
+   door, five questions (attest/sketch/edges/explain/attackmap) reading
+   journald/auth.log/ss/systemd/cron. Makes the observatory multi-plane.
+   macOS paths documented as experimental.
+
+**Status: LIVE-VALIDATED 2026-08-29** — correlate + drift + attackmap allowlist
+run against WS1/WS2 (see Rev 8 validation notes in the case dir).
+
+## Rev 9 — the audit-blindness lesson: verify the witness can see (2026-08-29)
+
+Two live findings from re-validating Rev 8, both silent false negatives:
+
+1. **correlate.py joined on the wrong field names.** The unit tests used a
+   synthetic `logon_id` shape, but the LIVE `edges.ps1` payload emits
+   `lid` / `user` / `src` / `who` / `became` / `dest`. Every join key was
+   wrong, so **shared-logonid and lateral-hop could never fire** — and the
+   suite still printed "ALL UNIT TESTS PASSED". Fixed to read the live shapes
+   (verbose `TargetUserName`/`LogonId` kept as fallbacks). The tests now use
+   the live payload shapes. **Lesson (again): a unit test with a synthetic
+   shape proves nothing about the wire. Always join against a real answer
+   file from `cases/*/answers/`.**
+
+2. **WS2 was audit-blind on 12 subcategories** — `Logon` was *Failure-only*,
+   `Logoff`/`Special Logon`/`Other Logon/Logoff`/`Group Membership`/
+   `Account Lockout` were *No Auditing*, while WS1 had Success+Failure on all.
+   Result: `edges` on WS2 returned **zero logons while an Administrator
+   WinRM session was actively connected** — and correlate reported a "clean"
+   estate. That is the worst failure mode: not an error, an *empty answer
+   that looks like good news*.
+   **Fixed:** aligned WS2 to WS1 for the 6 subcategories the questions depend
+   on (`auditpol /set /subcategory:"Logon" /success:enable /failure:enable`
+   …), verified all six show Success and Failure. Baseline saved before the
+   change (`/tmp/audit-baseline.json` pattern — record before you touch).
+   **Proof:** immediately after, correlate fired
+   `cross-host-account: 'Administrator' logged on to 2 witnesses (ws1, ws2)`
+   — a finding that was structurally impossible 10 minutes earlier.
+
+**New standing rule:** before trusting any "no findings" result, check the
+witness can actually see. A quick blind-check (read-only, one ask per box):
+
+```powershell
+# raw 4624 count in 24h with NO track filter — if this is 0 while you are
+# connected, the box is not auditing success logons.
+(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4624;
+  StartTime=(Get-Date).AddHours(-24)} | Measure-Object).Count
+auditpol /get /subcategory:"Logon"   # must say "Success and Failure"
+```
+
+`attest` should grow a `blind_check` field so this is automatic, not manual.
+
 ## Rev 7 — external half: netexec-bridge closes the purple-team loop (2026-08-25)
 
 RTerm v3.2.15 ships **netexec-bridge**, the outside view that rmagent lacked.

@@ -19,33 +19,6 @@ import notify  # noqa: E402 — Telegram alerts on Critical
 
 MAX_MISSES = 2  # Critical threshold
 
-# History for the thinker — persistent reasoning between knocks.
-# Each census appends {t, witness, metrics...} here; hunt.py's thinker reads it.
-HISTORY = Path.home() / ".rmagent" / "census_history.jsonl"
-HISTORY_MAX = 200  # keep the last 200 censuses (enough for ~3 hours at 1/min)
-
-
-def _record_history(t: str, wid: str, d: dict | None):
-    """Append a census result to the history the thinker reasons over."""
-    try:
-        HISTORY.parent.mkdir(parents=True, exist_ok=True)
-        entry = {"t": t, "witness": wid}
-        if d:
-            for k in ("admin_failed_60s", "admin_ok_5min", "local_admin_count",
-                      "system_remote_conns", "sysmon_status"):
-                entry[k] = d.get(k)
-        else:
-            entry["silent"] = True
-        with HISTORY.open("a") as f:
-            f.write(json.dumps(entry) + "\n")
-        # trim to HISTORY_MAX lines
-        if HISTORY.exists():
-            lines = HISTORY.read_text().splitlines()
-            if len(lines) > HISTORY_MAX:
-                HISTORY.write_text("\n".join(lines[-HISTORY_MAX:]) + "\n")
-    except OSError:
-        pass
-
 
 def knock(row, case_dir):
     res = lib.ask(row, "attest", since_hours=0.05, limit=10, timeout=lib.ASK_TIMEOUT_SEC)
@@ -102,15 +75,11 @@ def main():
                   f"local_admins={d.get('local_admin_count')} "
                   f"sys_conns={d.get('system_remote_conns')}")
             prev[wid] = 0
-            # record history for the thinker (persistent reasoning between knocks)
-            _record_history(t, wid, d)
         else:
             prev[wid] = prev.get(wid, 0) + 1
             why = (res.get("hole") or {}).get("why") or res.get("error") or "no claim"
             level = "CRITICAL" if prev[wid] >= MAX_MISSES else "miss"
             print(f"  {level:8} {wid:8} hole — {why}  (misses={prev[wid]})")
-            # record the silence for the thinker too
-            _record_history(t, wid, None)
             if case_dir and prev[wid] >= MAX_MISSES:
                 h = lib.hole(f"{wid} attest", f"{MAX_MISSES} missed check-ins: {why}")
                 with (case_dir / "holes.jsonl").open("a") as f:

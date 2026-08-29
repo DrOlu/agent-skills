@@ -1,24 +1,33 @@
 # Allowlisted: who did Administrator/SYSTEM touch since $SinceHours. Capped. No full table.
-# REV 8: + Kerberos 4768/4769 (pass-the-ticket), +4648 explicit creds, +4672 special privs.
-function F($ev,$name){$x=[xml]$ev.ToXml();$ns=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$ns.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$n=$x.SelectSingleNode("//e:Data[@Name='$name']",$ns);if($n){$n.'#text'} else {$null}}
+# Engine injects: $ErrorActionPreference='SilentlyContinue'; $Track; $SinceHours; $Limit
+# REV 2 (2026-08-19): +4648 explicit creds (lateral movement), +4672 special privs.
+function F($ev,$name){
+  $x=[xml]$ev.ToXml();$ns=New-Object System.Xml.XmlNamespaceManager($x.NameTable)
+  $ns.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event')
+  $n=$x.SelectSingleNode("//e:Data[@Name='$name']",$ns); if($n){$n.'#text'} else {$null}
+}
 function TT($ev){$t=F $ev 'TargetUserName';if($t){foreach($tr in $Track){if($t -like "*$tr*"){return $true}}};return $false}
 $since=(Get-Date).AddHours(-$SinceHours)
+
+# --- 4624 tracked logons (src IP, logon id, auth package) ---
 $logons=@()
 try{$logons=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4624;StartTime=$since}|Where-Object{TT $_}|Select-Object -First $Limit|ForEach-Object{
  [pscustomobject]@{t=$_.TimeCreated.ToString('o');user=(F $_ 'TargetUserName');type=(F $_ 'LogonType');src=(F $_ 'IpAddress');lid=(F $_ 'TargetLogonId');auth=(F $_ 'AuthenticationPackageName')}
 })}catch{}
+
+# --- 4648 explicit credentials (runas / -Credential / Invoke-Command) ---
 $explicit=@()
 try{$explicit=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4648;StartTime=$since}|Where-Object{TT $_}|Select-Object -First $Limit|ForEach-Object{
  [pscustomobject]@{t=$_.TimeCreated.ToString('o');who=(F $_ 'SubjectUserName');became=(F $_ 'TargetUserName');dest=(F $_ 'TargetServerName');src=(F $_ 'IpAddress')}
 })}catch{}
+
+# --- 4672 special privileges (privilege set matters: SeDebugPrivilege, SeTcbPrivilege) ---
 $privs=@()
 try{$privs=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4672;StartTime=$since}|Where-Object{TT $_}|Select-Object -First $Limit|ForEach-Object{
  [pscustomobject]@{t=$_.TimeCreated.ToString('o');user=(F $_ 'SubjectUserName');src=(F $_ 'IpAddress');privs=((F $_ 'PrivilegeList') -replace '\s+',',')}
 })}catch{}
-$kerb=@()
-try{$kerb=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4768,4769;StartTime=$since}|Select-Object -First $Limit|ForEach-Object{
- [pscustomobject]@{t=$_.TimeCreated.ToString('o');eid=$_.Id;user=(F $_ 'TargetUserName');svc=(F $_ 'ServiceName');src=(F $_ 'IpAddress')}
-})}catch{}
+
+# --- outbound remote connections owned by SYSTEM/Administrator processes ---
 $conns=@()
 try{
  $owned=@{}
@@ -27,4 +36,5 @@ try{
   [pscustomobject]@{dest=$_.RemoteAddress;port=$_.RemotePort;pid=$_.OwningProcess;proc=$owned[$_.OwningProcess]}
  })
 }catch{}
-[pscustomobject]@{skill='edges';host=$env:COMPUTERNAME;utc=[DateTime]::UtcNow.ToString('o');since=$since.ToString('o');track=$Track;logons=@($logons);explicit_creds=@($explicit);special_privs=@($privs);kerberos=@($kerb);conns=@($conns)}|ConvertTo-Json -Compress -Depth 4
+
+[pscustomobject]@{skill='edges';host=$env:COMPUTERNAME;utc=[DateTime]::UtcNow.ToString('o');since=$since.ToString('o');track=$Track;logons=@($logons);explicit_creds=@($explicit);special_privs=@($privs);conns=@($conns)}|ConvertTo-Json -Compress -Depth 4

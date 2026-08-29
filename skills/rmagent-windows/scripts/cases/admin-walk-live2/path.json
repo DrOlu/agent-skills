@@ -1,0 +1,29 @@
+[
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "edges",
+    "logons": 8,
+    "conns": 0,
+    "t": "2026-08-19T11:37:54.4206069Z"
+  },
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "explain",
+    "group_changes": 0,
+    "proc_spawns": 0,
+    "t": "2026-08-19T11:37:58.3760869Z"
+  },
+  {
+    "seq": 2,
+    "plane": "data",
+    "witness": "ws2",
+    "skill": "edges",
+    "logons": 0,
+    "conns": 0,
+    "t": "2026-08-19T11:38:01.3882536Z"
+  }
+]

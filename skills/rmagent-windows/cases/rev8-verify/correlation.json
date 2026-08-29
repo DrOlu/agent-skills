@@ -1,0 +1,13 @@
+{
+  "utc": "2026-08-29T17:37:56Z",
+  "witnesses": [
+    "ws1",
+    "ws2"
+  ],
+  "findings": [],
+  "summary": {
+    "critical": 0,
+    "warning": 0,
+    "total": 0
+  }
+}

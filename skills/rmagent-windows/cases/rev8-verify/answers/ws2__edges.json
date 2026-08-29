@@ -1,0 +1,14 @@
+{
+  "skill": "edges",
+  "host": "EC2AMAZ-C69VULQ",
+  "utc": "2026-08-29T17:37:33.8235473Z",
+  "since": "2026-08-29T15:37:33.4641714+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "logons": [],
+  "explicit_creds": [],
+  "special_privs": [],
+  "conns": []
+}

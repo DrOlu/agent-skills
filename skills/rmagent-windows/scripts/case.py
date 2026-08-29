@@ -73,8 +73,6 @@ def main():
     o.add_argument("--title", required=True)
     o.add_argument("--principal", default="Administrator")
     o.add_argument("--slug")
-    o.add_argument("--ticket", default=None, help="business ticket (payment id, incident number) — the Flight Recorder join")
-    o.add_argument("--trigger", default="manual", choices=["manual","scheduled","alert","drill","backfill"], help="what started this hunt")
     sub.add_parser("list")
     c = sub.add_parser("close")
     c.add_argument("dir")

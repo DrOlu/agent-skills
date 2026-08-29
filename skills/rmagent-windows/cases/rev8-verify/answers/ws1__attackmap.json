@@ -1,0 +1,21 @@
+{
+  "skill": "attackmap",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-08-29T17:37:29.7938907Z",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "checked": 13,
+  "found": 1,
+  "findings": [
+    {
+      "t": "T1547.001",
+      "n": "run_keys",
+      "c": 1,
+      "v": [
+        "SecurityHealth=C:\\Windows\\system32\\SecurityHealthSystray.exe"
+      ]
+    }
+  ]
+}

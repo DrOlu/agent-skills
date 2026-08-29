@@ -292,7 +292,33 @@ made by the skill's scripts, outside RTerm's agent loop). Their timing lives
 in the case hops (`asked`/`answered` timestamps) — by design, the case file is
 the record.
 
-## Rev 8 — correlation, drift, FP allowlist, score history, Linux sibling (2026-08-29)
+## Rev 7 — external half: netexec-bridge closes the purple-team loop (2026-08-25)
+
+RTerm v3.2.15 ships **netexec-bridge**, the outside view that rmagent lacked.
+The drill previously staged artifacts *on* the boxes; now you can also
+simulate the *external* attack (credential spray from outside) and verify
+`attest` catches the resulting 4625s.
+
+**How the two halves fit:**
+
+| | rmagent (inside) | netexec-bridge (outside) |
+|---|---|---|
+| Direction | pull from the boxes | push at the boxes |
+| Sees | 4625s, 4720s, new services/tasks, registry state | auth success/failure per host |
+| Governance | allowlisted questions, authorized estate | target allowlist required per call (CIDRs ok) |
+| Credential handling | env / creds.json / scrt | `env:<vaultRef>` — never the secret |
+
+**Recommended drill extension:** use `netexec_spray_plan` (rate-limited,
+jittered, SLOW — does not execute) to review the schedule first, then
+`netexec_check` against the SAME authorized estate. Immediately after, run
+`attest` on each box and confirm `admin_fail_60s` rose. That is the full
+outside→inside detection loop, scored end to end.
+
+**Same rule as always:** authorized estate only. netexec denies by default —
+empty or missing allowlists are refused, and every comma-separated target is
+validated individually (no batch bypass).
+
+## Rev 12 — correlation, drift, FP allowlist, score history, Linux sibling (2026-08-29)
 
 Eight improvements, live-validated against WS1/WS2:
 
@@ -345,7 +371,7 @@ Eight improvements, live-validated against WS1/WS2:
 **Status: LIVE-VALIDATED 2026-08-29** — correlate + drift + attackmap allowlist
 run against WS1/WS2 (see Rev 8 validation notes in the case dir).
 
-## Rev 9 — the audit-blindness lesson: verify the witness can see (2026-08-29)
+## Rev 13 — the audit-blindness lesson: verify the witness can see (2026-08-29)
 
 Two live findings from re-validating Rev 8, both silent false negatives:
 
@@ -385,7 +411,7 @@ witness can actually see. A quick blind-check (read-only, one ask per box):
 auditpol /get /subcategory:"Logon"   # must say "Success and Failure"
 ```
 
-**`attest` now does this automatically (Rev 9.1).** Every attest payload
+**`attest` now does this automatically (Rev 13.1).** Every attest payload
 carries:
 
 - `raw_4624_24h` — unfiltered 4624 count (the number that was 0 on WS2 while
@@ -415,29 +441,3 @@ because every other question silently returns empty.
 **Status: LIVE-VALIDATED 2026-08-29** — both WS1 and WS2 return
 `blind_count: 0`, all six `ok`; WS2 `raw_4624_24h` = 19 (was 0 before the
 audit-policy fix).
-
-## Rev 7 — external half: netexec-bridge closes the purple-team loop (2026-08-25)
-
-RTerm v3.2.15 ships **netexec-bridge**, the outside view that rmagent lacked.
-The drill previously staged artifacts *on* the boxes; now you can also
-simulate the *external* attack (credential spray from outside) and verify
-`attest` catches the resulting 4625s.
-
-**How the two halves fit:**
-
-| | rmagent (inside) | netexec-bridge (outside) |
-|---|---|---|
-| Direction | pull from the boxes | push at the boxes |
-| Sees | 4625s, 4720s, new services/tasks, registry state | auth success/failure per host |
-| Governance | allowlisted questions, authorized estate | target allowlist required per call (CIDRs ok) |
-| Credential handling | env / creds.json / scrt | `env:<vaultRef>` — never the secret |
-
-**Recommended drill extension:** use `netexec_spray_plan` (rate-limited,
-jittered, SLOW — does not execute) to review the schedule first, then
-`netexec_check` against the SAME authorized estate. Immediately after, run
-`attest` on each box and confirm `admin_fail_60s` rose. That is the full
-outside→inside detection loop, scored end to end.
-
-**Same rule as always:** authorized estate only. netexec denies by default —
-empty or missing allowlists are refused, and every comma-separated target is
-validated individually (no batch bypass).

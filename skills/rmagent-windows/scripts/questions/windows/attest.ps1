@@ -53,6 +53,25 @@ try {
   if ($svc) { $sysmon = "$($svc.Name)=$($svc.Status)" } else { $sysmon = 'not-installed' }
 } catch {}
 
+# --- Rev 9: blind_check — can this witness actually SEE? (WS2 was blind:
+# 'Logon' audit Failure-only -> edges returned ZERO logons while connected.)
+# COMPACT: preamble+payload must encode under WinRM's ~8191 budget (2.7x).
+$raw4624 = 0
+try { $raw4624 = @(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4624;StartTime=$now.AddHours(-24)} -ErrorAction SilentlyContinue).Count } catch {}
+$bw = 'Logon','Logoff','Special Logon','Other Logon/Logoff Events','Group Membership','Account Lockout'
+$blind = @{}
+try {
+  foreach ($l in (auditpol /get /category:* /r 2>$null)) {
+    $p = $l -split ','
+    if ($p.Count -ge 5) {
+      $n = $p[2].Trim('"')
+      if ($bw -contains $n) { $blind[$n] = $(if ($p[4].Trim('"') -match 'Success') { 'ok' } else { "BLIND" }) }
+    }
+  }
+} catch {}
+foreach ($w in $bw) { if (-not $blind.ContainsKey($w)) { $blind[$w] = 'unknown' } }
+$blindCount = @($blind.Values | Where-Object { $_ -like 'BLIND*' }).Count
+
 [pscustomobject]@{
   skill               = 'attest'
   host                = $env:COMPUTERNAME
@@ -65,4 +84,7 @@ try {
   local_admin_count   = $lac
   system_remote_conns = $sysconn
   sysmon_status       = $sysmon
+  raw_4624_24h        = $raw4624
+  blind_check         = $blind
+  blind_count         = $blindCount
 } | ConvertTo-Json -Compress

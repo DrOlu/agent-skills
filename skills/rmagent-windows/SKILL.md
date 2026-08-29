@@ -385,7 +385,36 @@ witness can actually see. A quick blind-check (read-only, one ask per box):
 auditpol /get /subcategory:"Logon"   # must say "Success and Failure"
 ```
 
-`attest` should grow a `blind_check` field so this is automatic, not manual.
+**`attest` now does this automatically (Rev 9.1).** Every attest payload
+carries:
+
+- `raw_4624_24h` — unfiltered 4624 count (the number that was 0 on WS2 while
+  an Administrator session was connected)
+- `blind_check` — per-subcategory `ok` / `BLIND` / `unknown` for the six
+  subcategories the questions depend on (Logon, Logoff, Special Logon,
+  Other Logon/Logoff, Group Membership, Account Lockout)
+- `blind_count` — how many are blind; **0 is the only healthy value**
+
+`drift.py` treats a growing `blind_count` as a **critical** finding
+(`witness_blind`) and `raw_4624_24h` dropping to 0 as a warning
+(`logon_visibility_lost`). A witness going blind is the worst regression
+because every other question silently returns empty.
+
+**Two implementation notes, both learned the hard way:**
+
+1. **WinRM command budget.** attest.ps1 grew past the ~8191-char *encoded*
+   budget (preamble+payload × ~2.7 for UTF-16LE base64) and every ask
+   returned "The command line is too long." — on both boxes, instantly.
+   The blind_check block is deliberately terse. If you extend attest,
+   re-check: `len(preamble) + len(_strip_payload(payload))` × 2.67 < 8191.
+2. **auditpol /r CSV columns** are MachineName, PolicyTarget, Subcategory,
+   Subcategory GUID, Inclusion Setting — the policy is field **[4]**, not
+   [3]. Reading [3] reports every box as blind with GUID strings (a
+   false positive that looks authoritative).
+
+**Status: LIVE-VALIDATED 2026-08-29** — both WS1 and WS2 return
+`blind_count: 0`, all six `ok`; WS2 `raw_4624_24h` = 19 (was 0 before the
+audit-policy fix).
 
 ## Rev 7 — external half: netexec-bridge closes the purple-team loop (2026-08-25)
 

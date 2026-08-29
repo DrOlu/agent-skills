@@ -87,6 +87,36 @@ assert any(f["kind"] == "new_persistence" and f["technique"] == "T1547.001" for 
 d = drift.diff(old, dict(new, admins=["Administrator"]))
 assert d["findings"] == [], d["findings"]
 
+# --- Rev 9: witness going audit-blind is CRITICAL ---
+old9 = {"taken_utc": "2026-08-28T00:00:00Z", "admins": ["Administrator"],
+        "sysmon_status": "running", "blind_count": 0, "raw_4624_24h": 120}
+new9 = {"witness": "ws2", "taken_utc": "2026-08-29T00:00:00Z", "admins": ["Administrator"],
+        "sysmon_status": "running", "blind_count": 3, "raw_4624_24h": 0,
+        "blind_check": {"Logon": "BLIND: Failure", "Logoff": "BLIND: No Auditing",
+                        "Special Logon": "BLIND: No Auditing", "Account Lockout": "ok"}}
+d = drift.diff(old9, new9)
+blind = [f for f in d["findings"] if f["kind"] == "witness_blind"]
+assert blind and blind[0]["severity"] == "critical", d["findings"]
+assert "Logon" in blind[0]["detail"] and "Logoff" in blind[0]["detail"], blind[0]["detail"]
+lost = [f for f in d["findings"] if f["kind"] == "logon_visibility_lost"]
+assert lost and lost[0]["severity"] == "warning", d["findings"]
+
+# --- Rev 9: blindness improving (or unchanged) is NOT a finding ---
+d = drift.diff(new9, dict(new9, blind_count=0, blind_check={"Logon": "ok"},
+                          raw_4624_24h=140))
+assert not any(f["kind"] in ("witness_blind", "logon_visibility_lost") for f in d["findings"]), d["findings"]
+
+# --- Rev 9: attest payload carries blind_check fields ---
+apayload = Path.home() / ".agents/skills/rmagent-windows/scripts/questions/windows/attest.ps1"
+text = apayload.read_text()
+for needle in ("raw_4624_24h", "blind_check", "blind_count", "auditpol"):
+    assert needle in text, "attest.ps1 missing %s" % needle
+# blind_check must be computed from UNFILTERED 4624 (no track filter) —
+# the WS2 bug was that a track-filtered count looked fine while raw was 0.
+import re as _re
+m = _re.search(r"raw4624 = @\(Get-WinEvent.*?\)\.Count", text, _re.S)
+assert m and "Where-Object" not in m.group(0), "raw4624 must not be track-filtered"
+
 # --- attackmap allowlist: default netsh helpers suppressed, real one fires ---
 import subprocess, tempfile, os
 payload = Path.home() / ".agents/skills/rmagent-windows/scripts/questions/windows/attackmap.ps1"

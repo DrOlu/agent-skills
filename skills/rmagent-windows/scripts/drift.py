@@ -35,6 +35,9 @@ def _snap_attest(row: dict) -> dict:
         "admins": sorted(d.get("local_admins") or d.get("admins") or []),
         "admin_count": d.get("local_admin_count") or d.get("admin_count"),
         "sysmon_status": d.get("sysmon_status"),
+        "blind_count": d.get("blind_count"),
+        "blind_check": d.get("blind_check"),
+        "raw_4624_24h": d.get("raw_4624_24h"),
         "utc": d.get("utc"),
     }
 
@@ -82,6 +85,23 @@ def diff(old: dict, new: dict) -> dict:
     if old_sysmon and new_sysmon and old_sysmon != new_sysmon:
         out["findings"].append({"kind": "sysmon_change", "severity": "critical",
                                 "detail": "Sysmon %s -> %s" % (old_sysmon, new_sysmon)})
+
+    # Rev 9: a witness going audit-blind is the worst regression — every other
+    # question silently returns empty. Found live on WS2 (Logon was Failure-only).
+    old_blind = int(old.get("blind_count") or 0)
+    new_blind = int(new.get("blind_count") or 0)
+    if new_blind > old_blind:
+        blind_map = new.get("blind_check") or {}
+        blind_list = [k for k, v in blind_map.items()
+                      if isinstance(v, str) and v.startswith("BLIND")]
+        out["findings"].append({"kind": "witness_blind", "severity": "critical",
+                                "detail": "audit-blind subcategories grew %d -> %d (%s)"
+                                          % (old_blind, new_blind, ", ".join(blind_list))})
+    # raw_4624_24h dropping to 0 on a live box is also blindness (log rolled
+    # or policy changed) — flag as warning, not critical (a quiet box is legal).
+    if old.get("raw_4624_24h") and not new.get("raw_4624_24h"):
+        out["findings"].append({"kind": "logon_visibility_lost", "severity": "warning",
+                                "detail": "raw 4624 in 24h went %s -> 0" % old.get("raw_4624_24h")})
 
     old_t = old.get("attackmap") or {}
     new_t = new.get("attackmap") or {}

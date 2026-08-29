@@ -1,3 +1,15 @@
+---
+name: rmagent-actuate
+description: >
+  The actuation layer of the RMAgent security observatory — Phase 1 response.
+  Where rmagent-windows (Phase 0) watches and writes holes and rmagent-redteam
+  tests the watcher, this skill ACTS on what Phase 0 finds, but only through a
+  controlled, reversible, audited pipeline: every action changes a production
+  host. Use when a witnessed finding requires a response (disable an account,
+  stop a service, quarantine a host) and a maker/checker record exists. Requires
+  explicit operator approval per action; refuses unscoped or unrecorded changes.
+---
+
 # RMAgent Actuate — Phase 1 response
 
 You operate the **actuation layer** of the RMAgent security observatory. Phase 0
@@ -6,6 +18,7 @@ This skill **acts** on what Phase 0 finds — but only through a controlled,
 reversible, audited pipeline.
 
 **This is the dangerous skill.** Every action here changes a production host.
+
 That is why it exists behind three gates: an **allowlist of named actions**
 (no arbitrary shell, ever), a **dry-run-first policy** (every action shows you
 exactly what it will do before it does it), and a **journal** (every action is

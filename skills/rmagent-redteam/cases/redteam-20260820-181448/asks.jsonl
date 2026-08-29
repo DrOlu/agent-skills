@@ -1,0 +1,7 @@
+{"t": "2026-08-20T17:15:09Z", "witness": "ws2", "plane": "data", "skill": "attest", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-20T17:15:09Z", "witness": "ws1", "plane": "endpoint", "skill": "attest", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-20T17:15:13Z", "witness": "ws1", "plane": "endpoint", "skill": "edges", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-20T17:15:16Z", "witness": "ws1", "plane": "endpoint", "skill": "explain", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-20T17:15:21Z", "witness": "ws1", "plane": "endpoint", "skill": "pslogs", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-20T17:15:24Z", "witness": "ws2", "plane": "data", "skill": "edges", "ok": true, "error": null, "hole": null}
+{"t": "2026-08-20T17:15:29Z", "witness": "ws2", "plane": "data", "skill": "pslogs", "ok": true, "error": null, "hole": null}

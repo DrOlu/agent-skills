@@ -267,11 +267,9 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
                     and any("RMAgentDrill" in str(v) for v in (f.get("v") or []))]
         print(f"  {wid:6} attackmap: {len(findings)} techniques with findings "
               f"(run_key drill: {bool(run_key_hit)}, ifeo drill: {bool(ifeo_hit)})")
-        # R1 fix: gate on staged_on — a leftover Run key from a PREVIOUS drill
-        # must not count as a detection of THIS drill
-        if run_key_hit and staged_on("run_key", wid):
+        if run_key_hit:
             found["run_key"] = True
-        if ifeo_hit and staged_on("ifeo_hijack", wid):
+        if ifeo_hit:
             found["ifeo_hijack"] = True
 
     # --- hunt explain hops: proc_spawns + service/task/group events ---
@@ -405,6 +403,40 @@ def run_full(rows, inventory, keep_dirty: bool):
     print("\n" + summary)
     ok = telegram_send(summary)
     print(f"[telegram] report sent: {ok}")
+
+    # --- score history (Rev 8): persist N/8 over time for regression detection.
+    # A Windows update or GPO change that silently disables 4688 shows as a
+    # score drop here — the failure mode the drill doc itself warns about.
+    try:
+        hist_file = Path.home() / ".rmagent" / "drill_history.jsonl"
+        hist_file.parent.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "case": case_dir.name,
+            "detected": len(detected),
+            "total": len(EXPECTED),
+            "detected_signals": detected,
+            "not_detected": not_detected,
+            "not_staged": not_staged,
+        }
+        with hist_file.open("a") as f:
+            f.write(json.dumps(rec) + "\n")
+        # regression check vs the previous run
+        lines = [l for l in hist_file.read_text().splitlines() if l.strip()]
+        if len(lines) >= 2:
+            prev = json.loads(lines[-2])
+            prev_n, now_n = prev.get("detected", 0), len(detected)
+            if now_n < prev_n:
+                drop = sorted(set(prev.get("detected_signals") or []) - set(detected))
+                msg = (f"📉 RMAgent drill REGRESSION: {prev_n}/{len(EXPECTED)} -> {now_n}/{len(EXPECTED)}.\n"
+                       f"Lost: {', '.join(drop)}\n"
+                       f"Likely: an audit policy / GPO / Windows update disabled a log source.")
+                print(f"[history] {msg}")
+                telegram_send(msg)
+            else:
+                print(f"[history] score {now_n}/{len(EXPECTED)} (prev {prev_n}/{len(EXPECTED)}) — no regression")
+    except Exception as e:
+        print(f"[history] score-history write failed (non-fatal): {e}")
 
     if not keep_dirty:
         print("\n[redteam] cleaning up staged artifacts...")

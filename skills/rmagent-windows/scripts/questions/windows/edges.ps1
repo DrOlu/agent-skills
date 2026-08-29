@@ -31,7 +31,13 @@ try{$privs=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4672;StartTim
 $conns=@()
 try{
  $owned=@{}
- foreach($p in (Get-CimInstance Win32_Process)){$o=$p.GetOwner().User; if($Track -contains $o){$owned[$p.ProcessId]=$p.Name}}
+ # BUG FIX (rev 14): .GetOwner().User returns '' on Server 2022 via WinRM —
+ # conns were silently empty. Invoke-CimMethod works; match bare name suffix.
+ foreach($p in (Get-CimInstance Win32_Process)){
+   $o=Invoke-CimMethod -InputObject $p -MethodName GetOwner
+   $u=$o.User
+   if($u -and ($Track -contains ($u -split '\\')[-1])){$owned[$p.ProcessId]=$p.Name}
+ }
  $conns=@(Get-NetTCPConnection -State Established|Where-Object{$_.RemoteAddress -notmatch '^(127\.|0\.0\.0\.0|::|::1)' -and $owned.ContainsKey($_.OwningProcess)}|Select-Object -First $Limit|ForEach-Object{
   [pscustomobject]@{dest=$_.RemoteAddress;port=$_.RemotePort;pid=$_.OwningProcess;proc=$owned[$_.OwningProcess]}
  })

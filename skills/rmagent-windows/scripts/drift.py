@@ -42,6 +42,31 @@ def _snap_attest(row: dict) -> dict:
     }
 
 
+def _snap_profile(row: dict) -> dict:
+    """Rev 14: on-device resource baseline — CPU/mem/disk + tracked-proc count.
+    Joins 'host got weird' with 'identity got weird' in the same drift run."""
+    if "profile" not in (row.get("skills") or []):
+        return {}
+    res = lib.ask(row, "profile", since_hours=1.0, limit=10)
+    d = res.get("data") or {}
+    if not d:
+        return {}
+    out = {"cpu_pct": d.get("cpu_pct"), "proc_count": d.get("proc_count")}
+    mem = d.get("mem") or {}
+    if mem:
+        out["mem_used_pct"] = mem.get("used_pct")
+    disks = d.get("disks") or []
+    if disks:
+        # worst (highest-used) local volume
+        worst = max(disks, key=lambda x: x.get("used_pct") or 0)
+        out["disk_used_pct_max"] = worst.get("used_pct")
+    tracked = d.get("tracked_procs") or []
+    out["tracked_proc_count"] = len(tracked)
+    # names of tracked-principal processes — a NEW one appearing is a finding
+    out["tracked_proc_names"] = sorted({t.get("n") for t in tracked if t.get("n")})
+    return {"profile": out}
+
+
 def _snap_attackmap(row: dict) -> dict:
     if "attackmap" not in (row.get("skills") or []):
         return {}
@@ -57,6 +82,7 @@ def snapshot(row: dict) -> dict:
     """Pull the current state for one witness. Pure-ish (one ask per skill)."""
     snap = {"witness": row.get("id")}
     snap.update(_snap_attest(row))
+    snap.update(_snap_profile(row))
     snap.update(_snap_attackmap(row))
     snap["taken_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     return snap
@@ -102,6 +128,30 @@ def diff(old: dict, new: dict) -> dict:
     if old.get("raw_4624_24h") and not new.get("raw_4624_24h"):
         out["findings"].append({"kind": "logon_visibility_lost", "severity": "warning",
                                 "detail": "raw 4624 in 24h went %s -> 0" % old.get("raw_4624_24h")})
+
+    # --- Rev 14: resource drift (profile) ---
+    old_p = old.get("profile") or {}
+    new_p = new.get("profile") or {}
+    if old_p and new_p:
+        # a NEW tracked-principal process is the identity x resource join —
+        # a service that appeared running as Administrator/SYSTEM since baseline
+        old_names = set(old_p.get("tracked_proc_names") or [])
+        new_names = set(new_p.get("tracked_proc_names") or [])
+        appeared = sorted(new_names - old_names)
+        if appeared:
+            out["findings"].append({"kind": "new_tracked_proc", "severity": "critical",
+                                    "detail": "new process(s) running as a tracked principal: %s"
+                                              % ", ".join(appeared),
+                                    "processes": appeared})
+        # resource spikes (warning — could be legitimate load)
+        for field, label, threshold in (("cpu_pct", "CPU", 90), ("mem_used_pct", "memory", 90),
+                                        ("disk_used_pct_max", "disk", 90)):
+            ov, nv = old_p.get(field), new_p.get(field)
+            if isinstance(ov, (int, float)) and isinstance(nv, (int, float)) and nv >= threshold > ov:
+                out["findings"].append({"kind": "resource_spike", "severity": "warning",
+                                        "detail": "%s %s%% -> %s%% (crossed %s%%)"
+                                                  % (label, ov, nv, threshold),
+                                        "field": field})
 
     old_t = old.get("attackmap") or {}
     new_t = new.get("attackmap") or {}

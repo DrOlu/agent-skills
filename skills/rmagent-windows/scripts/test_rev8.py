@@ -149,4 +149,54 @@ filtered2 = lib._filter_attackmap_fps(sample2)
 assert filtered2["findings"] == [], filtered2
 assert filtered2["found"] == 0, filtered2
 
+# --- Rev 14: profile payload exists, is allowlisted, and fits the WinRM budget ---
+prof = Path.home() / ".agents/skills/rmagent-windows/scripts/questions/windows/profile.ps1"
+assert prof.exists(), "profile.ps1 missing"
+ptext = prof.read_text()
+for needle in ("cpu_pct", "mem", "disks", "proc_count", "top_cpu", "top_mem", "tracked_procs"):
+    assert needle in ptext, "profile.ps1 missing %s" % needle
+assert "profile" in lib.ALLOWED, "profile not allowlisted"
+# budget: preamble + stripped payload must encode under ~8191 (2.67x inflation)
+_p = lib._strip_payload(ptext)
+_pre = lib._preamble({"id": "x", "track": ["Administrator", "SYSTEM"]}, 1.0, 10, "profile")
+assert (len(_pre) + len(_p)) * 2.67 < 8191, "profile.ps1 over WinRM budget"
+# read-only: must not contain any state-changing cmdlet
+for bad in ("Stop-Service", "Remove-Item", "Set-Item", "Restart-Computer", "netsh ", "auditpol /set"):
+    assert bad not in ptext, "profile.ps1 contains mutating command: %s" % bad
+
+# --- Rev 14: drift — new tracked-principal process is CRITICAL ---
+old14 = {"taken_utc": "2026-08-28T00:00:00Z", "admins": ["Administrator"], "sysmon_status": "running",
+         "profile": {"cpu_pct": 12, "mem_used_pct": 45, "disk_used_pct_max": 60,
+                     "tracked_proc_names": ["svchost", "Sysmon64"]}}
+new14 = {"witness": "ws1", "taken_utc": "2026-08-29T00:00:00Z", "admins": ["Administrator"],
+         "sysmon_status": "running",
+         "profile": {"cpu_pct": 12, "mem_used_pct": 45, "disk_used_pct_max": 60,
+                     "tracked_proc_names": ["svchost", "Sysmon64", "evilsvc"]}}
+d = drift.diff(old14, new14)
+ntp = [f for f in d["findings"] if f["kind"] == "new_tracked_proc"]
+assert ntp and ntp[0]["severity"] == "critical", d["findings"]
+assert "evilsvc" in ntp[0]["detail"], ntp[0]["detail"]
+
+# --- Rev 14: drift — resource spike crossing 90% is a warning ---
+new14b = dict(new14)
+new14b["profile"] = dict(new14["profile"], cpu_pct=97, mem_used_pct=45, disk_used_pct_max=60)
+d = drift.diff(old14, new14b)
+spikes = [f for f in d["findings"] if f["kind"] == "resource_spike"]
+assert spikes and any("CPU" in f["detail"] for f in spikes), d["findings"]
+assert all(f["severity"] == "warning" for f in spikes), spikes
+
+# --- Rev 14: drift — same profile, no findings ---
+d = drift.diff(old14, dict(new14, profile=old14["profile"]))
+assert not any(f["kind"] in ("new_tracked_proc", "resource_spike") for f in d["findings"]), d["findings"]
+
+# --- Rev 14: drift — no profile in baseline (first run) is not a finding ---
+d = drift.diff({"taken_utc": "x", "admins": ["Administrator"]}, new14)
+assert not any(f["kind"] in ("new_tracked_proc", "resource_spike") for f in d["findings"]), d["findings"]
+
+# --- Rev 14: drift — spike that stays UNDER 90 is not a finding ---
+new14c = dict(new14)
+new14c["profile"] = dict(new14["profile"], cpu_pct=75)
+d = drift.diff(old14, new14c)
+assert not any(f["kind"] == "resource_spike" for f in d["findings"]), d["findings"]
+
 print("ALL UNIT TESTS PASSED")

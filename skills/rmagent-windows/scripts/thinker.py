@@ -41,7 +41,7 @@ METRICS = [
     ("admin_failed_60s", "up", "failed admin logons (60s)", 3),
     ("admin_ok_5min", "up", "successful admin logons (5min)", 10),
     ("local_admin_count", "up", "local admin count", 0),      # any change is notable
-    ("system_remote_conns", "up", "SYSTEM remote connections", 5),
+    ("sys_remote_conns", "up", "SYSTEM remote connections", 5),
 ]
 
 # Conditions that, if they persist across censuses, are a finding.

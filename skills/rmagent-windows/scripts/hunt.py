@@ -400,6 +400,33 @@ def main():
                 write_hole(case_dir, h)
                 print(f"  {wid:8} flowstats: HOLE — {h['why']}")
 
+        # rev 14: profile — on-device resource profiling + tracked-principal procs
+        if "profile" in (r.get("skills") or []):
+            pf = lib.ask(r, "profile", since_hours=since_h, limit=10)
+            lib.record_ask(case_dir, r, "profile", pf)
+            if pf.get("ok") and pf.get("data"):
+                pd = pf["data"]
+                mem = pd.get("mem") or {}
+                disks = pd.get("disks") or []
+                worst_disk = max((d.get("used_pct") or 0 for d in disks), default=None)
+                n_tracked = len(pd.get("tracked_procs") or [])
+                print(f"  {wid:8} profile: cpu={pd.get('cpu_pct')}% mem={mem.get('used_pct')}% "
+                      f"disk_max={worst_disk}% procs={pd.get('proc_count')} tracked={n_tracked}")
+                T.observe(wid, "profile",
+                          f"cpu={pd.get('cpu_pct')}% mem={mem.get('used_pct')}% "
+                          f"disk={worst_disk}% tracked_procs={n_tracked}")
+                # the identity x resource join: a tracked-principal proc eating CPU
+                hot = [t for t in (pd.get("tracked_procs") or [])
+                       if (t.get("mem") or 0) > 500]
+                if hot:
+                    names = ", ".join(f"{t.get('n')}({t.get('owner')})" for t in hot[:5])
+                    print(f"  {wid:8} profile: {len(hot)} tracked-proc(s) >500MB: {names}")
+                    T.observe(wid, "profile_heavy", f"tracked procs >500MB: {names}")
+            else:
+                h = pf.get("hole") or lib.hole(f"{wid} profile", pf.get("error") or "empty")
+                write_hole(case_dir, h)
+                print(f"  {wid:8} profile: HOLE — {h['why']}")
+
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")
             write_hole(case_dir, h)

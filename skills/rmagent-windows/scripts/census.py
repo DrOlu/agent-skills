@@ -32,7 +32,7 @@ def _record_history(t: str, wid: str, d: dict | None):
         entry = {"t": t, "witness": wid}
         if d:
             for k in ("admin_failed_60s", "admin_ok_5min", "local_admin_count",
-                      "system_remote_conns", "sysmon_status"):
+                      "sys_remote_conns", "sysmon_status"):
                 entry[k] = d.get(k)
         else:
             entry["silent"] = True
@@ -100,7 +100,7 @@ def main():
                   f"admin_fail_60s={d.get('admin_failed_60s')} "
                   f"admin_ok_5m={d.get('admin_ok_5min')} "
                   f"local_admins={d.get('local_admin_count')} "
-                  f"sys_conns={d.get('system_remote_conns')}")
+                  f"sys_conns={d.get('sys_remote_conns')}")
             prev[wid] = 0
             # record history for the thinker (persistent reasoning between knocks)
             _record_history(t, wid, d)

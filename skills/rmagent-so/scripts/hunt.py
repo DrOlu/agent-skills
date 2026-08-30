@@ -140,6 +140,7 @@ def main():
     T.think(f"Hunt started: tracking {track} across {len(rows)} witnesses since {args.since}")
 
     # --- the thinker: reason over recent census history if available ---
+    findings = []  # thinker findings (for the rollup below)
     census_hist_path = Path.home() / ".rmagent" / "census_history.jsonl"
     if census_hist_path.exists():
         try:
@@ -192,6 +193,34 @@ def main():
             crit = [f for f in df if f.get("severity") == "critical"]
             if crit:
                 notify.alert_smoke("dthinker", [f["what"] for f in crit], case_dir.name)
+
+        # --- severity rollup: a finding that is simultaneously a
+        # temporal_cluster AND a cross_host_chain AND a 3σ deviation should be
+        # ONE critical case, not three warnings. Chain the thinkers. ---
+        all_findings = (findings or []) + (df or [])
+        if len(all_findings) >= 2:
+            by_witness = {}
+            for f in all_findings:
+                w = str(f.get("witness", "")).split("+")[0]
+                by_witness.setdefault(w, []).append(f)
+            for w, fs in by_witness.items():
+                kinds = {f.get("kind") for f in fs}
+                # any two independent detector kinds on the same witness = rollup
+                if len(kinds) >= 2:
+                    sev = sum(1 for f in fs if f.get("severity") in ("critical", "high"))
+                    rolled = {
+                        "kind": "rollup",
+                        "witness": w,
+                        "kinds": sorted(kinds),
+                        "n_findings": len(fs),
+                        "what": f"{w}: {len(fs)} independent detectors agree "
+                                f"({', '.join(sorted(kinds))}) — one story, not {len(fs)} findings",
+                        "severity": "critical" if sev >= 2 else "high",
+                    }
+                    T.think(f"[{rolled['severity']}] {rolled['what']}")
+                    print(f"[rollup] {rolled['what']}")
+                    if rolled["severity"] == "critical":
+                        notify.alert_smoke("rollup", [rolled["what"]], case_dir.name)
 
     seq = 0
     _visited = {r.get("id") for r in rows}  # all inventory witnesses start visited

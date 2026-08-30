@@ -30,6 +30,7 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
 ALLOWED = {"agents", "agentstate", "agenttrace", "agentnet", "agentmodels", "agentdrift",
+           "agentdeep",
            "attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
            "flowstats", "deepwindow", "profile"}
 PHASE0_SKILLS = ALLOWED

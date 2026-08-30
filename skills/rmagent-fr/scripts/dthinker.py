@@ -38,7 +38,44 @@ def think_distributed(index_entries: list[dict]) -> list[dict]:
     findings += _cross_host_chain(parsed)
     findings += _repeat_offender(parsed)
     findings += _session_correlation(parsed)
+    findings += _odd_hour_login(parsed)
 
+    return findings
+
+
+def _odd_hour_login(parsed: list[dict]) -> list[dict]:
+    """rev 14: per-account behavioural baseline — 'this account has never
+    logged in at 3am before.' Uses the hour field on hop entries. Needs >= 10
+    prior observations of the principal before it will say anything, so a new
+    account does not fire on its second login."""
+    # build per-principal hour history
+    by_principal: dict[str, list[int]] = defaultdict(list)
+    for e in parsed:
+        h = e.get("hour")
+        p = e.get("principal")
+        if isinstance(h, int) and p:
+            by_principal[p].append(h)
+
+    findings = []
+    for p, hours in by_principal.items():
+        if len(hours) < 10:
+            continue
+        hist, last = hours[:-1], hours[-1]
+        if last not in hist:
+            # never seen this hour before, with >= 9 prior observations
+            night = last < 6 or last >= 22
+            findings.append({
+                "kind": "odd_hour_login",
+                "witness": str(parsed[-1].get("host", "?")),
+                "principal": p,
+                "hour": last,
+                "seen_hours": sorted(set(hist)),
+                "n_obs": len(hist),
+                "what": f"{p} logged in at {last:02d}:00 — never seen at this hour "
+                        f"in {len(hist)} prior observations (seen: "
+                        f"{','.join(f'{h:02d}' for h in sorted(set(hist))[:8])})",
+                "severity": "critical" if night else "high",
+            })
     return findings
 
 

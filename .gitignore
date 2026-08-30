@@ -8,3 +8,9 @@
 node_modules/
 __pycache__/
 *.pyc
+
+# rmagent runtime case files (per-run hunt data — never commit)
+skills/rmagent-windows/scripts/cases/
+skills/rmagent-redteam/cases/
+skills/rmagent-so/scripts/cases/
+**/__pycache__/

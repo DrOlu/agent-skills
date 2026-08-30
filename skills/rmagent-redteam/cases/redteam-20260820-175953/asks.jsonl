@@ -1,7 +1,0 @@
-{"t": "2026-08-20T17:00:42Z", "witness": "ws1", "plane": "endpoint", "skill": "attest", "ok": true, "error": null, "hole": null}
-{"t": "2026-08-20T17:00:42Z", "witness": "ws2", "plane": "data", "skill": "attest", "ok": true, "error": null, "hole": null}
-{"t": "2026-08-20T17:00:48Z", "witness": "ws1", "plane": "endpoint", "skill": "edges", "ok": true, "error": null, "hole": null}
-{"t": "2026-08-20T17:00:56Z", "witness": "ws1", "plane": "endpoint", "skill": "explain", "ok": false, "error": "pull exceeded 32768 bytes", "hole": {"asked": "ws1 explain", "empty": true, "why": "pull exceeded 32768 bytes"}}
-{"t": "2026-08-20T17:00:59Z", "witness": "ws1", "plane": "endpoint", "skill": "pslogs", "ok": true, "error": null, "hole": null}
-{"t": "2026-08-20T17:01:02Z", "witness": "ws2", "plane": "data", "skill": "edges", "ok": true, "error": null, "hole": null}
-{"t": "2026-08-20T17:01:06Z", "witness": "ws2", "plane": "data", "skill": "pslogs", "ok": true, "error": null, "hole": null}

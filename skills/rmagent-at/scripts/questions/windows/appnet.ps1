@@ -7,7 +7,7 @@ $etl="C:\etw\RMAgent-NetTrace.etl"
 $conns=@(); $n=0
 try{
   if(Test-Path $etl){
-    logman flush RMAgent-NetTrace -ets 2>&1|Out-Null
+    & "C:\Windows\System32\logman.exe" flush RMAgent-NetTrace 2>&1|Out-Null
     $evs=Get-WinEvent -Path $etl -Oldest -EA SilentlyContinue|?{$_.TimeCreated -gt $cutoff}|Select -First ($Limit*3)
     $n=@($evs).Count
     $seen=@{}

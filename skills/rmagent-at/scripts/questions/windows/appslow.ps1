@@ -8,7 +8,7 @@ $etl="C:\etw\RMAgent-AppTrace.etl"
 $slow=@(); $n=0
 try{
   if(Test-Path $etl){
-    logman flush RMAgent-AppTrace -ets 2>&1|Out-Null
+    & "C:\Windows\System32\logman.exe" flush RMAgent-AppTrace 2>&1|Out-Null
     $evs=Get-WinEvent -Path $etl -Oldest -EA SilentlyContinue|?{$_.TimeCreated -gt $cutoff}
     $n=@($evs).Count
     # look for duration-like fields in the message (HTTP.sys, .NET timing)

@@ -7,7 +7,7 @@ $etl="C:\etw\RMAgent-ProcTrace.etl"
 $procs=@(); $n=0
 try{
   if(Test-Path $etl){
-    logman flush RMAgent-ProcTrace -ets 2>&1|Out-Null
+    & "C:\Windows\System32\logman.exe" flush RMAgent-ProcTrace 2>&1|Out-Null
     $evs=Get-WinEvent -Path $etl -Oldest -EA SilentlyContinue|?{$_.TimeCreated -gt $cutoff}|Select -First ($Limit*2)
     $n=@($evs).Count
     foreach($e in $evs){

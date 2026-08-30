@@ -9,7 +9,18 @@ now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 host=$(hostname)
 lim=${Limit:-20}
 sh=${SinceHours:-2}
-since_s=$(( ${sh%.*} * 3600 )); [ "$since_s" -lt 60 ] && since_s=60
+# handle sub-hour values: 0.5h -> 1800s, not 0s (the old ${sh%.*} gave 0)
+case "$sh" in
+  *.*) whole=${sh%.*}; frac=${sh#*.}
+       case "$frac" in
+         5)  since_s=$(( whole * 3600 + 1800 ));;
+         25) since_s=$(( whole * 3600 + 900 ));;
+         75) since_s=$(( whole * 3600 + 2700 ));;
+         *)  since_s=$(( whole * 3600 ));;
+       esac;;
+  *)   since_s=$(( sh * 3600 ));;
+esac
+[ "$since_s" -lt 60 ] && since_s=60
 cutoff=$(( $(date +%s) - since_s ))
 
 # --- helper: newest files under a dir, filtered by mtime ---

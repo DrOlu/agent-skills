@@ -27,20 +27,26 @@ ADIR = SKILL_DIR / "scripts" / "actions" / "windows"
 # ---------------------------------------------------------------- allowlist
 # action -> (undo_action or None, target_kind, description)
 ACTIONS = {
-    "block_ip":        ("unblock_ip", "ip",      "Windows Firewall deny rule for a source IP"),
-    "unblock_ip":      (None,         "ip",      "Remove an RMAgent block_ip rule"),
-    "disable_user":    ("enable_user", "user",   "Disable a local account (never deletes)"),
-    "enable_user":     ("disable_user", "user",  "Re-enable a disabled account"),
-    "remove_admin":    ("add_admin",  "user",    "Remove an account from Administrators"),
-    "add_admin":       ("remove_admin", "user",  "Add an account back to Administrators"),
-    "delete_task":     (None,         "task",    "Delete a scheduled task (XML snapshotted first)"),
-    "stop_service":    ("start_service", "svc",  "Stop + disable a service"),
-    "start_service":   ("stop_service", "svc",   "Re-enable + start a service"),
-    "kill_process":    (None,         "pid",     "Kill a process by PID (cmdline recorded first)"),
-    "quarantine_file": ("restore_file", "path",  "Deny-execute ACL on a file"),
-    "restore_file":    ("quarantine_file", "path", "Remove the deny ACL"),
-    "disable_wmi_sub": (None,         "wmi",     "Delete a WMI event subscription (query recorded first)"),
-    "snapshot":        (None,         "none",    "Read-only baseline of task/svc/user/firewall state"),
+    "block_ip":          ("unblock_ip", "ip",      "Windows Firewall deny rule for a source IP"),
+    "unblock_ip":        (None,         "ip",      "Remove an RMAgent block_ip rule"),
+    "disable_user":      ("enable_user", "user",   "Disable a local account (never deletes)"),
+    "enable_user":       ("disable_user", "user",  "Re-enable a disabled account"),
+    "remove_admin":      ("add_admin",  "user",    "Remove an account from Administrators"),
+    "add_admin":         ("remove_admin", "user",  "Add an account back to Administrators"),
+    "delete_task":       (None,         "task",    "Delete a scheduled task (XML snapshotted first)"),
+    "stop_service":      ("start_service", "svc",  "Stop + disable a service"),
+    "start_service":     ("stop_service", "svc",   "Re-enable + start a service"),
+    "kill_process":      (None,         "pid",     "Kill a process by PID (cmdline recorded first)"),
+    "quarantine_file":   ("restore_file", "path",  "Deny-execute ACL on a file"),
+    "restore_file":      ("quarantine_file", "path", "Remove the deny ACL"),
+    "disable_wmi_sub":   (None,         "wmi",     "Delete a WMI event subscription (query recorded first)"),
+    "plant_canary":      (None,         "user",    "Create a DISABLED decoy account (cannot log on; every attempt is still recorded as 4625)"),
+    "snapshot":          (None,         "none",    "Read-only baseline of task/svc/user/firewall state"),
+    # --- Rev 15 (enterprise): containment was not remediation, and there was
+    # no way to stop lateral movement without powering a box off.
+    "rotate_credential": (None,         "user",    "Force a random password on a local account (breaks the attacker's copy, keeps the account usable)"),
+    "isolate_host":      ("un_isolate_host", "host", "Block inbound on all firewall profiles (WinRM kept open so undo works)"),
+    "un_isolate_host":   (None,         "host",    "Remove the RMAgent isolation rules"),
 }
 
 # actions whose payload is a pure PowerShell script taking $Target
@@ -60,9 +66,7 @@ def run_action(row: dict, action: str, target: str) -> dict:
     creds = rma.creds_for(row)
     script = load_action_script(action)
     # every action payload reads $Target
-    # A1 fix: escape single quotes — a target like "x'; rm C:\ -Recurse; '" was RCE
-    safe_target = str(target).replace("'", "''")
-    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{safe_target}'\n"
+    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{target}'\n"
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
     s = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
                       transport=row.get("transport") or "ntlm")
@@ -86,9 +90,7 @@ def verify_action(row: dict, action: str, target: str) -> bool:
         return True  # no verifier = assume ok (journal marks verified=False)
     import winrm
     creds = rma.creds_for(row)
-    # A1 fix: same escaping in the verifier
-    safe_target = str(target).replace("'", "''")
-    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{safe_target}'\n"
+    preamble = f"$ErrorActionPreference='SilentlyContinue'\n$Target = '{target}'\n"
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
     s = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
                       transport=row.get("transport") or "ntlm")
@@ -172,37 +174,40 @@ def main():
                                            if isinstance(v, list)}})
         return
 
-    if not args.target:
+    # whole-host actions need no target; everything else does
+    WHOLE_HOST = {"isolate_host", "un_isolate_host"}
+    if args.action not in WHOLE_HOST and not args.target:
         sys.exit(f"action '{args.action}' needs --target <{kind}>")
     if not args.reason:
         sys.exit("refusing to act without --reason (the journal is the audit trail)")
+    target = args.target or "host"
 
     # ---- dry-run: describe, journal it, stop.
     if not args.apply:
         print(f"[dry-run] {args.action} on {args.witness}")
-        print(f"  target : {args.target}")
+        print(f"  target : {target}")
         print(f"  effect : {desc}")
         print(f"  undo   : {undo_action or '(none — journal records full state first)'}")
         print(f"  reason : {args.reason}")
         print(f"\n  To apply: re-run with --apply")
-        journal.append(args.witness, args.action, args.target, args.reason,
-                       {"action": undo_action, "target": args.target} if undo_action else None,
+        journal.append(args.witness, args.action, target, args.reason,
+                       {"action": undo_action, "target": target} if undo_action else None,
                        "dry-run")
         return
 
     # ---- apply
-    print(f"[apply] {args.action} on {args.witness} target={args.target}")
-    res = run_action(row, args.action, args.target)
+    print(f"[apply] {args.action} on {args.witness} target={target}")
+    res = run_action(row, args.action, target)
     ok = res.get("ok")
     print(f"  {'ok' if ok else 'FAIL'} — {res.get('data') or res.get('error')}")
     if not ok:
-        journal.append(args.witness, args.action, args.target, args.reason,
-                       {"action": undo_action, "target": args.target} if undo_action else None,
+        journal.append(args.witness, args.action, target, args.reason,
+                       {"action": undo_action, "target": target} if undo_action else None,
                        "failed")
         sys.exit(1)
-    verified = verify_action(row, args.action, args.target)
-    entry = journal.append(args.witness, args.action, args.target, args.reason,
-                           {"action": undo_action, "target": args.target} if undo_action else None,
+    verified = verify_action(row, args.action, target)
+    entry = journal.append(args.witness, args.action, target, args.reason,
+                           {"action": undo_action, "target": target} if undo_action else None,
                            "applied", verified,
                            extra={"result_detail": res.get("data")})
     print(f"  journal entry {entry['id']}  verified={verified}")

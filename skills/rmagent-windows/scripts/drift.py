@@ -78,12 +78,33 @@ def _snap_attackmap(row: dict) -> dict:
     return {"attackmap": techs}
 
 
+def _snap_canary(row: dict) -> dict:
+    """Rev 15: the canary tripwire. A decoy identity that gets TOUCHED is the
+    highest-signal patient-zero detector there is — it exists only to be
+    touched, so there is no legitimate reason for activity against it.
+    No correlation needed: a hit IS the finding."""
+    if "canary" not in (row.get("skills") or []):
+        return {}
+    res = lib.ask(row, "canary", since_hours=24.0, limit=50)
+    d = res.get("data") or {}
+    if not d:
+        return {}
+    return {"canary": {
+        "armed": d.get("armed") or [],
+        "armed_count": d.get("armed_count") or 0,
+        "hit_count": d.get("hit_count") or 0,
+        "tripped": bool(d.get("tripped")),
+        "sources": d.get("sources") or [],
+    }}
+
+
 def snapshot(row: dict) -> dict:
     """Pull the current state for one witness. Pure-ish (one ask per skill)."""
     snap = {"witness": row.get("id")}
     snap.update(_snap_attest(row))
     snap.update(_snap_profile(row))
     snap.update(_snap_attackmap(row))
+    snap.update(_snap_canary(row))
     snap["taken_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     return snap
 
@@ -152,6 +173,27 @@ def diff(old: dict, new: dict) -> dict:
                                         "detail": "%s %s%% -> %s%% (crossed %s%%)"
                                                   % (label, ov, nv, threshold),
                                         "field": field})
+
+    # --- Rev 15: canary tripwire (current state, not a diff — any hit is a hit) ---
+    new_c = new.get("canary") or {}
+    if new_c.get("tripped"):
+        srcs = ", ".join((new_c.get("sources") or [])[:5]) or "unknown source"
+        out["findings"].append({
+            "kind": "canary_tripped", "severity": "critical",
+            "detail": "canary identity touched (%s hit(s)) from %s — decoy exists only "
+                      "to be touched; treat as patient-zero candidate"
+                      % (new_c.get("hit_count") or 0, srcs),
+            "sources": new_c.get("sources") or [],
+            "hit_count": new_c.get("hit_count"),
+        })
+    elif new_c and int(new_c.get("armed_count") or 0) == 0:
+        # armed but nothing armed = the estate planted no canaries. Not a
+        # finding, but worth a note so the operator knows the tripwire is OFF.
+        out["findings"].append({
+            "kind": "canary_unarmed", "severity": "info",
+            "detail": "no canary identities declared — plant decoys (inventory "
+                      "`canaries: [name,...]`) to turn patient-zero detection into a tripwire",
+        })
 
     old_t = old.get("attackmap") or {}
     new_t = new.get("attackmap") or {}

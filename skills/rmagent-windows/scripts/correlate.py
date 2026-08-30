@@ -178,8 +178,71 @@ def correlate(answers: dict, rows: list) -> dict:
                 "logon_id": lid, "hosts": sorted(hosts),
             })
 
+    # --- 5. canary tripwire (Rev 15) — any hit is critical, no correlation needed ---
+    # Included here (not only in drift) so a single correlate run gives the
+    # operator the complete picture with triage ordering applied.
+    for key, data in answers.items():
+        if "__canary" not in key:
+            continue
+        wid = key.split("__")[0]
+        if not data.get("tripped"):
+            continue
+        srcs = data.get("sources") or []
+        for s in srcs:
+            findings.append({
+                "kind": "canary_tripped", "severity": "critical",
+                "detail": "%s: canary identity touched from %s — decoy exists only to be touched"
+                          % (wid, s),
+                "src": wid, "source_ip": s,
+                "hit_count": data.get("hit_count"),
+            })
+        if not srcs:  # tripped but no source recorded (local console?)
+            findings.append({
+                "kind": "canary_tripped", "severity": "critical",
+                "detail": "%s: canary identity touched (no source IP recorded)" % wid,
+                "src": wid, "hit_count": data.get("hit_count"),
+            })
+
     sev_order = {"critical": 0, "warning": 1, "info": 2}
     findings.sort(key=lambda f: sev_order.get(f.get("severity", "info"), 3))
+
+    # --- Rev 15 (enterprise): TRIAGE — derive a response order, don't improvise it.
+    # With 50 findings across 10 hosts an operator needs to know what to actuate
+    # FIRST. Each finding gets a rank + a recommended actuate action, derived
+    # from its kind (never invented — the allowlist is the whole surface).
+    TRIAGE = {
+        # kind -> (rank, why, recommended actuate actions in order)
+        "canary_tripped":      (0, "decoy identity touched — near-zero false positive, patient-zero candidate",
+                                ["block_ip", "disable_user", "kill_process"]),
+        "shared-logonid":      (1, "same session on two boxes — stolen credential in active use",
+                                ["disable_user", "block_ip"]),
+        "lateral-hop":         (2, "one witness connecting to another — active movement",
+                                ["block_ip", "kill_process"]),
+        "new_admins":          (3, "an account gained admin since baseline",
+                                ["remove_admin", "disable_user"]),
+        "new_tracked_proc":     (4, "new process running as a tracked principal",
+                                ["kill_process", "quarantine_file"]),
+        "witness_blind":       (5, "a witness lost audit visibility — every other answer is suspect",
+                                []),  # policy fix, not an actuate action
+        "explicit-cred-to-peer": (6, "explicit credentials used against a peer",
+                                  ["disable_user"]),
+        "cross-host-account":  (7, "account seen on multiple boxes — could be legitimate admin",
+                                ["disable_user"]),
+        "sysmon_change":       (8, "Sysmon state changed — the tripwire itself moved",
+                                []),
+        "new_persistence":      (9, "persistence technique grew since baseline",
+                                 ["delete_task", "stop_service", "disable_wmi_sub"]),
+    }
+    for f in findings:
+        rank, why, acts = TRIAGE.get(f.get("kind"), (99, "", []))
+        f["triage_rank"] = rank
+        f["triage_why"] = why
+        f["recommended_actions"] = acts
+    # rank first, then severity, then kind for stable ordering
+    findings.sort(key=lambda f: (f.get("triage_rank", 99),
+                                sev_order.get(f.get("severity", "info"), 3),
+                                f.get("kind", "")))
+
     return {
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "witnesses": [r.get("id") for r in rows],
@@ -188,6 +251,11 @@ def correlate(answers: dict, rows: list) -> dict:
             "critical": sum(1 for f in findings if f["severity"] == "critical"),
             "warning": sum(1 for f in findings if f["severity"] == "warning"),
             "total": len(findings),
+        },
+        "triage": {
+            "top": [f["kind"] for f in findings[:5]],
+            "actuate_order": [f["kind"] for f in findings
+                              if f.get("recommended_actions")][:10],
         },
     }
 

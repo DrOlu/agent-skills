@@ -371,6 +371,86 @@ Eight improvements, live-validated against WS1/WS2:
 **Status: LIVE-VALIDATED 2026-08-29** — correlate + drift + attackmap allowlist
 run against WS1/WS2 (see Rev 8 validation notes in the case dir).
 
+## Rev 15 — the enterprise layer + the skill split (2026-08-30)
+
+**The skill is now split.** The question half lives in its own skill so it can
+be loaded and reasoned about on its own:
+
+| Skill | Half |
+|---|---|
+| `rmagent-windows` | **this skill** — both halves, fully runnable |
+| `rmagent-so` | the witness-question (Security Observatory) half |
+| `rmagent-fr` | the Flight Recorder (tracing) half |
+| `rmagent-actuate` | Phase 1 response — named, reversible actions |
+| `rmagent-redteam` | the drill — stages artifacts, scores detection |
+| `rmagent-linux` | the Linux/macOS sibling |
+
+All six share one constitution. `rmagent-so` is the one to load when you only
+want to *ask questions* of the estate.
+
+**What rev 15 added (implemented in `rmagent-so` + `rmagent-actuate`):**
+
+1. **`canary` — a new question, and a new kind of question.** A decoy
+   identity that exists only to be touched. Any 4624/4625/4740 against it is
+   critical by definition — there is no business reason to authenticate as
+   `honeyadmin`. Decoys are declared in the inventory (`canaries: [name,...]`)
+   or auto-detected by decoy-name heuristics. This turns patient-zero
+   detection from a graph walk into a tripwire.
+
+2. **`canary_watch.py` — the standing tripwire.** Polls the canary question
+   every 60s, alerts once per NEW hit (dedup by timestamp, not cooldown — a
+   cooldown can hide a second hit), reports unreachable witnesses as holes,
+   exits non-zero when tripped so cron can chain response. This is what
+   shrinks the detection window from "whenever a hunt runs" to ~60 seconds.
+   Run it from cron, not as a daemon:
+   ```
+   * * * * * python3 ~/.agents/skills/rmagent-so/scripts/canary_watch.py \
+       --inventory ~/estate.yaml --once --quiet >> ~/.rmagent/canary_watch.log 2>&1
+   ```
+
+3. **`plant_canary` (actuate) — arm the tripwire.** Creates a **disabled**
+   decoy account: it can never log on, so it cannot be used as a foothold,
+   but Windows still records every attempt against it. Complexity-safe
+   random password (GUID hex fails password policy on some boxes).
+
+4. **`patient_zero.py` — the backward walk with honest termination.** Labels
+   how the walk stopped — origin / retention-boundary / blind-witness /
+   no-signal / cycle / hop-limit — and refuses to name a patient zero it
+   cannot prove. Uses the new `attest.oldest_security_event` to tell "reached
+   the origin" from "ran out of log". Those two look identical without it,
+   and reporting the second as the first is a confident wrong answer.
+
+5. **Signal-aware cap.** An over-budget answer is now TRIAGED, not dropped:
+   low-signal rows shed first, rows carrying critical event IDs (4648, 4672,
+   5861, 1102, 4104, 4698, 7045, 4732, 4688) always survive. The 32 KB cap
+   is never raised — we only choose what survives it. Closes the evasion
+   surface where a noisy host could push the signal past the window.
+
+6. **Triage ranking.** Every correlate finding carries `triage_rank`,
+   `triage_why`, and `recommended_actions` drawn only from the actuator
+   allowlist. Response order is derived, not improvised.
+
+7. **`rotate_credential` + `isolate_host` (actuate).** Containment becomes
+   remediation: rotation breaks the attacker's copy of a credential without
+   breaking the account's owner. Isolation stops lateral movement without
+   powering the box off, keeping WinRM open so undo works.
+
+**Tests:** `test_enterprise.py` (57 assertions, pure-logic) and
+`test_budget.py` (every payload under WinRM's ~8191-char budget — this
+caught attest going 108% over when `oldest_security_event` was added).
+
+**Known limitation, stated honestly:** a canary hit cannot be staged from the
+jump host. Windows writes 4625 only for real *logon-session* attempts;
+`LogonUser`/`DirectoryEntry` API validation does not create one. Proving the
+tripwire end-to-end requires a genuine network logon from a **second host**.
+The detection query itself is proven — it reads live 4625s correctly.
+
+**Status: LIVE-VALIDATED 2026-08-30** — canaries planted on WS1+WS2 (journal
+13, 15), both verified disabled; `canary_watch.py` runs a clean pass against
+both witnesses and sees the armed canaries.
+
+---
+
 ## Rev 13 — the audit-blindness lesson: verify the witness can see (2026-08-29)
 
 Two live findings from re-validating Rev 8, both silent false negatives:

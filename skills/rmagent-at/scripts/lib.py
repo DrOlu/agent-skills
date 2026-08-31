@@ -29,7 +29,7 @@ except ImportError:
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
-ALLOWED = {"apptrace", "appslow", "apperrors", "appnet", "appproc",
+ALLOWED = {"apptrace", "appslow", "apperrors", "appnet", "appproc", "appsysmon",
            "attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
            "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2"}
 PHASE0_SKILLS = ALLOWED

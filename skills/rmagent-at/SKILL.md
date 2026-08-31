@@ -88,6 +88,32 @@ one line of `EventWriteString` (or a Python ctypes call) joins the party.
 | `apperrors` | Errors and warnings (Level ≤ 3) with counts | full error dumps |
 | `appnet` | TCP connections (src → dst), deduplicated | full netflow |
 | `appproc` | Process start/end events with command lines | full process list |
+| `appsysmon` | Sysmon security telemetry: image SHA256s, LSASS access, image loads, registry sets, Guid-keyed connections | raw Sysmon dump |
+
+### `appsysmon` — the security layer, read not installed
+
+Sysmon is a **separate telemetry plane** from the ETW ring. The ring sessions
+(`ProcTrace`, `NetTrace`) capture process and connection *events* from the
+kernel. Sysmon adds the **security context** the kernel providers do not emit:
+
+| Sysmon event | What it adds over the ring |
+|---|---|
+| Event 1 (hashes) | SHA256 of every binary executed — "did this binary ever run here?" is answerable without the file still being present |
+| Event 3 (ProcessGuid) | Connections keyed by ProcessGuid, not PID — PIDs are reused, Guids are not |
+| Event 7 (image loads) | DLL loads — injection and LOLBin abuse |
+| Event 10 (LSASS) | Credential-access attempts the process provider does not see |
+| Event 13 (registry) | Registry value sets — the persistence channel ProcTrace misses entirely |
+
+**This skill does not install Sysmon.** It reads the log that is already
+running. If Sysmon is absent, the answer carries `sysmon: 'not-installed'`
+and empty lists — a hole, not an error, and not a reason to install anything.
+Installation is an EDR decision, not a tracing one.
+
+The honest overlap: process create/exit and network connections appear in both
+planes. Where they duplicate, the ETW ring is the application view (what ran,
+what connected) and Sysmon is the security view (what it was, its hash, its
+Guid). Use `appproc`/`appnet` for volume; use `appsysmon` when you need to
+tie an action to a specific binary identity.
 
 ## Setup (MOP-level — this is a persistent change)
 

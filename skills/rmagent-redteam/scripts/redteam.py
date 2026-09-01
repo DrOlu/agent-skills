@@ -327,21 +327,30 @@ def clean(rows):
               + (f"  ⚠ STILL PRESENT: {still}" if still else ""))
     return all_clean
 
-def run_full(rows, inventory, keep_dirty: bool):
-    case_root = Path("./cases")
-    case_root.mkdir(parents=True, exist_ok=True)
-    case_dir = case_root / f"redteam-{time.strftime('%Y%m%d-%H%M%S')}"
-    case_dir.mkdir(parents=True, exist_ok=True)
+def verify_present(rows):
+    """READ-ONLY: which drill artifacts are CURRENTLY on each box.
 
-    telegram_send(f"🛰️ RMAgent red-team drill started\nStaging LOTL artifacts on "
-                  f"{len(rows)} box(es): {[r['id'] for r in rows]}\n"
-                  f"Expect: {', '.join(EXPECTED.keys())}")
+    Used by `detect` mode so the score is honest — it only counts signals
+    whose artifacts are verifiably present, exactly like stage() does, but
+    without staging anything. Returns {signal -> set(witness ids)}."""
+    print(f"[redteam] verifying PRESENT artifacts on {len(rows)} box(es) (read-only)")
+    present: dict[str, set[str]] = {}
+    for r in rows:
+        res = run_payload(r, "verify", timeout=60)
+        data = res.get("data") or {}
+        v = data.get("present") or {}
+        here = [k for k, yes in (v.items() if isinstance(v, dict) else []) if yes]
+        print(f"  {r['id']:6} present={here if here else '(none)'}")
+        for sig in here:
+            present.setdefault(sig, set()).add(r["id"])
+    return present
 
-    _, staged_verified = stage(rows)
-    print("[redteam] waiting 8s for events to settle in the logs...")
-    time.sleep(8)
 
-    # run rmagent census + hunt
+def _detect_and_score(rows, inventory, case_dir: Path,
+                      staged_verified: dict[str, set[str]]) -> tuple[list, list]:
+    """The blue side only: run rmagent census + hunt into case_dir, score
+    against staged_verified, telegram the report, append score history.
+    Shared by `run` (after staging) and `detect` (against what's present)."""
     census = subprocess.run(
         [sys.executable, str(RMA / "census.py"), "--inventory", inventory,
          "--case-dir", str(case_dir)],
@@ -358,25 +367,15 @@ def run_full(rows, inventory, keep_dirty: bool):
     found = score(rows, census_out, case_dir, staged_verified)
     detected = list(found.keys())
     missed = [k for k in EXPECTED if k not in found]
+    return detected, missed
 
-    # distinguish "not staged" (drill couldn't create it — env limitation) from
-    # "not detected" (rmagent missed something that WAS staged). A signal counts
-    # as staged if it landed on at least one box.
-    _DRILL_KEY = {
-        "failed_admin_logons": "failed_logons",
-        "new_local_admin": "new_local_admin",
-        "new_scheduled_task": "scheduled_task",
-        "new_service": "new_service",
-        "powershell_spawns": "powershell_spawns",
-        "system_outbound_conn": "scheduled_task",
-        "run_key": "run_key",
-        "ifeo_hijack": "ifeo_hijack",
-    }
-    def _staged_anywhere(sig: str) -> bool:
-        return bool(staged_verified.get(_DRILL_KEY.get(sig, sig)))
 
-    not_staged = [k for k in EXPECTED if not _staged_anywhere(k)]
-    not_detected = [k for k in missed if _staged_anywhere(k)]
+def _report_and_history(detected, missed, staged_verified, case_dir: Path):
+    """The report + score-history half of the pipeline. Shared by run/detect."""
+    not_staged = [k for k in EXPECTED
+                  if not staged_verified.get(_REPORT_DRILL_KEY.get(k, k))]
+    not_detected = [k for k in missed
+                    if staged_verified.get(_REPORT_DRILL_KEY.get(k, k))]
 
     WHY = {
         "new_local_admin": "4732 needs 'Audit Security Group Management' on; sketch's regex may miss workgroup-format names",
@@ -405,8 +404,6 @@ def run_full(rows, inventory, keep_dirty: bool):
     print(f"[telegram] report sent: {ok}")
 
     # --- score history (Rev 8): persist N/8 over time for regression detection.
-    # A Windows update or GPO change that silently disables 4688 shows as a
-    # score drop here — the failure mode the drill doc itself warns about.
     try:
         hist_file = Path.home() / ".rmagent" / "drill_history.jsonl"
         hist_file.parent.mkdir(parents=True, exist_ok=True)
@@ -421,7 +418,6 @@ def run_full(rows, inventory, keep_dirty: bool):
         }
         with hist_file.open("a") as f:
             f.write(json.dumps(rec) + "\n")
-        # regression check vs the previous run
         lines = [l for l in hist_file.read_text().splitlines() if l.strip()]
         if len(lines) >= 2:
             prev = json.loads(lines[-2])
@@ -438,6 +434,39 @@ def run_full(rows, inventory, keep_dirty: bool):
     except Exception as e:
         print(f"[history] score-history write failed (non-fatal): {e}")
 
+
+# EXPECTED signal name → the key the drill's `verified`/verify's `present` dict
+# uses (they differ: 'failed_admin_logons' vs 'failed_logons', etc.).
+# system_outbound_conn is derived from the scheduled task at stage time.
+_REPORT_DRILL_KEY = {
+    "failed_admin_logons": "failed_logons",
+    "new_local_admin": "new_local_admin",
+    "new_scheduled_task": "scheduled_task",
+    "new_service": "new_service",
+    "powershell_spawns": "powershell_spawns",
+    "system_outbound_conn": "scheduled_task",
+    "run_key": "run_key",
+    "ifeo_hijack": "ifeo_hijack",
+}
+
+
+def run_full(rows, inventory, keep_dirty: bool):
+    case_root = Path("./cases")
+    case_root.mkdir(parents=True, exist_ok=True)
+    case_dir = case_root / f"redteam-{time.strftime('%Y%m%d-%H%M%S')}"
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    telegram_send(f"🛰️ RMAgent red-team drill started\nStaging LOTL artifacts on "
+                  f"{len(rows)} box(es): {[r['id'] for r in rows]}\n"
+                  f"Expect: {', '.join(EXPECTED.keys())}")
+
+    _, staged_verified = stage(rows)
+    print("[redteam] waiting 8s for events to settle in the logs...")
+    time.sleep(8)
+
+    detected, missed = _detect_and_score(rows, inventory, case_dir, staged_verified)
+    _report_and_history(detected, missed, staged_verified, case_dir)
+
     if not keep_dirty:
         print("\n[redteam] cleaning up staged artifacts...")
         all_clean = clean(rows)
@@ -450,9 +479,44 @@ def run_full(rows, inventory, keep_dirty: bool):
     print(f"\n[redteam] done. case: {case_dir}")
     return detected, missed
 
+
+def detect_only(rows, inventory):
+    """BLUE SIDE ONLY: score rmagent against artifacts ALREADY on the boxes.
+
+    Nothing is staged and nothing is cleaned. Use after `stage --keep`, or
+    hours/days after a stage, to answer "what does rmagent see RIGHT NOW?"
+    The score is honest: it only counts signals whose artifacts are
+    verifiably present (checked read-only via verify.ps1), so a half-cleaned
+    or never-staged artifact can never be counted as a detection miss."""
+    case_root = Path("./cases")
+    case_root.mkdir(parents=True, exist_ok=True)
+    case_dir = case_root / f"redteam-detect-{time.strftime('%Y%m%d-%H%M%S')}"
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    present = verify_present(rows)
+    if not present:
+        print("[redteam] no drill artifacts present on any box.")
+        print("           stage first: redteam.py stage --inventory ... --confirm")
+        print("           (or --keep a previous run), then run detect.")
+        telegram_send("🔍 RMAgent detect: no drill artifacts present on any box — "
+                      "nothing to score. Stage first (stage --confirm), or --keep a run.")
+        return [], list(EXPECTED.keys())
+
+    telegram_send(f"🔍 RMAgent detect (blue side only)\n"
+                  f"Scoring rmagent against artifacts already present on "
+                  f"{len(rows)} box(es). Nothing staged, nothing cleaned.")
+
+    detected, missed = _detect_and_score(rows, inventory, case_dir, present)
+    _report_and_history(detected, missed, present, case_dir)
+
+    print(f"\n[redteam] detect done. case: {case_dir}")
+    print("[redteam] artifacts LEFT AS FOUND (detect never stages or cleans).")
+    return detected, missed
+
+
 def main():
     ap = argparse.ArgumentParser(description="RMAgent red-team drill")
-    ap.add_argument("mode", choices=["stage", "clean", "run"])
+    ap.add_argument("mode", choices=["stage", "clean", "run", "detect"])
     ap.add_argument("--inventory", required=True)
     ap.add_argument("--confirm", action="store_true",
                     help="required for stage/run — this is a drill that changes hosts")
@@ -480,6 +544,9 @@ def main():
             sys.exit(1)
     elif args.mode == "run":
         run_full(rows, args.inventory, args.keep)
+    elif args.mode == "detect":
+        # read-only: no --confirm needed, nothing is staged or cleaned
+        detect_only(rows, args.inventory)
 
 if __name__ == "__main__":
     main()

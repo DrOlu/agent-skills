@@ -64,6 +64,40 @@ python3 "$SKILL_DIR/scripts/redteam.py" stage --inventory ./estate.yaml --confir
 python3 "$SKILL_DIR/scripts/redteam.py" clean --inventory ./estate.yaml             # remove them
 ```
 
+## The two sides, separately
+
+The drill is a **purple-team** loop by default, but the red side and the blue
+side can now be run independently:
+
+```bash
+# RED SIDE ONLY — stage the attack, leave it live, test ANYTHING against it
+# (rmagent, CrowdStrike, Defender, a SIEM query you are writing — the drill
+#  does not care who does the detecting)
+python3 redteam.py stage --inventory estate.yaml --confirm
+
+# ...hours or days later...
+
+# BLUE SIDE ONLY — score rmagent against whatever is STILL on the boxes.
+# Read-only: stages nothing, cleans nothing, needs no --confirm.
+python3 redteam.py detect --inventory estate.yaml
+
+# Clean up whenever you are done
+python3 redteam.py clean --inventory estate.yaml
+```
+
+`detect` is honest about what it scores: before running the hunt it verifies
+(read-only, via `verify.ps1`) which `RMAgentDrill_*` artifacts are actually
+present, and only counts those. A half-cleaned or never-staged artifact can
+never be reported as a detection miss. If nothing is present it says so and
+refuses to run a meaningless test.
+
+This closes the gap the welded `run` loop had: you could always test another
+detection system against staged artifacts, but you could not measure
+rmagent's detection against a scenario that was staged earlier, or that you
+arranged yourself. `detect` also enables **delayed detection testing** —
+stage today, detect tomorrow, to answer "would we have caught this attack
+while it sat on the box overnight?"
+
 `--keep` leaves artifacts staged after a `run` (clean later with `clean`).
 
 ## What happens during a `run`

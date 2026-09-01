@@ -124,16 +124,32 @@ def run_pass(inv: dict, interval_s: int, limit: int, quiet: bool = False,
         # a hit. Is it NEW (newer than the last one we alerted on)?
         prev = state.get(wid) or ""
         newest = r.get("newest_hit") or ""
-        if newest and newest > prev:
+        # BUG FIX (audit): a hit with NO timestamp used to be silently DROPPED
+        # (newest falsy -> the whole condition False -> "already alerted")
+        # — a real attacker touching the decoy with timestamp-less events
+        # would never alert. Now: no timestamp means we cannot dedup by time,
+        # so we alert when the hit_count has GROWN since the last alert.
+        if newest:
+            is_new = newest > prev
+        else:
+            prev_n = state.get(f"{wid}#hits") or 0
+            is_new = r["hit_count"] > prev_n
+        if is_new:
             tripped.append(r)
             state[wid] = newest
+            # for the no-timestamp path, remember the count we alerted on
+            if not newest:
+                state[f"{wid}#hits"] = r["hit_count"]
             if not quiet:
                 srcs = ", ".join(r["sources"][:5]) or "no source recorded"
                 print(f"  [TRIPPED] {wid}: {r['hit_count']} hit(s) from {srcs}")
-                print(f"            newest at {newest} — decoy exists only to be touched")
+                if newest:
+                    print(f"            newest at {newest} — decoy exists only to be touched")
+                else:
+                    print(f"            (no hit timestamps — deduped by hit_count)")
         else:
             if not quiet:
-                print(f"  [repeat ] {wid}: hit already alerted (newest {newest})")
+                print(f"  [repeat ] {wid}: hit already alerted (newest {newest or 'n/a'})")
 
     out = {
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

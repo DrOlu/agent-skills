@@ -113,8 +113,10 @@ for needle in ("raw_4624_24h", "blind_check", "blind_count", "auditpol"):
     assert needle in text, "attest.ps1 missing %s" % needle
 # blind_check must be computed from UNFILTERED 4624 (no track filter) —
 # the WS2 bug was that a track-filtered count looked fine while raw was 0.
+# NOTE: the payload is compact-style ("$raw4624=@(...)" — no spaces around =),
+# so the regex must tolerate both spacing forms.
 import re as _re
-m = _re.search(r"raw4624 = @\(Get-WinEvent.*?\)\.Count", text, _re.S)
+m = _re.search(r"raw4624\s*=\s*@\(\s*Get-WinEvent.*?\)\s*\.Count", text, _re.S)
 assert m and "Where-Object" not in m.group(0), "raw4624 must not be track-filtered"
 
 # --- attackmap allowlist: default netsh helpers suppressed, real one fires ---

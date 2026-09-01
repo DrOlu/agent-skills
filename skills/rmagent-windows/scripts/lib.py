@@ -216,6 +216,12 @@ _CRITICAL_FIELDS = {
     "kernring":    ["events"],
     "flowstats":   ["top_destinations"],
     "canary":      ["hits"],
+    "apptrace":    ["events"],
+    "appslow":     ["slowest"],
+    "apperrors":   ["recent"],
+    "appnet":      ["conns"],
+    "appproc":     ["procs"],
+    "appsysmon":   ["proc_hashes", "lsass_access", "image_loads", "registry_sets", "guid_conns"],
 }
 # Event IDs that must survive any trim — a row carrying one of these is critical.
 _CRITICAL_EVENT_IDS = {"4648", "4672", "5861", "1102", "4104", "4698", "7045", "4732", "4688"}

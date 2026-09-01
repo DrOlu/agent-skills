@@ -35,14 +35,22 @@ def record(case: str, entry_id: int, host: str, principal: str,
     months. Suspicious hunts always record full.
     """
     INDEX.parent.mkdir(parents=True, exist_ok=True)
+    ts = t or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     e = {
-        "t": t or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "t": ts,
         "case": case,
         "entry": entry_id,
         "host": host,
         "principal": principal,
         "kind": hop_kind,
     }
+    # rev 14: hour_of_day for the per-account behavioural baseline —
+    # "this account has never logged in at 3am before" without a lake.
+    try:
+        hour = int(ts[11:13])
+        e["hour"] = hour
+    except (ValueError, IndexError):
+        pass
     # BUG FIX: anything that is not explicitly "summary" records FULL fields.
     # Previously an invalid sample value fell into the else-branch and recorded
     # NEITHER full fields NOR the summary tag — silent data loss.

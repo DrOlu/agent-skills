@@ -70,6 +70,7 @@ correlation needed.
 
 | Script | Role |
 |---|---|
+| `scripts/stc.py` | Security Trace Context — the W3C `traceparent` analog. Context propagates across hosts; event data never does |
 | `scripts/lib.py` | The engine — allowlisted `ask()`, **signal-aware cap**, holes, pywinrm transport, scrt credential fallback, attackmap FP allowlist |
 | `scripts/hunt.py` | The walk — edges → explain → pslogs where smoke; smoke → Telegram. Runs correlate at the end. |
 | `scripts/correlate.py` | Cross-witness join — cross-host-account, lateral-hop (critical), explicit-cred-to-peer, shared-logonid (critical), canary_tripped. **Adds triage ranking + recommended actuate actions.** |
@@ -94,6 +95,47 @@ raised — we only choose *what* survives it. Still no lake.
 
 An answer that was trimmed carries `capped: true` and a `cap_note`, so the
 operator knows the window was narrowed rather than being silently deceived.
+
+### Security Trace Context (STC) — context propagates, data does not
+
+The W3C `traceparent` analog, but the unit is a **principal's walk across an
+estate**, not a request across services:
+
+```
+stc: case=CASE-20260825-143022; principal=Administrator;
+     window=2h; origin=jh1; depth=2; ticket=PAY-4419;
+     apptrace=4bf92f3577b34da6a3ce929d0e0e4736
+```
+
+- **Context travels; event data never does.** When a hunt moves from WS1 to
+  WS2, WS2 receives "I'm looking for Administrator, case X, depth 2" — not
+  WS1's logs. Each host answers from its own local tools.
+- **`depth` is the distributed circuit breaker.** The walk budget (≤ 8) applies
+  across the WHOLE trace, not per-host — this is what stops a distributed
+  hunt becoming a worm.
+- **`ticket`** is the business join (a payment id, incident number) — the
+  Flight Recorder link.
+- **`apptrace` (v2)** is the application trace id — an OTel `trace_id` or W3C
+  `traceparent` observed on a witness. It lets ONE case serve both lenses:
+  *"who walked?"* (principal) **and** *"which request was slow?"* (app trace).
+  Identity-led and request-led correlation on the same tape.
+
+Start a hunt joined to an application request:
+
+```bash
+python3 hunt.py --inventory estate.yaml --since 2h \
+  --ticket PAY-4419 --app-trace-id 4bf92f3577b34da6a3ce929d0e0e4736
+```
+
+Every emitted OTel span then carries `rmagent.app_trace_id`, so in
+Grafana/Jaeger the security walk and the application request appear as
+correlatable traces — one waterfall for "the request was slow", one for
+"and here is who was walking the estate at that moment".
+
+**Injection-hardened:** the STC is a delimiter format, so a crafted value
+like `X; depth=9; principal=root` could rewrite the walk budget. Values
+containing `;` or `=` are rejected at construction AND at decode, and
+duplicate keys are rejected at decode. `test_stc_v2.py` asserts all of it.
 
 ### Triage (Rev 15)
 

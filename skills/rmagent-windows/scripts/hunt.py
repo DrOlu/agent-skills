@@ -110,6 +110,10 @@ def main():
     ap.add_argument("--principal", default=None, help="override track (default: inventory track)")
     ap.add_argument("--limit", type=int, default=50)
     ap.add_argument("--ticket", default=None, help="business ticket — the Flight Recorder join")
+    ap.add_argument("--app-trace-id", default=None, dest="app_trace_id",
+                    help="application trace id (OTel trace_id / W3C traceparent) — "
+                         "joins this hunt to the app request it was triggered by, "
+                         "so one case serves both 'who walked?' and 'which request?'")
     ap.add_argument("--trigger", default="manual", choices=["manual","scheduled","alert","drill","backfill"], help="what started this hunt")
     args = ap.parse_args()
 
@@ -161,7 +165,8 @@ def main():
     S = stc_mod.STC(case=case_dir.name, principal=(track[0] if track else "unknown"),
                     window_h=since_h,
                     ticket=getattr(args, "ticket", None),
-                    trigger=getattr(args, "trigger", "manual"))
+                    trigger=getattr(args, "trigger", "manual"),
+                    app_trace_id=getattr(args, "app_trace_id", None))
     T.think(f"STC: {S}")
 
     # --- rev 6: clock-skew detection (the silent killer of cross-host timelines) ---

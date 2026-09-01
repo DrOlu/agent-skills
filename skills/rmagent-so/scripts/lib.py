@@ -207,7 +207,7 @@ def _cap(result: dict, row: dict, skill: str) -> dict:
 #
 # Field priority per skill. Anything not listed is kept as-is (usually small).
 _CRITICAL_FIELDS = {
-    "edges":       ["logons", "explicit_creds", "special_privs", "conns"],
+    "edges":       ["logons", "failed_sources", "explicit_creds", "special_privs", "conns"],
     "netedges":    ["lsass_access", "thread_injection", "conns", "dns"],
     "explain":     ["identity_changes", "wmi_subscriptions", "audit_cleared", "lolbin_spawns"],
     "pslogs":      ["blocks"],
@@ -225,6 +225,9 @@ _CRITICAL_FIELDS = {
 }
 # Event IDs that must survive any trim — a row carrying one of these is critical.
 _CRITICAL_EVENT_IDS = {"4648", "4672", "5861", "1102", "4104", "4698", "7045", "4732", "4688"}
+# Rev 16: hard row cap per critical field in the last-resort path — the
+# critical-fields-only answer can never itself become a lake.
+_CRITICAL_FIELD_KEEP = 25
 
 
 def _row_signal(row) -> int:
@@ -272,8 +275,15 @@ def _trim_lists(data, skill: str, budget: int) -> tuple[dict, bool]:
 
 def _cap_signal(result: dict, row: dict, skill: str) -> dict:
     """Enterprise cap: triage instead of drop. The cap is never raised —
-    we only choose what survives it. Falls back to the old hole behaviour
-    only when even the critical subset exceeds the budget."""
+    we only choose what survives it.
+
+    Rev 16: the last resort is no longer a bare hole. When the trimmed answer
+    STILL exceeds the budget, keep ONLY the critical fields (the small lists
+    the skill itself declared most important — e.g. edges' failed_sources,
+    the brute-force pointer). A 400-row logon flood used to bury the one
+    row naming the attacker; now the attacker's row survives and everything
+    else is honestly marked as shed. A hole is only returned when even the
+    critical fields cannot fit."""
     if not result.get("ok"):
         result.setdefault("hole", hole(f"{row.get('id')} {skill}", result.get("error") or "empty"))
         return result
@@ -289,7 +299,24 @@ def _cap_signal(result: dict, row: dict, skill: str) -> dict:
         result["cap_note"] = ("answer exceeded the byte cap; low-signal rows were shed "
                               "so critical signal survives. still no lake.")
         return result
-    # even the critical subset is too big — the honest answer is a hole
+    # Rev 16: last resort — keep only the critical fields, capped hard.
+    # This is the difference between "the loudest box got ignored" and
+    # "the attacker's IP survived the flood."
+    fields = _CRITICAL_FIELDS.get(skill) or []
+    if fields:
+        core = {}
+        for f in fields:
+            v = data.get(f)
+            if isinstance(v, list) and v:
+                core[f] = v[:_CRITICAL_FIELD_KEEP]
+        if core and len(json.dumps(core, default=str).encode()) <= MAX_PULL_BYTES:
+            result["data"] = core
+            result["capped"] = True
+            result["cap_note"] = ("answer exceeded the byte cap even after triage; "
+                                  "only the critical fields survive (non-critical "
+                                  "fields were shed). still no lake.")
+            return result
+    # even the critical fields cannot fit — the honest answer is a hole
     return _cap(result, row, skill)
 
 

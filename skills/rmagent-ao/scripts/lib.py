@@ -29,10 +29,8 @@ except ImportError:
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
-ALLOWED = {"agents", "agentstate", "agenttrace", "agentnet", "agentmodels", "agentdrift",
-           "agentdeep",
-           "attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
-           "flowstats", "deepwindow", "profile"}
+ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
+           "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2", "canary"}
 PHASE0_SKILLS = ALLOWED
 MAX_PULL_BYTES = 32 * 1024
 WALK_DEPTH = 8
@@ -209,7 +207,7 @@ def _cap(result: dict, row: dict, skill: str) -> dict:
 #
 # Field priority per skill. Anything not listed is kept as-is (usually small).
 _CRITICAL_FIELDS = {
-    "edges":       ["logons", "explicit_creds", "special_privs", "conns"],
+    "edges":       ["logons", "failed_sources", "explicit_creds", "special_privs", "conns"],
     "netedges":    ["lsass_access", "thread_injection", "conns", "dns"],
     "explain":     ["identity_changes", "wmi_subscriptions", "audit_cleared", "lolbin_spawns"],
     "pslogs":      ["blocks"],
@@ -227,6 +225,9 @@ _CRITICAL_FIELDS = {
 }
 # Event IDs that must survive any trim — a row carrying one of these is critical.
 _CRITICAL_EVENT_IDS = {"4648", "4672", "5861", "1102", "4104", "4698", "7045", "4732", "4688"}
+# Rev 16: hard row cap per critical field in the last-resort path — the
+# critical-fields-only answer can never itself become a lake.
+_CRITICAL_FIELD_KEEP = 25
 
 
 def _row_signal(row) -> int:
@@ -274,14 +275,21 @@ def _trim_lists(data, skill: str, budget: int) -> tuple[dict, bool]:
 
 def _cap_signal(result: dict, row: dict, skill: str) -> dict:
     """Enterprise cap: triage instead of drop. The cap is never raised —
-    we only choose what survives it. Falls back to the old hole behaviour
-    only when even the critical subset exceeds the budget."""
+    we only choose what survives it.
+
+    Rev 16: the last resort is no longer a bare hole. When the trimmed answer
+    STILL exceeds the budget, keep ONLY the critical fields (the small lists
+    the skill itself declared most important — e.g. edges' failed_sources,
+    the brute-force pointer). A 400-row logon flood used to bury the one
+    row naming the attacker; now the attacker's row survives and everything
+    else is honestly marked as shed. A hole is only returned when even the
+    critical fields cannot fit."""
     if not result.get("ok"):
         result.setdefault("hole", hole(f"{row.get('id')} {skill}", result.get("error") or "empty"))
         return result
     data = result.get("data")
     if not isinstance(data, dict):
-        return _cap_signal(result, row, skill)
+        return _cap(result, row, skill)
     if len(json.dumps(data, default=str).encode()) <= MAX_PULL_BYTES:
         return result
     trimmed, changed = _trim_lists(dict(data), skill, MAX_PULL_BYTES)
@@ -291,7 +299,24 @@ def _cap_signal(result: dict, row: dict, skill: str) -> dict:
         result["cap_note"] = ("answer exceeded the byte cap; low-signal rows were shed "
                               "so critical signal survives. still no lake.")
         return result
-    # even the critical subset is too big — the honest answer is a hole
+    # Rev 16: last resort — keep only the critical fields, capped hard.
+    # This is the difference between "the loudest box got ignored" and
+    # "the attacker's IP survived the flood."
+    fields = _CRITICAL_FIELDS.get(skill) or []
+    if fields:
+        core = {}
+        for f in fields:
+            v = data.get(f)
+            if isinstance(v, list) and v:
+                core[f] = v[:_CRITICAL_FIELD_KEEP]
+        if core and len(json.dumps(core, default=str).encode()) <= MAX_PULL_BYTES:
+            result["data"] = core
+            result["capped"] = True
+            result["cap_note"] = ("answer exceeded the byte cap even after triage; "
+                                  "only the critical fields survive (non-critical "
+                                  "fields were shed). still no lake.")
+            return result
+    # even the critical fields cannot fit — the honest answer is a hole
     return _cap(result, row, skill)
 
 
@@ -397,79 +422,9 @@ def _preamble(row: dict, since_hours: float, limit: int, skill: str = "") -> str
     return out
 
 
-def _ssh_preamble(row: dict, since_hours: float, limit: int, skill: str = "") -> str:
-    """Bash preamble for SSH witnesses. Mirrors the PowerShell one."""
-    track = row.get("track") or ["root"]
-    return (
-        f"Track=\"{','.join(str(t) for t in track)}\"\n"
-        f"SinceHours={float(since_hours)}\n"
-        f"Limit={int(limit)}\n"
-    )
-
-
-def _ask_ssh(row: dict, skill: str, since_hours: float, limit: int,
-             timeout: int) -> dict:
-    """Send ONE allowlisted question to an SSH witness (Linux/macOS).
-
-    Payloads are bash scripts in questions/linux/<skill>.sh, piped to
-    `bash -s` over non-interactive SSH — no agent install, no tty.
-    """
-    import subprocess as _sp
-
-    payload = QDIR / "linux" / f"{skill}.sh"
-    if not payload.exists():
-        return {"ok": False, "error": f"no payload {payload.name}",
-                "hole": hole(f"{row.get('id')} {skill}", f"no payload {payload.name}")}
-
-    user = row.get("user") or "root"
-    address = row.get("address")
-    port = row.get("port") or 22
-    if not address:
-        return {"ok": False, "error": "ssh witness needs an address",
-                "hole": hole(f"{row.get('id')} {skill}", "no address")}
-
-    body = _ssh_preamble(row, since_hours, limit, skill) + payload.read_text()
-    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-           "-o", "StrictHostKeyChecking=accept-new", "-p", str(port),
-           f"{user}@{address}", "bash -s"]
-    try:
-        r = _sp.run(cmd, input=body, capture_output=True, text=True,
-                    timeout=max(timeout, 30))
-    except _sp.TimeoutExpired:
-        return _cap_signal({"ok": False, "error": f"ssh timeout after {timeout}s"}, row, skill) | {
-            "hole": hole(f"{row.get('id')} {skill}", "ssh timeout")}
-    except Exception as e:  # noqa: BLE001
-        msg = str(e).split("\n")[0][:300]
-        return _cap_signal({"ok": False, "error": msg}, row, skill) | {
-            "hole": hole(f"{row.get('id')} {skill}", f"ssh: {msg}")}
-
-    if r.returncode != 0:
-        err = (r.stderr or r.stdout or "")[-500:]
-        return _cap_signal({"ok": False, "error": err or f"exit {r.returncode}"}, row, skill)
-
-    out = r.stdout
-    jline = None
-    for line in out.splitlines():
-        if line.strip().startswith("{"):
-            jline = line.strip()
-            break
-    if not jline:
-        return _cap_signal({"ok": False, "error": f"no JSON in output: {out[:200]}"}, row, skill)
-    try:
-        import json as _json
-        parsed = _json.loads(jline)
-    except Exception as e:
-        return _cap_signal({"ok": False, "error": f"json parse: {e}: {jline[:200]}"}, row, skill)
-    return _cap_signal({"ok": True, "data": parsed}, row, skill)
-
-
 def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
         timeout: int = 25, creds: dict | None = None) -> dict:
-    """Send ONE allowlisted named question. Returns {ok, data?, error?, hole?}.
-
-    rmagent-ao: door-aware. door=winrm -> PowerShell payloads (questions/windows).
-    door=ssh -> bash payloads (questions/linux) over non-interactive SSH.
-    """
+    """Send ONE allowlisted named question. Returns {ok, data?, error?, hole?}."""
     if skill == "actuate":
         return {"ok": False, "error": "actuate is off in Phase 0 (watch only)",
                 "hole": hole(f"{row.get('id')} actuate", "watch is not actuate")}
@@ -478,16 +433,14 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
     if skill not in (row.get("skills") or []):
         return {"ok": False, "error": f"{row.get('id')} does not advertise {skill}",
                 "hole": hole(f"{row.get('id')} {skill}", f"not advertised")}
-
-    door = (row.get("door") or "winrm").lower()
-    if door == "ssh":
-        return _ask_ssh(row, skill, since_hours, limit, timeout)
-    if door != "winrm":
-        return {"ok": False, "error": f"unsupported door: {door}",
-                "hole": hole(f"{row.get('id')} {skill}", f"door {door} not supported")}
     if winrm is None:
         return {"ok": False, "error": "pywinrm not installed (`pip install pywinrm`)",
                 "hole": hole(f"{row.get('id')} {skill}", "pywinrm not installed")}
+
+    door = (row.get("door") or "winrm").lower()
+    if door != "winrm":
+        return {"ok": False, "error": f"this skill is Windows-only; door={door}",
+                "hole": hole(f"{row.get('id')} {skill}", f"door {door} not supported")}
 
     payload = QDIR / "windows" / f"{skill}.ps1"
     if not payload.exists():

@@ -203,6 +203,37 @@ def correlate(answers: dict, rows: list) -> dict:
                 "src": wid, "hit_count": data.get("hit_count"),
             })
 
+    # --- 6. brute-force sources (Rev 16) — the block_ip shortlist ---
+    # edges now carries failed_sources: tracked 4625s collapsed to distinct
+    # (src, user) with count + last-seen + substatus. This is the pointer the
+    # old count-only design lacked: the 95.142.115.135 attack hit Administrator,
+    # not the canary, so the observatory had smoke with no name to block.
+    # Severity scales with volume: a single mistyped password (n=1) is info;
+    # sustained guessing is warning; heavy guessing is critical.
+    for key, data in answers.items():
+        if "__edges" not in key:
+            continue
+        wid = key.split("__")[0]
+        for fs in data.get("failed_sources") or []:
+            n = int(fs.get("n") or 0)
+            if n <= 0:
+                continue
+            if n >= 20:
+                sev = "critical"
+            elif n >= 5:
+                sev = "warning"
+            else:
+                sev = "info"
+            findings.append({
+                "kind": "bruteforce_source", "severity": sev,
+                "detail": "%s: %s failed logon(s) for '%s' from %s (type=%s auth=%s substatus=%s last=%s)"
+                          % (wid, n, fs.get("user"), fs.get("src"),
+                             fs.get("type"), fs.get("auth"), fs.get("sub"),
+                             (fs.get("last") or "")[:19]),
+                "src": wid, "source_ip": fs.get("src"),
+                "user": fs.get("user"), "hit_count": n,
+            })
+
     sev_order = {"critical": 0, "warning": 1, "info": 2}
     findings.sort(key=lambda f: sev_order.get(f.get("severity", "info"), 3))
 
@@ -214,23 +245,25 @@ def correlate(answers: dict, rows: list) -> dict:
         # kind -> (rank, why, recommended actuate actions in order)
         "canary_tripped":      (0, "decoy identity touched — near-zero false positive, patient-zero candidate",
                                 ["block_ip", "disable_user", "kill_process"]),
-        "shared-logonid":      (1, "same session on two boxes — stolen credential in active use",
+        "bruteforce_source":   (1, "a named source is guessing a tracked account — block_ip has its target",
+                                ["block_ip"]),
+        "shared-logonid":      (2, "same session on two boxes — stolen credential in active use",
                                 ["disable_user", "block_ip"]),
-        "lateral-hop":         (2, "one witness connecting to another — active movement",
+        "lateral-hop":         (3, "one witness connecting to another — active movement",
                                 ["block_ip", "kill_process"]),
-        "new_admins":          (3, "an account gained admin since baseline",
+        "new_admins":          (4, "an account gained admin since baseline",
                                 ["remove_admin", "disable_user"]),
-        "new_tracked_proc":     (4, "new process running as a tracked principal",
+        "new_tracked_proc":     (5, "new process running as a tracked principal",
                                 ["kill_process", "quarantine_file"]),
-        "witness_blind":       (5, "a witness lost audit visibility — every other answer is suspect",
+        "witness_blind":       (6, "a witness lost audit visibility — every other answer is suspect",
                                 []),  # policy fix, not an actuate action
-        "explicit-cred-to-peer": (6, "explicit credentials used against a peer",
+        "explicit-cred-to-peer": (7, "explicit credentials used against a peer",
                                   ["disable_user"]),
-        "cross-host-account":  (7, "account seen on multiple boxes — could be legitimate admin",
+        "cross-host-account":  (8, "account seen on multiple boxes — could be legitimate admin",
                                 ["disable_user"]),
-        "sysmon_change":       (8, "Sysmon state changed — the tripwire itself moved",
+        "sysmon_change":       (9, "Sysmon state changed — the tripwire itself moved",
                                 []),
-        "new_persistence":      (9, "persistence technique grew since baseline",
+        "new_persistence":      (10, "persistence technique grew since baseline",
                                  ["delete_task", "stop_service", "disable_wmi_sub"]),
     }
     for f in findings:

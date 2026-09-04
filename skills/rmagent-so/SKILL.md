@@ -71,16 +71,16 @@ correlation needed.
 | Script | Role |
 |---|---|
 | `scripts/stc.py` | Security Trace Context — the W3C `traceparent` analog. Context propagates across hosts; event data never does |
-| `scripts/lib.py` | The engine — allowlisted `ask()`, **signal-aware cap**, holes, pywinrm transport, scrt credential fallback, attackmap FP allowlist |
-| `scripts/hunt.py` | The walk — edges → explain → pslogs where smoke; smoke → Telegram. Runs correlate at the end. |
-| `scripts/correlate.py` | Cross-witness join — cross-host-account, lateral-hop (critical), explicit-cred-to-peer, shared-logonid (critical), canary_tripped. **Adds triage ranking + recommended actuate actions.** |
+| `scripts/lib.py` | The engine — allowlisted `ask()`, **signal-aware cap**, holes, pywinrm transport, scrt credential fallback, attackmap FP allowlist. Rev 17: unparseable answers are holes (not clean), credentials never touch `os.environ`, and the **silent-host cooldown** (`mark_silent`/`cooldown_left`) enforces "no tight retry on a silent host" in code |
+| `scripts/hunt.py` | The walk — edges → explain → pslogs where smoke; smoke → Telegram. Runs correlate at the end. Rev 17: skips witnesses in cooldown and records the skip as a hole |
+| `scripts/correlate.py` | Cross-witness join — cross-host-account, lateral-hop (critical), explicit-cred-to-peer, shared-logonid (critical), canary_tripped. **Adds triage ranking + recommended actuate actions.** Rev 17: the shared-logonid join is the (LogonId, user) PAIR within 10 minutes (per-boot coincidences downgrade to info) and the peer match is an exact token, not a substring |
 | `scripts/patient_zero.py` | The backward graph walk with **honest termination** — origin vs retention-boundary vs blind-witness vs no-signal vs cycle |
 | `scripts/drift.py` | Baseline + diff — new_admins (critical), sysmon_change (critical), witness_blind (critical), new_persistence, **canary_tripped (critical)** |
-| `scripts/case.py` | Open / list / close a one-page case. `--ticket PAY-4419` threads a business id through everything. |
+| `scripts/case.py` | Open / list / close a one-page case. `--ticket PAY-4419` threads a business id through everything. Rev 17: `prune --days N` sheds old cases' raw answers (the story is kept) — a lake by accretion is still a lake |
 | `scripts/notify.py` | Telegram helper (token+chat from secrets store). |
 | `scripts/test_enterprise.py` | Pure-logic test suite for all of the above (57 assertions). |
 | `scripts/test_budget.py` | Enforces the WinRM ~8191-char budget on every payload. |
-| `scripts/questions/windows/*.ps1` | The payloads above. Compact — preamble+payload must encode under WinRM's ~8191-char budget (×2.7 for UTF-16LE base64). |
+| `scripts/questions/windows/*.ps1` | The payloads above. Compact — preamble+payload must encode under WinRM's ~8191-char budget (×2.7 for UTF-16LE base64). Rev 17: every event query carries `-MaxEvents` so the DEVICE sheds first (a flood cannot balloon the scan past the timeout), and tracked-name matching is exact on the bare name |
 
 ### The signal-aware cap (Rev 15)
 
@@ -163,11 +163,23 @@ Found live on WS2: the Logon audit policy was Failure-only, so `edges` returned
 report from that box was a silent false negative.
 
 Every `attest` now carries `raw_4624_24h` (unfiltered 4624 count), `blind_check`
-(per-subcategory ok/BLIND/unknown for the six the questions depend on), and
+(per-subcategory ok/BLIND/unknown for the sources the questions depend on), and
 `blind_count` (must be 0). `drift` treats a growing `blind_count` as **critical**.
 
+Rev 17 hardens the check itself:
+- **Locale-invariant.** `auditpol` is parsed by SUBCATEGORY GUID (the `{0CCE...}`
+  column in the CSV), not display name — a non-English Windows no longer reports
+  every entry as `unknown`, which used to make `blind_count=0` and the box look
+  sighted.
+- **Two new sources the questions depend on:** `Process CmdLine` (4688 command-line
+  inclusion — without it `lolbin_spawns.c` is null and the LOLBin detection is
+  decorative) and `ScriptBlock Logging` (4104 — without it `pslogs` is ALWAYS
+  empty). These are the two an attacker is most likely to switch off.
+
 **Standing rule: never trust a "no findings" result until you have confirmed
-the witness can see.** An empty answer is not a clean answer.
+the witness can see.** An empty answer is not a clean answer — and (Rev 17)
+neither is an unparseable one: a payload that fails to emit JSON is a hole,
+not `ok` with a raw blob.
 
 ## Relationship to the other skills
 

@@ -8,7 +8,7 @@ $P='winword.exe|excel.exe|outlook.exe|powerpnt.exe|wscript.exe|cscript.exe|mshta
 $C='powershell|cmd.exe|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|msiexec|wmic|netsh|curl'
 $hits=@(); $lol=@(); $n=0
 $evs=$null
-try{$evs=Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';Id=1;StartTime=$cutoff} -EA SilentlyContinue|Select -First 300}catch{}
+try{$evs=Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';Id=1;StartTime=$cutoff} -MaxEvents 300 -EA SilentlyContinue}catch{}
 if($evs){
   $n=@($evs).Count
   foreach($e in $evs){
@@ -25,7 +25,7 @@ if($evs){
       }
       if($usr -and $il -match $C){
         foreach($t in $Track){
-          if($usr -like "*$t*"){
+          if((($usr -split '\')[-1]) -eq $t){
             $lol+=[pscustomobject]@{proc=$img;user=$usr}
             break
           }

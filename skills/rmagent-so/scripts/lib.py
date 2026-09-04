@@ -30,7 +30,13 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
 ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
-           "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2", "canary"}
+           "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2", "canary",
+           # rmagent-at (application tracing) — Rev 18: these payloads are
+           # shared canonical files and the at AutoLogger sessions are managed
+           # by rmagent-at/scripts/autologger.py. Asking them from so/fr hunts
+           # is legal: the names are allowlisted here and a witness must still
+           # advertise the skill in its inventory row.
+           "apptrace", "appslow", "apperrors", "appnet", "appproc", "appsysmon"}
 PHASE0_SKILLS = ALLOWED
 MAX_PULL_BYTES = 32 * 1024
 WALK_DEPTH = 8
@@ -40,6 +46,11 @@ MAX_CONCURRENT_ATTEND = 3   # census knock pool (all-windows budget)
 ASK_TIMEOUT_SEC = 25
 EXPLAIN_TIMEOUT_SEC = 15 * 60
 COOLDOWN_SEC = 5 * 60
+# REV 17 (H2 companion): ONE transport default for every consumer of this
+# engine (questions AND actuate). 'ntlm' works on AWS Windows with zero
+# server-side changes; 'basic' needs Auth\Basic + AllowUnencrypted on the
+# target. An inventory row can always override with its own transport:.
+DEFAULT_TRANSPORT = "ntlm"
 
 _CREDS_FILE = Path.home() / ".rmagent" / "creds.json"
 
@@ -133,10 +144,20 @@ _SCRT_KEY_MAP = {
     "ws2": "windows-server2-password",
 }
 
+# REV 17 (L1): in-process credential cache. The old code copied the resolved
+# password into os.environ so child processes (scrt, curl) could inherit it —
+# which also exposed it to `ps -E` for the life of the process and leaked it
+# into every subprocess we spawn afterwards. A module-level dict keeps the
+# same "resolve once per process" behaviour without the exposure.
+_CRED_CACHE: dict[str, dict] = {}
+
+
 def creds_for(row: dict) -> dict:
     """Resolve credentials WITHOUT ever printing them.
     Order: env → ~/.rmagent/creds.json → scrt store."""
     rid = (row.get("id") or "").upper()
+    if rid in _CRED_CACHE:
+        return _CRED_CACHE[rid]
     user = os.environ.get(f"RMAgent_{rid}_USER") or row.get("user") or "Administrator"
     pw = os.environ.get(f"RMAgent_{rid}_PASS")
     if not pw and _CREDS_FILE.exists():
@@ -156,7 +177,6 @@ def creds_for(row: dict) -> dict:
         sec = _scrt(_SCRT_KEY_MAP.get((row.get("id") or "").lower(), ""))
         if sec:
             pw = sec
-            os.environ[f"RMAgent_{rid}_PASS"] = pw   # cache for later calls in this process
     if not pw:
         raise SystemExit(
             f"No credential for {row.get('id')}. Set RMAgent_{rid}_PASS / RMAgent_{rid}_USER "
@@ -164,7 +184,9 @@ def creds_for(row: dict) -> dict:
             f"or add key '{_SCRT_KEY_MAP.get((row.get('id') or '').lower(), '?')}' to the scrt store. "
             f"Never put the password in the inventory file."
         )
-    return {"user": user, "password": pw}
+    creds = {"user": user, "password": pw}
+    _CRED_CACHE[rid] = creds  # in-process only — never os.environ
+    return creds
 
 
 # ---------------------------------------------------------------- holes + caps
@@ -335,7 +357,15 @@ def _parse(stdout: str) -> dict:
                 return {"ok": True, "data": json.loads(stdout[i:])}
             except json.JSONDecodeError:
                 pass
-        return {"ok": True, "data": {"raw": stdout[:4000]}}
+        # REV 17 (H4): unparseable output is NOT a clean answer. The old
+        # behaviour returned ok=True with a raw blob — downstream readers did
+        # data.get("logons") -> [] and read a CLEAN box out of a payload that
+        # half-ran. The standing rule is "an empty answer is not a clean
+        # answer"; a garbage answer is even less so. It becomes a hole with
+        # the first 500 chars kept for diagnosis.
+        return {"ok": False, "error": "unparseable answer (payload did not emit JSON)",
+                "hole": hole("unparseable", "payload did not emit JSON; first 500 chars: "
+                                          + stdout[:500])}
 
 
 # ---------------------------------------------------------------- preamble + ask
@@ -419,6 +449,10 @@ def _preamble(row: dict, since_hours: float, limit: int, skill: str = "") -> str
         canaries = []
     c_items = "','".join(str(c).replace("'", "''") for c in canaries if c)
     out += f"$CanaryList = @('{c_items}')\n"
+    # Rev 18 (L5): ONE truncation cap for every message field across all
+    # payloads. The app questions used three different hardcoded caps (160/
+    # 140/180) for the same field; the preamble now owns the constant.
+    out += "$MsgCap = 180\n"
     return out
 
 
@@ -455,7 +489,7 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
     script = _preamble(row, since_hours, limit, skill) + _strip_payload(payload.read_text())
     timeout = _clamp_timeout(skill, timeout)
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
-    transport = row.get("transport") or "basic"
+    transport = row.get("transport") or DEFAULT_TRANSPORT
 
     try:
         session = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
@@ -468,14 +502,17 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
         if isinstance(err, bytes):
             err = err.decode("utf-8", "replace")
         if r.status_code != 0:
+            mark_silent(row.get("id") or "", f"exit {r.status_code}: {(err or out)[-200:]}")
             return _cap_signal({"ok": False, "error": (err or out or "")[-500:] or f"exit {r.status_code}"}, row, skill)
         parsed = _parse(out)
         if skill == "attackmap" and parsed.get("ok") and isinstance(parsed.get("data"), dict):
             parsed["data"] = _filter_attackmap_fps(parsed["data"])
+        clear_silent(row.get("id") or "")   # the witness answered — L2
         return _cap_signal(parsed, row, skill)
     except Exception as e:  # noqa: BLE001 — any transport failure is a hole, not a crash
         msg = str(e).split("\n")[0][:300]
         kind = "timeout" if "timed out" in msg.lower() else "unreachable"
+        mark_silent(row.get("id") or "", f"{kind}: {msg}")   # L2: no tight retry
         return _cap_signal({"ok": False, "error": msg}, row, skill) | {
             "hole": hole(f"{row.get('id')} {skill}", f"{kind}: {msg}")
         }
@@ -518,3 +555,55 @@ class BoundedPool:
 
     def __exit__(self, *a):
         self._sem.release()
+
+
+# ---------------------------------------------------------------- L2: silent-host cooldown
+# The constitution says "no tight retry on a silent host" — but nothing
+# enforced it. A silent (unreachable/timeout) witness now records its last
+# failure time, and mark_silent()/cooldown_left() let walkers skip the box
+# until COOLDOWN_SEC has elapsed. This is a PULL-BUDGET feature, not just
+# etiquette: hammering a box that just timed out burns the same WinRM
+# budget as a real question and teaches the attacker our knock pattern.
+_SILENT_FILE = Path.home() / ".rmagent" / "silent.json"
+
+
+def mark_silent(witness_id: str, why: str) -> None:
+    """Record that a witness went silent (best-effort, never raises)."""
+    try:
+        state = {}
+        if _SILENT_FILE.exists():
+            state = json.loads(_SILENT_FILE.read_text() or "{}")
+        state[witness_id] = {"t": time.time(), "why": (why or "")[:200]}
+        _SILENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _SILENT_FILE.write_text(json.dumps(state))
+        _SILENT_FILE.chmod(0o600)
+    except Exception:
+        pass
+
+
+def cooldown_left(witness_id: str, cooldown_sec: int = COOLDOWN_SEC) -> float:
+    """Seconds remaining in the silent-host cooldown (0 = ask freely)."""
+    try:
+        if not _SILENT_FILE.exists():
+            return 0.0
+        state = json.loads(_SILENT_FILE.read_text() or "{}")
+        rec = state.get(witness_id)
+        if not rec:
+            return 0.0
+        age = time.time() - float(rec.get("t") or 0)
+        return max(0.0, cooldown_sec - age)
+    except Exception:
+        return 0.0
+
+
+def clear_silent(witness_id: str) -> None:
+    """The witness answered — take it out of the silent book (best-effort)."""
+    try:
+        if not _SILENT_FILE.exists():
+            return
+        state = json.loads(_SILENT_FILE.read_text() or "{}")
+        if witness_id in state:
+            del state[witness_id]
+            _SILENT_FILE.write_text(json.dumps(state))
+    except Exception:
+        pass

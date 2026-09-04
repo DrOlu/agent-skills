@@ -18,7 +18,14 @@ import time
 from pathlib import Path
 
 INDEX = Path.home() / ".rmagent" / "hop_index.jsonl"
-INDEX_MAX = 5000  # keep the last 5000 hops (plenty for a mid-size estate, months of cases)
+INDEX_MAX = 5000  # keep the last 5000 hops
+# REV 18 (M4): age-based retention, not just line-count. On a busy estate
+# 5000 lines is a day; the "months of cases" claim was aspirational. Entries
+# older than KEEP_DAYS are shed at the next trim. And because a trimmed index
+# silently answering False to seen_before() was a false negative factory,
+# queries can distinguish "never seen" from "beyond retention".
+KEEP_DAYS = 30
+_oldest_entry_ts: dict = {"t": None}
 
 HOP_KINDS = {"4624", "4648", "4672", "conn", "task", "service", "wmi", "file", "account", "hole"}
 
@@ -67,12 +74,59 @@ def record(case: str, entry_id: int, host: str, principal: str,
 
 
 def _trim() -> None:
+    """Line-count AND age trim (REV 18 M4). O(n) per call is fine at 5000
+    lines but only when needed: skip when both budgets are comfortably clear."""
     try:
+        if not INDEX.exists():
+            return
         lines = INDEX.read_text().splitlines()
-        if len(lines) > INDEX_MAX:
-            INDEX.write_text("\n".join(lines[-INDEX_MAX:]) + "\n")
+        if len(lines) <= INDEX_MAX:
+            # age check is still cheap and keeps the retention promise
+            cutoff = time.time() - KEEP_DAYS * 86400
+            old = 0
+            for l in lines[:50]:
+                try:
+                    ts = json.loads(l).get("t")
+                    from datetime import datetime
+                    if datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() < cutoff:
+                        old += 1
+                except Exception:
+                    old += 1
+            if old == 0:
+                return
+        cutoff = time.time() - KEEP_DAYS * 86400
+        kept = []
+        from datetime import datetime
+        for l in lines:
+            try:
+                ts = json.loads(l).get("t")
+                ok = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() >= cutoff
+            except Exception:
+                ok = True  # unparseable lines are kept (never destroy on a parse error)
+            if ok:
+                kept.append(l)
+        kept = kept[-INDEX_MAX:]
+        if len(kept) < len(lines):
+            INDEX.write_text("\n".join(kept) + "\n")
     except OSError:
         pass
+
+
+def retention_horizon() -> str | None:
+    """The timestamp of the oldest entry the index still holds, or None when
+    empty. seen_before() uses it to answer 'beyond retention' honestly."""
+    try:
+        if not INDEX.exists():
+            return None
+        lines = INDEX.read_text().splitlines()
+        for l in lines:
+            try:
+                return json.loads(l).get("t")
+            except Exception:
+                continue
+    except OSError:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------- queries
@@ -115,8 +169,13 @@ def hosts_for_case(case: str) -> list[str]:
     return sorted({e["host"] for e in by_case(case) if e.get("host")})
 
 
-def seen_before(host: str, principal: str, within_hours: float = 168) -> bool:
-    """Has this principal ever been seen on this host recently (default: 7 days)?"""
+def seen_before(host: str, principal: str, within_hours: float = 168):
+    """Has this principal been seen on this host recently (default: 7 days)?
+
+    REV 18 (M4): returns (seen: bool, honest: bool). honest=False means the
+    answer extends beyond the index's retention horizon — 'False' then means
+    'no record within what I can see', NOT 'never happened'. Callers that
+    need the old bool can use `seen_before(...)[0]`."""
     cutoff = time.time() - (within_hours * 3600)
     for e in by_principal(principal):
         if e.get("host") == host:
@@ -124,10 +183,18 @@ def seen_before(host: str, principal: str, within_hours: float = 168) -> bool:
                 from datetime import datetime, timezone
                 et = datetime.fromisoformat(e["t"].replace("Z", "+00:00")).timestamp()
                 if et >= cutoff:
-                    return True
+                    return True, True
             except (ValueError, KeyError):
                 continue
-    return False
+    # not found — is that an honest answer or a retention boundary?
+    horizon = retention_horizon()
+    try:
+        from datetime import datetime
+        h_ts = datetime.fromisoformat(horizon.replace("Z", "+00:00")).timestamp() if horizon else None
+    except (ValueError, TypeError):
+        h_ts = None
+    honest = bool(h_ts and h_ts <= cutoff)
+    return False, honest
 
 
 def render(entries: list[dict] | None = None) -> str:

@@ -1,13 +1,38 @@
 #!/usr/bin/env python3
 """rmagent-at autologger — enterprise-scale ETW session management.
 
-Creates and manages AutoLogger sessions that start at BOOT and run resident
-in kernel memory. The ring buffer is circular: old events are overwritten,
-nothing hits disk until the pull reads it. No lake.
+Creates and manages AutoLogger sessions that start at BOOT and run resident.
+The ring buffer is circular: old events are overwritten, nothing is retained
+beyond the buffer you chose. No lake.
 
-ENTERPRISE SCALE: the default session uses a 512 MB kernel ring buffer with
-a 256 MB file cap, giving hours-to-days of retention on a busy box instead
-of minutes. Buffer sizes are tunable per session.
+REV 18 — rebuilt against LIVE FACTS from WS1 (2026-09-04):
+
+  C2. The old LogFileMode 0x1004 decoded to FILE_MODE_APPEND |
+      USE_PAGED_MEMORY — a file that grows until MaxFileSize and then the
+      session goes DEAD. That is a lake with a lid, not a ring. All three
+      sessions were found STOPPED with zero ETL files: they never recorded
+      anything. The new mode is 0x2 (EVENT_TRACE_FILE_MODE_CIRCULAR) with
+      MaxFileSize as the ring bound: when full, the OLDEST data is
+      overwritten — a real ring, bounded, on the witness's own disk.
+
+  H1. 4 of 5 provider GUIDs were WRONG (verified against
+      `logman query providers` on WS1):
+        .NET CLR        E13C0D23-CCBC-4E12-931B-D9CC2EEE27E4 (was ...D9CC2EEDB7D1)
+        HTTP.sys        DD5EF90A-6398-47A4-AD34-4DCECDEF795F (was a fabricated GUID)
+        Kernel-Network  7DD42A49-5329-4832-8DFD-43D979153A88 (was correct)
+        Kernel-Process  22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716 (was ...-B0C5-...)
+      The ASP.NET GUID did not exist at all and is dropped; ASP.NET events
+      surface through the CLR provider. A test asserts every configured GUID
+      against the KNOWN_PROVIDERS table.
+
+  Buffer arithmetic fixed: BufferSize is in KB and MinimumBuffers is a COUNT.
+  "512 MB ring" = BufferSize 1024 KB x 512 buffers = 524,288 KB. The old
+  config (1024 x 512) was 512 KB — 1024x smaller than advertised, which
+  rounds to nothing on a busy box.
+
+  L1. Transport default now comes from lib.DEFAULT_TRANSPORT.
+  L2. --setup is MOP-level: it now supports --dry-run (default) and requires
+      --apply for the real change, printing exactly what it will do first.
 
 TRANSPORT NOTE (found live on WS1/WS2, 2026-08-30): Impacket's reg.py
 (C:\\Python314\\Scripts\\reg.py) SHADOWS Windows reg.exe in the WinRM PATH.
@@ -15,15 +40,16 @@ Every bare `reg add` was silently calling Impacket and failing. ALL registry
 writes in this script use the absolute path C:\\Windows\\System32\\reg.exe.
 Same for logman: C:\\Windows\\System32\\logman.exe.
 
-This is a PERSISTENT CHANGE to the witness (registry + boot-time session).
-It is a MOP-level action, not a Phase 0 question. Every function here is
+This is a PERSISTENT change to the witness (registry + boot-time session).
+It is a MOP-level action, not a Phase 0 question. Every change here is
 reversible via `teardown()`.
 
 Usage:
-  python3 autologger.py --inventory estate.yaml --setup          # create sessions
-  python3 autologger.py --inventory estate.yaml --status         # what's running
-  python3 autologger.py --inventory estate.yaml --resize 1024    # grow buffers
-  python3 autologger.py --inventory estate.yaml --teardown       # remove everything
+  python3 autologger.py --inventory estate.yaml --status              # read-only
+  python3 autologger.py --inventory estate.yaml --setup               # DRY-RUN (default)
+  python3 autologger.py --inventory estate.yaml --setup --apply       # the real change
+  python3 autologger.py --inventory estate.yaml --setup --apply --resize 1024
+  python3 autologger.py --inventory estate.yaml --teardown --apply    # remove everything
 """
 from __future__ import annotations
 import argparse, json, sys
@@ -41,66 +67,96 @@ LOGMAN = r"C:\Windows\System32\logman.exe"
 
 REG_BASE = r"HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger"
 
+# REV 18 (H1): provider GUIDs VERIFIED LIVE on WS1 via
+# `logman query providers` (2026-09-04). A test (test_appsysmon.py) asserts
+# every GUID below appears in KNOWN_PROVIDERS with the right label.
+KNOWN_PROVIDERS = {
+    "E13C0D23-CCBC-4E12-931B-D9CC2EEE27E4": "Microsoft-Windows-DotNETRuntime",
+    "DD5EF90A-6398-47A4-AD34-4DCECDEF795F": "Microsoft-Windows-HttpService",
+    "7DD42A49-5329-4832-8DFD-43D979153A88": "Microsoft-Windows-Kernel-Network",
+    "22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716": "Microsoft-Windows-Kernel-Process",
+    "3D6B6687-9ABF-4A72-8A2E-3B1B1E4F1F1A": "(reserved-do-not-use)",
+}
+
 SESSIONS = [
     {
         "name": "RMAgent-AppTrace",
-        "purpose": "application-level events (.NET EventSource, HTTP.sys, IIS)",
-        "buffer_mb": 512,
-        "file_cap_mb": 256,
+        "purpose": "application-level events (.NET CLR runtime, HTTP.sys)",
+        # H1: DotNETRuntime + HttpService, both verified live. The fabricated
+        # "ASP.NET" GUID is gone — ASP.NET events surface via the CLR provider.
         "providers": [
-            "e13c0d23-ccbc-4e12-931b-d9cc2eedb7d1",  # .NET CLR
-            "7b9a21c0-2f55-4e75-b6c1-0b0a5e1f6b6d",  # HTTP.sys
-            "d9d1d5b8-2f5a-4e75-b6c1-0b0a5e1f6b6d",  # ASP.NET
+            "E13C0D23-CCBC-4E12-931B-D9CC2EEE27E4",
+            "DD5EF90A-6398-47A4-AD34-4DCECDEF795F",
         ],
+        "ring_mb": 512,
     },
     {
         "name": "RMAgent-NetTrace",
         "purpose": "connection-level network (every TCP connection with PID)",
-        "buffer_mb": 256,
-        "file_cap_mb": 128,
         "providers": [
-            "7dd42a49-5329-4832-8dfd-43d979153a88",  # Kernel-Network
+            "7DD42A49-5329-4832-8DFD-43D979153A88",
         ],
+        "ring_mb": 256,
     },
     {
         "name": "RMAgent-ProcTrace",
         "purpose": "process lifecycle (create/exit with full command line)",
-        "buffer_mb": 128,
-        "file_cap_mb": 64,
         "providers": [
-            "22fb2cd6-0c7b-422b-b0c5-2e8b9918b978",  # Kernel-Process
+            "22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716",
         ],
+        "ring_mb": 128,
     },
 ]
+
+# C2: a TRUE circular file ring. 0x2 = EVENT_TRACE_FILE_MODE_CIRCULAR.
+# (The old 0x1004 = APPEND | USE_PAGED_MEMORY was a file that fills once
+# and the session dies — never circular, never a ring.)
+LOG_FILE_MODE_CIRCULAR = 0x2
+BUFFER_SIZE_KB = 1024  # each kernel buffer is 1 MB
+
+
+def ring_buffers(ring_mb: int) -> int:
+    """C2 arithmetic: how many BufferSize(1024 KB) buffers make ring_mb.
+
+    The old config passed '512' as MinimumBuffers for a '512 MB' session —
+    that is 512 KB, 1024x too small."""
+    return max(8, (ring_mb * 1024) // BUFFER_SIZE_KB)
 
 
 # ---------------------------------------------------------------- payloads
 
-def _setup_ps(session: dict, buffer_mb: int) -> str:
-    """PowerShell to create one AutoLogger session. Compact for WinRM.
-
-    Uses ABSOLUTE reg.exe path (Impacket shadows it). Errors on the logman
-    call are NOT swallowed — a failed session start must surface.
+def _setup_ps(session: dict, ring_mb: int) -> str:
+    """PowerShell to create one circular AutoLogger session. MUST fit the
+    WinRM ~8191-char encoded-command budget (Rev 8 lesson — this payload is
+    NOT comment-stripped by the engine, so keep it lean; the full lore lives
+    in this docstring):
+      - ABSOLUTE reg.exe/logman.exe paths (Impacket's reg.py shadows reg.exe).
+      - Registry keys configure the BOOT AutoLogger; `logman create` builds a
+        DCS whose OWN config governs at runtime and SHADOWS the registry
+        (found live 2026-09-04: registry circular, query said Circular: Off).
+        Hence the `update -f bincirc -max -o` step — that is what makes the
+        ring circular and puts the file where the questions read.
+      - logman quirks: -p needs {braces}; no -ets (ephemeral); one create per
+        name then `update` for extra providers; verify Circular:On + C:\\etw.
     """
     name = session["name"]
     provs = ",".join(session["providers"])
-    file_cap = session["file_cap_mb"]
+    max_mb = ring_mb  # the circular file IS the ring
+    nbuffers = ring_buffers(ring_mb)
     return f"""
 $ErrorActionPreference='Continue'
 $name='{name}'
 $base='{REG_BASE}\\'+$name
 $REG='{REG}'
-# session root — ABSOLUTE PATH (Impacket's reg.py shadows reg.exe)
 & $REG add $base /v Start /t REG_DWORD /d 1 /f
-& $REG add $base /v MaxFileSize /t REG_DWORD /d 0x{file_cap * 1024 * 1024:x} /f
+& $REG add $base /v MaxFileSize /t REG_DWORD /d {max_mb} /f
 & $REG add $base /v FileName /t REG_SZ /d "C:\\etw\\{name}.etl" /f
-& $REG add $base /v LogFileMode /t REG_DWORD /d 0x1004 /f
-& $REG add $base /v BufferSize /t REG_DWORD /d 1024 /f
-& $REG add $base /v MinimumBuffers /t REG_DWORD /d {buffer_mb} /f
-& $REG add $base /v MaximumBuffers /t REG_DWORD /d {buffer_mb * 2} /f
+& $REG add $base /v LogFileMode /t REG_DWORD /d 0x{LOG_FILE_MODE_CIRCULAR:x} /f
+& $REG add $base /v BufferSize /t REG_DWORD /d {BUFFER_SIZE_KB} /f
+& $REG add $base /v MinimumBuffers /t REG_DWORD /d {nbuffers} /f
+& $REG add $base /v MaximumBuffers /t REG_DWORD /d {nbuffers * 2} /f
 & $REG add $base /v FlushTimer /t REG_DWORD /d 0 /f
 New-Item -ItemType Directory -Path 'C:\\etw' -Force | Out-Null
-# providers
 $provs = '{provs}'.Split(',')
 $i = 0
 foreach($p in $provs){{
@@ -110,47 +166,39 @@ foreach($p in $provs){{
   & $REG add $pk /v MatchAnyKeyword /t REG_QWORD /d 0xffffffffffffffff /f
   $i++
 }}
-# VERIFY the registry writes actually landed (Impacket shadow check)
-$verifyStart = & $REG query $base /v Start 2>&1 | Out-String
-if($verifyStart -notmatch '0x1'){{
-  Write-Output "REGFAIL $name Start not written"
-  exit 1
-}}
-# Create the session ONCE with the first provider, then logman update to add
-# the rest. Calling `create` repeatedly for the same name fails on the 2nd
-# call ("already exists") — that is why the 3-provider AppTrace session
-# ended up Status: Stop while the single-provider sessions worked.
-# FOUR logman quirks found live on WS1/WS2 (2026-08-30):
-#   1. -o is parsed as -outputFormat -> omit it entirely.
-#   2. -p REQUIRES the GUID wrapped in braces; bare GUID = "Element not found".
-#   3. -ets makes the session EPHEMERAL (invisible to logman query). Create
-#      WITHOUT -ets, then `logman start <name>`.
-#   4. One create per name; additional providers go in via `logman update`.
+$vm = & $REG query $base /v LogFileMode 2>&1 | Out-String
+if($vm -notmatch '0x2'){{ Write-Output "REGFAIL $name not circular"; exit 1 }}
 $first = $provs[0]
-& '{LOGMAN}' create trace $name -p "{{$first}}" 2>&1 | Out-Null
-if($LASTEXITCODE -ne 0){{
-  Write-Output "LMFAIL $name logman create failed"
+$exists = (& '{LOGMAN}' query $name 2>&1 | Out-String) -notmatch '(?i)not found'
+if(-not $exists){{
+  & '{LOGMAN}' create trace $name -p "{{$first}}" 0xffffffffffffffff 0xff 2>&1 | Out-Null
+  if($LASTEXITCODE -ne 0){{ Write-Output "LMFAIL $name create"; exit 1 }}
+}}
+# the DCS config governs at runtime and shadows the registry — set it here
+# -r = run CONTINUOUSLY (restart into a new segment when full): without it a
+# circular session fills segment 1 and STOPS (found live: 512 MB file, Stopped).
+# FOUND LIVE: providers added via -p default to Level 0 / Keywords 0x0 = capture
+# NOTHING (NetTrace recorded one empty event in 20 min). Every provider must
+# be re-applied with its keyword mask (0xffffffffffffffff) and level (0xff).
+& '{LOGMAN}' update trace $name -f bincirc -max {max_mb} -o "C:\\etw\\{name}.etl" -r 2>&1 | Out-Null
+if($LASTEXITCODE -ne 0){{ Write-Output "LMFAIL $name bincirc"; exit 1 }}
+foreach($p in $provs){{
+  & '{LOGMAN}' update trace $name -p "{{$p}}" 0xffffffffffffffff 0xff 2>&1 | Out-Null
+}}
+$q = & '{LOGMAN}' query $name 2>&1 | Out-String -Width 400
+if($q -notmatch '(?i)Running'){{ & '{LOGMAN}' start $name 2>&1 | Out-Null; Start-Sleep 2 }}
+$q = & '{LOGMAN}' query $name 2>&1 | Out-String -Width 400
+if(($q -notmatch '(?i)Running') -or ($q -notmatch '(?i)Circular:[ ]*On') -or ($q -notmatch 'C:[/\\\\]+etw')){{
+  Write-Output "LMFAIL $name state: $(($q -split \"`n\" | Select-String 'Status|Circular|Output') -join ' | ')"
   exit 1
 }}
-# add the remaining providers via update (a no-op when there is only one)
-if($provs.Count -gt 1){{
-  foreach($p in $provs | Select-Object -Skip 1){{
-    & '{LOGMAN}' update trace $name -p "{{$p}}" 2>&1 | Out-Null
-  }}
-}}
-& '{LOGMAN}' start $name 2>&1 | Out-Null
-# HARD VERIFY: the session must actually exist and be running
-$q = & '{LOGMAN}' query $name 2>&1 | Out-String
-if(($q -notmatch '(?i)Running') -or ($q -match '(?i)not found')){{
-  Write-Output "LMFAIL $name session not running after start"
-  exit 1
-}}
-Write-Output "SETUP $name buffers={buffer_mb}MB providers=$i"
+Write-Output "SETUP $name ring={max_mb}MB buffers={nbuffers}x{BUFFER_SIZE_KB}KB providers=$i mode=circular"
 """.strip()
 
 
 def _status_ps() -> str:
-    """Status with ABSOLUTE reg.exe path and real running check."""
+    """Status with ABSOLUTE reg.exe path, running check, file size + age.
+    L3: wide Out-String so reg query output cannot wrap mid-value."""
     return f"""
 $ErrorActionPreference='SilentlyContinue'
 $REG='{REG}'
@@ -158,43 +206,63 @@ $LM='{LOGMAN}'
 $out=@()
 foreach($n in @('RMAgent-AppTrace','RMAgent-NetTrace','RMAgent-ProcTrace')){{
   $base='{REG_BASE}\\'+$n
-  $start=(& $REG query $base /v Start 2>$null | Out-String) -replace '.*REG_DWORD\s+',''
-  $buf=(& $REG query $base /v MinimumBuffers 2>$null | Out-String) -replace '.*REG_DWORD\s+',''
-  $q = & $LM query $n 2>&1 | Out-String
+  $mode=(& $REG query $base /v LogFileMode 2>$null|Out-String -Width 400) -replace '(?s).*REG_DWORD[ ]+',''
+  $max=(& $REG query $base /v MaxFileSize 2>$null|Out-String -Width 400) -replace '(?s).*REG_DWORD[ ]+',''
+  $buf=(& $REG query $base /v MinimumBuffers 2>$null|Out-String -Width 400) -replace '(?s).*REG_DWORD[ ]+',''
+  $q = & $LM query $n 2>&1 | Out-String -Width 400
   $running = ($q -match '(?i)Running') -and ($q -notmatch '(?i)not found')
-  $out += [pscustomobject]@{{name=$n;start=$start.Trim();buffer_mb=$buf.Trim();running=$running}}
+  $f = Get-Item "C:\\\\etw\\$n.etl" -ErrorAction SilentlyContinue
+  $out += [pscustomobject]@{{name=$n;running=$running;mode=$mode.Trim();
+    ring_mb=if($max.Trim()){{[int]'0'+$max.Trim()}}else{{$null}};
+    min_buffers=$buf.Trim();buf_total_mb=if($buf.Trim()){{[math]::Round(([int]'0'+$buf.Trim())*1024/1024,0)}}else{{$null}};
+    file_mb=if($f){{[math]::Round($f.Length/1MB,1)}}else{{$null}};
+    file_mtime=if($f){{$f.LastWriteTime.ToString('o')}}else{{$null}}}}
 }}
 $out | ConvertTo-Json -Compress
 """.strip()
 
 
 def _teardown_ps() -> str:
-    """Teardown with ABSOLUTE paths. Persistent sessions: stop WITHOUT -ets
-    (the -ets flag only applies to ephemeral sessions), then delete."""
+    """Teardown with ABSOLUTE paths. Found live (2026-09-04): a single
+    stop+delete leaves the DCS behind when the trace subcollector is still
+    finishing — 'Data Collector already exists' on the next setup. So:
+    stop, poll until not Running, delete, re-delete the -ets ghost, and
+    VERIFY by DCS existence (not the registry key, which always deletes)."""
     return f"""
 $ErrorActionPreference='Continue'
 $REG='{REG}'
 $LM='{LOGMAN}'
 foreach($n in @('RMAgent-AppTrace','RMAgent-NetTrace','RMAgent-ProcTrace')){{
-  # persistent Data Collector Set: stop + delete WITHOUT -ets
+  # stop (both forms), then WAIT until it is actually not Running
   & $LM stop $n 2>&1 | Out-Null
-  & $LM delete $n 2>&1 | Out-Null
-  # also try the -ets form in case an ephemeral one is left over
   & $LM stop $n -ets 2>&1 | Out-Null
-  & $LM delete $n -ets 2>&1 | Out-Null
+  for($w=0; $w -lt 10; $w++){{
+    $q = & $LM query $n 2>&1 | Out-String -Width 400
+    if(($q -notmatch '(?i)Running') -or ($q -match '(?i)not found')){{ break }}
+    Start-Sleep -Milliseconds 500
+  }}
+  # delete (both forms), twice — the first can fail against a stopping DCS
+  for($d=0; $d -lt 3; $d++){{
+    & $LM delete $n 2>&1 | Out-Null
+    & $LM delete $n -ets 2>&1 | Out-Null
+    $q = & $LM query $n 2>&1 | Out-String -Width 400
+    if($q -match '(?i)not found'){{ break }}
+    Start-Sleep -Milliseconds 500
+  }}
   & $REG delete ('{REG_BASE}\\'+$n) /f 2>&1 | Out-Null
-  Remove-Item "C:\\etw\\$n.etl" -Force -ErrorAction SilentlyContinue
+  Remove-Item "C:\\etw\\$n*.etl" -Force -ErrorAction SilentlyContinue
   Remove-Item "C:\\PerfLogs\\Admin\\$n*.etl" -Force -ErrorAction SilentlyContinue
 }}
-# VERIFY teardown actually removed the keys
+# VERIFY by DCS existence + registry + files
 $left = @()
 foreach($n in @('RMAgent-AppTrace','RMAgent-NetTrace','RMAgent-ProcTrace')){{
-  $q = & $REG query ('{REG_BASE}\\'+$n) /v Start 2>&1 | Out-String
-  if($q -match '0x1'){{ $left += $n }}
-  # also check the session is really gone
-  $s = & $LM query $n 2>&1 | Out-String
-  if($s -match '(?i)Running'){{ $left += $n }}
+  $q = & $LM query $n 2>&1 | Out-String -Width 400
+  if($q -notmatch '(?i)not found'){{ $left += $n + ' (dcs)' }}
+  $r = & $REG query ('{REG_BASE}\\'+$n) 2>&1 | Out-String -Width 400
+  if($r -match 'REG_DWORD'){{ $left += $n + ' (reg)' }}
 }}
+$etl = Get-ChildItem 'C:\\etw' -Filter 'RMAgent-*.etl' -EA SilentlyContinue
+if($etl){{ $left += 'etl-files' }}
 if($left.Count -gt 0){{
   Write-Output "TDFAIL left=$($left -join ',')"
   exit 1
@@ -206,11 +274,11 @@ Write-Output 'TORN DOWN'
 # ---------------------------------------------------------------- driver
 
 def run_ps(row: dict, script: str) -> dict:
-    """Send a PowerShell script to a WinRM witness."""
+    """Send a PowerShell script to a WinRM witness. L1: transport from lib."""
     import winrm as _winrm
     creds = lib.creds_for(row)
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
-    transport = row.get("transport") or "basic"
+    transport = row.get("transport") or lib.DEFAULT_TRANSPORT
     session = _winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
                              transport=transport)
     r = session.run_ps(script)
@@ -219,17 +287,43 @@ def run_ps(row: dict, script: str) -> dict:
     return {"ok": r.status_code == 0, "stdout": out.strip(), "stderr": err.strip()[:500]}
 
 
+def describe_setup(session: dict, ring_mb: int) -> str:
+    """L2: the dry-run plan line for one session."""
+    provs = ", ".join(KNOWN_PROVIDERS.get(p, p) for p in session["providers"])
+    return (f"  {session['name']}: circular ring {ring_mb} MB "
+            f"({ring_buffers(ring_mb)} buffers x {BUFFER_SIZE_KB} KB), "
+            f"file C:\\etw\\{session['name']}.etl, providers: {provs}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="rmagent-at autologger management (MOP-level)")
     ap.add_argument("--inventory", required=True)
     ap.add_argument("--setup", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--teardown", action="store_true")
-    ap.add_argument("--resize", type=int, default=None, metavar="MB")
+    ap.add_argument("--resize", type=int, default=None, metavar="MB",
+                    help="ring size in MB (default per session: 512/256/128)")
+    # L2: MOP discipline — dry-run is the default, --apply mutates
+    ap.add_argument("--apply", action="store_true",
+                    help="actually create/tear down (default is a dry-run plan)")
     args = ap.parse_args()
 
     if not (args.setup or args.status or args.teardown):
         ap.error("choose --setup, --status, or --teardown")
+    if (args.setup or args.teardown) and not args.apply:
+        # L2: describe exactly what would happen, touch nothing
+        print("[dry-run] autologger would make the following PERSISTENT changes:")
+        print("  registry: " + REG_BASE + r"\<session> (Start, LogFileMode=0x2 circular,")
+        print("            MaxFileSize=ring MB, BufferSize/MinimumBuffers/MaximumBuffers,")
+        print("            one subkey per provider GUID) + C: etw directory (C:\\etw\\)")
+        print("  logman:   create + start each session (boot-persistent AutoLogger)")
+        print("  undo    : --teardown --apply (stops sessions, deletes keys, removes files)")
+        print()
+        for sess in SESSIONS:
+            buf = args.resize if args.resize else sess["ring_mb"]
+            print(describe_setup(sess, buf))
+        print("\nRe-run with --apply to make the change. --status is always read-only.")
+        return
 
     inv = lib.load_inventory(args.inventory)
     rows = lib.witnesses(inv)
@@ -238,7 +332,7 @@ def main():
         wid = row.get("id")
         if args.status:
             res = run_ps(row, _status_ps())
-            print(f"[{wid}] {res.get('stdout','')[:300]}")
+            print(f"[{wid}] {res.get('stdout','')[:600]}")
             continue
         if args.teardown:
             res = run_ps(row, _teardown_ps())
@@ -247,7 +341,7 @@ def main():
             continue
         if args.setup:
             for sess in SESSIONS:
-                buf = args.resize if args.resize else sess["buffer_mb"]
+                buf = args.resize if args.resize else sess["ring_mb"]
                 script = _setup_ps(sess, buf)
                 res = run_ps(row, script)
                 line = res.get("stdout", "")

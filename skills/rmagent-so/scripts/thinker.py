@@ -48,6 +48,13 @@ METRICS = [
 PERSISTENT = [
     ("admin_failed_60s", ">", 0, "failed admin logons continuing"),
     ("sysmon_status", "not_running", "Running", "Sysmon not running"),
+    # REV 18 (M1): the thinker can now see blindness. A witness that reports
+    # blind_count > 0 on consecutive censuses is a critical finding —
+    # every other question it answers is suspect while blind.
+    ("blind_count", ">", 0, "witness is AUDIT-BLIND (auditpol subcategory off) "
+                            "— every other answer from it is suspect"),
+    ("raw_4624_24h", "==", 0, "no 4624 events in 24h — log rolled, policy "
+                              "changed, or the box is lying about being alive"),
 ]
 
 
@@ -148,10 +155,14 @@ def think(history: list[dict]) -> list[dict]:
                     # --- z-score: 3σ deviation from this host's own rolling baseline ---
                     # A box that always has 20 failed logons (noisy service) stops firing.
                     # A box that suddenly has 5 (normally 0) fires loudly.
-                    # Needs >= 8 samples so the mean/std mean something.
-                    if len(vals) >= 8:
+                    # REV 18 (L6): the baseline needs n >= 30 to make σ meaningful.
+                    # The old floor of 8 let a "3σ" fire on 8 points — where a single
+                    # outlier IS the σ, so the "3σ" was arithmetic, not evidence, and
+                    # the zero-variance branch fired on any 8 identical values.
+                    # n >= 30 is the standard minimum for a stable sample std-dev.
+                    if len(vals) >= 30:
                         nums = [v for v in vals[:-1] if isinstance(v, (int, float))]
-                        if len(nums) >= 8:
+                        if len(nums) >= 30:
                             mean = sum(nums) / len(nums)
                             var = sum((x - mean) ** 2 for x in nums) / len(nums)
                             std = var ** 0.5
@@ -200,7 +211,10 @@ def think(history: list[dict]) -> list[dict]:
                     "values": vals[-3:],
                     "what": f"{desc} on {w} for {len(vals[-3:])} consecutive censuses "
                             f"(values: {vals[-3:]})",
-                    "severity": "high",
+                    # REV 18 (M1): blindness is CRITICAL at any threshold — a
+                    # blind witness's clean answers lie, so it outranks the
+                    # generic persistence finding.
+                    "severity": "critical" if key == "blind_count" else "high",
                 })
             elif op == "not_running" and all(
                     isinstance(v, str) and "Running" not in v for v in vals[-3:]):

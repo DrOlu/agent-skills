@@ -26,12 +26,15 @@ src = (Path(__file__).resolve().parent / "questions/windows/edges.ps1").read_tex
 ok("Id=4625" in src, "reads 4625")
 ok("failed_sources" in src, "emits failed_sources")
 ok("SubStatus" in src, "captures substatus (wrong-pw vs disabled vs locked)")
-ok("Sort-Object n -Descending" in src, "sorted by count, worst source first")
-ok("Select-Object -First $Limit" in src.split("4625")[1].split("4648")[0],
+ok("sort n -Descending" in src or "Sort-Object n -Descending" in src,
+   "sorted by count, worst source first")
+sec = src.split("4625")[1].split("4648")[0]
+ok("Select-Object -First $Limit" in sec or "select -First $Limit" in sec,
    "distinct sources capped at $Limit")
 # the collapse: one entry per (src,user) key, not per event
 ok("$g.ContainsKey($k)" in src, "collapses to distinct (src,user) — one row per source")
-ok("TT $_" in src.split("Id=4625")[1].split("4648")[0], "failures are TRACK-filtered (not a lake)")
+ok(("TT $_" in src or "? TT" in src) and "TT" in src.split("Id=4625")[1].split("4648")[0],
+   "failures are TRACK-filtered (not a lake)")
 
 # ---- 2. budget ----
 print("\n== 2. WinRM budget ==")

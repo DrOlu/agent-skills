@@ -5,7 +5,7 @@
 $now=[DateTime]::UtcNow.ToString('o'); $hn=$env:COMPUTERNAME
 $sh=${SinceHours:2}; $cutoff=(Get-Date).AddHours(-[double]$sh)
 $long=@(); $entropic=@(); $tlds=@(); $vol=@(); $n=0
-try{$evs=Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';Id=22;StartTime=$cutoff} -EA SilentlyContinue|Select -First 500
+try{$evs=Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Sysmon/Operational';Id=22;StartTime=$cutoff} -MaxEvents 500 -EA SilentlyContinue
 $n=@($evs).Count
 $domCount=@{}
 foreach($e in $evs){

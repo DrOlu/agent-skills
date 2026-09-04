@@ -32,7 +32,8 @@ def _record_history(t: str, wid: str, d: dict | None):
         entry = {"t": t, "witness": wid}
         if d:
             for k in ("admin_failed_60s", "admin_ok_5min", "local_admin_count",
-                      "sys_remote_conns", "sysmon_status"):
+                      "sys_remote_conns", "sysmon_status",
+                      "blind_count", "raw_4624_24h"):   # REV 18 (M1)
                 entry[k] = d.get(k)
         else:
             entry["silent"] = True
@@ -50,7 +51,18 @@ def _record_history(t: str, wid: str, d: dict | None):
 def knock(row, case_dir):
     res = lib.ask(row, "attest", since_hours=0.05, limit=10, timeout=lib.ASK_TIMEOUT_SEC)
     lib.record_ask(case_dir, row, "attest", res)
-    return row.get("id"), res
+    wid = row.get("id")
+    # REV 18 (M2): the census/cooldown contract. Census is the CHEAPEST knock
+    # (one attest, 1/min) and runs before any hunt, so it owns the silent-host
+    # book: a successful knock CLEARS the witness's L2 cooldown (lib.ask does
+    # it) and a miss MARKS it. One missed knock does not blind the next hunt
+    # for COOLDOWN_SEC — the hunt defers to whichever census ran last.
+    # COOLDOWN_SEC (5 min) >= 2x the census interval by design.
+    if res.get("ok"):
+        lib.clear_silent(wid)
+    else:
+        lib.mark_silent(wid, (res.get("hole") or {}).get("why") or res.get("error") or "census miss")
+    return wid, res
 
 
 def main():

@@ -64,6 +64,14 @@ def _resolve_dest(dest_str, rows):
 def _walk_witness(row, stc, T, case_dir, since_h, args, visited, rows=None):
     """Recursively walk a witness reached via a 4648 hop. Budget-capped by the STC."""
     wid = row.get("id")
+    # L2 (Rev 17): no tight retry on a silent host. A box that just timed out
+    # gets COOLDOWN_SEC before we knock again — the walk records a hole and
+    # moves on instead of burning the WinRM budget on a dead door.
+    cd = lib.cooldown_left(wid)
+    if cd > 0:
+        T.hole(wid, f"silent-host cooldown: {int(cd)}s remaining from the last failed knock")
+        write_hole(case_dir, lib.hole(f"{wid} walk", f"cooldown {int(cd)}s (silent host)"))
+        return
     T.think(f"following hop to {wid} (depth {stc.depth}, fanout {stc.fanout})")
     try:
         res = lib.ask(row, "edges", since_hours=since_h, limit=args.limit)
@@ -116,6 +124,24 @@ def main():
                          "so one case serves both 'who walked?' and 'which request?'")
     ap.add_argument("--trigger", default="manual", choices=["manual","scheduled","alert","drill","backfill"], help="what started this hunt")
     args = ap.parse_args()
+
+    # REV 18 (H4): inherit ticket/trigger/app_trace_id from case.json when the
+    # CLI did not pass them. `case.py open --ticket PAY-4419` now makes the
+    # ticket flow into every hunt against that case dir without retyping it —
+    # the old flow dropped the ticket at case-open.
+    if not (args.ticket or args.app_trace_id or args.trigger != "manual"):
+        meta_path = Path(args.case_dir) / "case.json"
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+                args.ticket = args.ticket or meta.get("ticket")
+                args.app_trace_id = args.app_trace_id or meta.get("app_trace_id")
+                if args.trigger == "manual" and meta.get("trigger"):
+                    args.trigger = meta["trigger"]
+                if args.ticket:
+                    print(f"[hunt] inherited ticket {args.ticket} from case.json")
+            except Exception:
+                pass
 
     def to_hours(s):
         s = s.strip()
@@ -232,6 +258,14 @@ def main():
     for r in rows:
         seq += 1
         wid = r.get("id")
+        # L2 (Rev 17): skip a witness still in its silent-host cooldown
+        cd = lib.cooldown_left(wid)
+        if cd > 0:
+            h = lib.hole(f"{wid} hunt", f"silent-host cooldown: {int(cd)}s remaining")
+            write_hole(case_dir, h)
+            T.hole(wid, h["why"])
+            print(f"  {wid:8} SKIPPED — {h['why']}")
+            continue
         T.think(f"Asking {wid}: edges — who did they touch?")
 
         # edges — who did this witness touch?

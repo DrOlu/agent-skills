@@ -20,7 +20,7 @@ Pure post-processing: re-uses answers already pulled by hunt.py when a case-dir
 with answers/ is given; otherwise pulls edges/netedges itself.
 """
 from __future__ import annotations
-import argparse, json, sys, time
+import argparse, json, re, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -136,6 +136,9 @@ def correlate(answers: dict, rows: list) -> dict:
                 })
 
     # --- 3. explicit-credential use targeting a peer box ---
+    # Rev 17 (M2): EXACT token match. The old substring test made
+    # 10.0.0.1 match 10.0.0.10 — a lateral-movement pointer that was
+    # sometimes a string accident.
     for key, data in answers.items():
         if "__edges" not in key:
             continue
@@ -145,11 +148,12 @@ def correlate(answers: dict, rows: list) -> dict:
                       or ec.get("TargetServerName") or "").strip()
             if not target:
                 continue
+            t_tokens = set(re.split(r"[\\/,;:\s]+", target.lower()))
             for other_id, r in by_id.items():
                 if other_id == src:
                     continue
-                other_addr = (r.get("address") or "").strip()
-                if other_addr and other_addr in target:
+                other_addr = (r.get("address") or "").strip().lower()
+                if other_addr and other_addr in t_tokens:
                     findings.append({
                         "kind": "explicit-cred-to-peer",
                         "severity": "warning",
@@ -159,6 +163,11 @@ def correlate(answers: dict, rows: list) -> dict:
                     })
 
     # --- 4. same LogonId on two boxes (stolen session / PTH) ---
+    # Rev 17 (M2): LogonIds are per-host counters — two boxes that booted at
+    # similar times share low values routinely, and a lid-only join produced
+    # a CRITICAL finding out of a string accident. Now the join is the
+    # (lid, user) PAIR, and both hosts must have seen that pair inside the
+    # window. TargetLinkedLogonId/SubjectLogonId are preferred when present.
     logonid_hosts = {}
     for key, data in answers.items():
         if "__edges" not in key:
@@ -166,16 +175,39 @@ def correlate(answers: dict, rows: list) -> dict:
         wid = key.split("__")[0]
         for lg in data.get("logons") or []:
             lid = _logon_lid(lg)
-            if lid and lid not in ("0x0", "0x3e7"):
-                logonid_hosts.setdefault(lid, set()).add(wid)
-    for lid, hosts in logonid_hosts.items():
+            user = _logon_user(lg)
+            if lid and lid not in ("0x0", "0x3e7") and user:
+                # the linked (original) logon id is the stronger join key
+                link = (lg.get("link") or lg.get("TargetLinkedLogonId")
+                        or lg.get("SubjectLogonId") or "").strip()
+                pair = (link or lid, user.lower())
+                logonid_hosts.setdefault(pair, set()).add((wid, lg.get("t")))
+    for (lid, user), hits in logonid_hosts.items():
+        hosts = {w for w, _ in hits}
         if len(hosts) > 1:
+            # Rev 17 (M2): both observations must be temporally CLOSE for this
+            # to be one session on two boxes. Two boxes that booted at similar
+            # times mint the same low LogonId for the same user weeks apart —
+            # that is a coincidence, not PTH. 10 minutes is the window.
+            ts = sorted(t for _, t in hits if t)
+            close = True
+            if len(ts) >= 2:
+                try:
+                    from datetime import datetime
+                    t0 = datetime.fromisoformat(ts[0].replace("Z", "+00:00"))
+                    t1 = datetime.fromisoformat(ts[-1].replace("Z", "+00:00"))
+                    close = abs((t1 - t0).total_seconds()) <= 600
+                except (ValueError, TypeError):
+                    close = True  # unparseable timestamps — do not downgrade on a parse error
             findings.append({
                 "kind": "shared-logonid",
-                "severity": "critical",
-                "detail": "LogonId %s appears on %d witnesses (%s) — same session on two boxes"
-                          % (lid, len(hosts), ", ".join(sorted(hosts))),
-                "logon_id": lid, "hosts": sorted(hosts),
+                "severity": "critical" if close else "info",
+                "detail": "LogonId %s for '%s' appears on %d witnesses (%s)%s"
+                          % (lid, user, len(hosts), ", ".join(sorted(hosts)),
+                             " — same session on two boxes" if close
+                             else " — observations far apart; likely per-boot coincidence"),
+                "logon_id": lid, "account": user, "hosts": sorted(hosts),
+                "observed_at": ts,
             })
 
     # --- 5. canary tripwire (Rev 15) — any hit is critical, no correlation needed ---

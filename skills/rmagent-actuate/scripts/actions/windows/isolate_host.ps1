@@ -1,52 +1,74 @@
-# isolate_host — enable all Windows Firewall profiles with a default BLOCK
-# inbound rule, while keeping the WinRM management port open so the operator
-# can still reach the box (and undo).
+# isolate_host — block ALL inbound via the profile DEFAULT, not a Block rule.
 #
-# This is the containment action that was missing: quarantine_file stops one
-# binary but a live implant keeps running. Isolation stops the LATERAL
-# MOVEMENT without powering the host off — evidence is preserved.
+# REV 17 (C2) — the old design was a lockout: it created an explicit
+# BlockInbound rule and a separate Allow rule for WinRM 5985/5986. Windows
+# Firewall evaluates explicit BLOCK rules BEFORE explicit Allow rules, so
+# the WinRM allow was overridden — the operator (and the undo) could never
+# reach the box again. It had only ever been dry-run, so nobody was locked
+# out, but the action whose undo MUST work was the one that couldn't.
 #
-# Reversible: un-isolate removes the block rules and restores the previous
-# profile states (captured in the journal by the verify payload).
+# The new design does not fight rule precedence. The profile DEFAULT inbound
+# action is evaluated AFTER all allow rules, so:
+#   1. journal the current DefaultInboundAction per profile + the names of
+#      enabled inbound Allow rules (names only — small, no lake)
+#   2. create RMAgent-Isolate-AllowWinRM FIRST (an allow rule beats the
+#      profile default)
+#   3. set every profile's DefaultInboundAction to Block
+#   4. disable every OTHER enabled inbound Allow rule (so the default
+#      actually applies) — names captured in step 1 let the undo re-enable
+#      exactly what was there before
+#
+# Outbound is left alone (allow-by-default; blocking it would kill evidence
+# collection and C2 beaconing we WANT to observe).
 #
 # $Target is unused (whole-host action); pass 'host'.
-$prev = @{}
+$ErrorActionPreference = 'Stop'
 try {
-  Get-NetFirewallProfile | ForEach-Object { $prev[$_.Name] = $_.Enabled }
-} catch {}
-
-# enable every profile
-try { Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True } catch {}
-
-# default-deny inbound, allow established outbound (keeps evidence collection
-# and the management door working)
-try {
-  if (-not (Get-NetFirewallRule -DisplayName 'RMAgent-Isolate-BlockInbound' -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName 'RMAgent-Isolate-BlockInbound' -Direction Inbound -Action Block -Profile Any |
-      Out-Null
+  # --- 1. capture the pre-state (goes to the journal via result_detail) ---
+  $prevDefault = @{}
+  foreach ($p in (Get-NetFirewallProfile -ErrorAction Stop)) {
+    $prevDefault[$p.Name] = [string]$p.DefaultInboundAction
   }
-  if (-not (Get-NetFirewallRule -DisplayName 'RMAgent-Isolate-AllowEstablished' -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName 'RMAgent-Isolate-AllowEstablished' -Direction Outbound -Action Allow `
-      -Protocol TCP -RemotePort Any -ErrorAction SilentlyContinue | Out-Null
-  }
-} catch {}
+  $prevAllowRules = @()
+  $prevAllowRules = @(Get-NetFirewallRule -Direction Inbound -Action Allow -ErrorAction SilentlyContinue |
+    Where-Object { $_.Enabled -eq 'True' } |
+    ForEach-Object { $_.DisplayName })
 
-# keep the WinRM door open so undo/verify can reach the host
-try {
+  # --- 2. WinRM allow FIRST — an allow rule outranks the profile default ---
   if (-not (Get-NetFirewallRule -DisplayName 'RMAgent-Isolate-AllowWinRM' -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule -DisplayName 'RMAgent-Isolate-AllowWinRM' -Direction Inbound -Action Allow `
       -Protocol TCP -LocalPort 5985,5986 -Profile Any | Out-Null
   }
-} catch {}
 
-$now_enabled = @{}
-try { Get-NetFirewallProfile | ForEach-Object { $now_enabled[$_.Name] = $_.Enabled } } catch {}
+  # --- 3. every profile ON with a Block default inbound ---
+  Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+  Set-NetFirewallProfile -Profile Domain,Public,Private -DefaultInboundAction Block
 
-[pscustomobject]@{
-  ok=$true; action='isolate_host'; host=$env:COMPUTERNAME
-  previous_profiles=($prev | ConvertTo-Json -Compress)
-  now_profiles=($now_enabled | ConvertTo-Json -Compress)
-  block_rule='RMAgent-Isolate-BlockInbound'
-  winrm_kept_open=$true
-  note='inbound blocked, WinRM 5985/5986 kept open so undo can reach the host'
-} | ConvertTo-Json -Compress
+  # --- 4. disable every other inbound allow so the default takes effect ---
+  $disabled = @()
+  foreach ($r in (Get-NetFirewallRule -Direction Inbound -Action Allow -ErrorAction SilentlyContinue)) {
+    if ($r.Enabled -eq 'True' -and $r.DisplayName -ne 'RMAgent-Isolate-AllowWinRM') {
+      Disable-NetFirewallRule -DisplayName $r.DisplayName -ErrorAction SilentlyContinue
+      $disabled += $r.DisplayName
+    }
+  }
+
+  # --- verify what we actually observe, not what we intended ---
+  $nowDefault = @{}
+  foreach ($p in (Get-NetFirewallProfile)) { $nowDefault[$p.Name] = [string]$p.DefaultInboundAction }
+  $winrmOpen = [bool](Get-NetFirewallRule -DisplayName 'RMAgent-Isolate-AllowWinRM' -ErrorAction SilentlyContinue)
+  $isolated = ($nowDefault.Values | Where-Object { $_ -ne 'Block' }).Count -eq 0 -and $winrmOpen
+
+  [pscustomobject]@{
+    ok=$true; action='isolate_host'; host=$env:COMPUTERNAME
+    previous_default_inbound=($prevDefault | ConvertTo-Json -Compress)
+    previous_allow_rules=($prevAllowRules | Select-Object -First 200)
+    disabled_allow_rules=($disabled | Select-Object -First 200)
+    now_default_inbound=($nowDefault | ConvertTo-Json -Compress)
+    winrm_rule_present=$winrmOpen
+    status= if($isolated){'isolated'}else{'partial'}
+    note='inbound blocked via profile default; WinRM 5985/5986 allowed by rule (beats the default); undo re-enables the journaled rules'
+  } | ConvertTo-Json -Compress -Depth 4
+} catch {
+  [pscustomobject]@{ok=$false; action='isolate_host'; error="$($_.Exception.Message)"} | ConvertTo-Json -Compress
+}

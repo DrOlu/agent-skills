@@ -135,8 +135,15 @@ class STC:
     # ---------------------------------------------------------------- ids
     @property
     def trace_id(self) -> str:
-        """OTel-compatible trace id (32 hex chars) derived from the case id."""
-        return self.case.replace("-", "").replace("_", "")[:32].ljust(32, "0")
+        """OTel-compatible trace id (32 hex chars) derived from the case id.
+
+        REV 18 (M3): the old derivation was case.replace('-','')[:32] — two
+        cases opened in the same second collided, and the hunt default case
+        name ('admin-walk') mapped EVERY default hunt to the same trace id,
+        so Grafana merged unrelated walks into one waterfall. Now: sha256 of
+        the case id, hex-truncated to 32 — stable, unique per case name."""
+        import hashlib
+        return hashlib.sha256(self.case.encode()).hexdigest()[:32]
 
     def span_id(self, entry_id: int) -> str:
         """OTel-compatible span id (16 hex chars) derived from a trajectory entry id."""

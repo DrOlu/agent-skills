@@ -69,15 +69,28 @@ chose. It is a ring, not a warehouse.
 
 ## The sessions
 
-| Session | Purpose | Default buffer | Providers |
+| Session | Purpose | Ring | Providers (LIVE-VERIFIED 2026-09-04) |
 |---|---|---|---|
-| `RMAgent-AppTrace` | Application events | 512 MB | .NET CLR, HTTP.sys, ASP.NET |
-| `RMAgent-NetTrace` | TCP connections with PID | 256 MB | Kernel-Network |
-| `RMAgent-ProcTrace` | Process create/exit + cmdline | 128 MB | Kernel-Process |
+| `RMAgent-AppTrace` | Application events | 512 MB circular | DotNETRuntime `{E13C0D23-CCBC-4E12-931B-D9CC2EEE27E4}`, HTTP.sys `{DD5EF90A-6398-47A4-AD34-4DCECDEF795F}` |
+| `RMAgent-NetTrace` | TCP connections with PID | 256 MB circular | Kernel-Network `{7DD42A49-5329-4832-8DFD-43D979153A88}` |
+| `RMAgent-ProcTrace` | Thread/image activity | 128 MB circular | Kernel-Process `{22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716}` |
 
-All providers are **built into Windows**. .NET apps, IIS, and anything
-using HTTP.sys emit into them with zero code changes. For non-.NET apps,
-one line of `EventWriteString` (or a Python ctypes call) joins the party.
+**The ring is REAL now (Rev 18).** The original config set `LogFileMode 0x1004`
+= APPEND mode — a file that grows to its cap and then the session DIES (found
+live: all three sessions Stopped with zero bytes recorded, 4 of 5 provider
+GUIDs wrong). Rev 18 uses `logman update -f bincirc -max <MB> -r` — a true
+circular file that overwrites oldest-first and restarts into new segments
+continuously. Verified live on WS1: sessions Running, `Circular: On`,
+ring files at `C:\etw\<name>_000001.etl`.
+
+**Six logman/registry facts learned live** (the setup payload encodes all of
+them): Impacket's `reg.py` shadows `reg.exe` (absolute paths mandatory);
+`logman create`'s own DCS config SHADOWS the AutoLogger registry values;
+providers added via `-p` default to Level 0 / Keywords 0x0 = capture NOTHING
+(every provider needs an explicit keyword mask + level); a circular session
+without `-r` fills one segment and stops; kernel providers engage their flags
+only at trace start; and a teardown must poll for stop before delete or the
+next setup hits "Data Collector already exists".
 
 ## The questions
 
@@ -159,16 +172,28 @@ lib.ask(row, "apperrors", since_hours=1, limit=30)
 
 1. **The ring overwrites.** A busy box will cycle a 512 MB buffer in hours,
    not days. Increase the buffer if you need longer retention — the cost
-   is kernel memory.
-2. **Message-shape parsing.** `appslow` and `appnet` parse the human-readable
-   event message for durations and tuples. Providers with structured
-   payloads (via `tdh` or manifests) would be more robust — a future
-   improvement, noted honestly.
-3. **No LLM token counts / prompt text.** This is application tracing, not
+   is disk (bincirc) rather than kernel memory.
+2. **Structured parsing, name-keyed.** `appnet`/`appproc` parse the event's
+   XML payload by PROPERTY NAME (Message is null for ETL-file events — the
+   original prose-regex parsing saw volume with zero findings and reported
+   it as a quiet box). `parse_failures` in every answer makes "N events, 0
+   parsed" a hole, not a clean bill.
+3. **NetTrace's kernel limitation (found live 2026-09-04).** The
+   Kernel-Network provider config verifies correct (Level 255, all keywords,
+   Running/Circular) yet Server 2022's AutoLogger delivers no kernel-network
+   events to the ring. `appnet` therefore PREFERS the ring and FALLS BACK to
+   Sysmon EID 3 (same pull, same box, better source — it also carries the
+   process name). If both sources are empty the answer says `source='none'`
+   — an honest hole, not a fake clean bill.
+4. **ProcTrace carries thread events, not command lines.** The Kernel-Process
+   AutoLogger ring delivers thread-start/stop (ProcessID, ThreadID,
+   Win32StartAddr) — process command lines and binary hashes live in Sysmon
+   Event 1 via `appsysmon`. Stated in the payload itself.
+5. **No LLM token counts / prompt text.** This is application tracing, not
    OpenLLMetry. Different layer.
-4. **The AutoLogger is a persistent change.** This is stated in every
-   place it matters, because it is the one thing in the observatory that
-   leaves a footprint on the witness.
+6. **The AutoLogger is a persistent change.** `--setup` is MOP-level:
+   dry-run by default, `--apply` required, `--teardown --apply` reverses
+   everything (verified: teardown removes DCS + registry keys + ring files).
 
 ## Relationship to the other skills
 

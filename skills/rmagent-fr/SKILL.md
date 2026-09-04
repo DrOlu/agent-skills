@@ -55,13 +55,38 @@ half. The three skills share one constitution.
 
 ```
 case.py open --ticket PAY-4419
-hunt.py   --ticket PAY-4419
+hunt.py   --case-dir cases/<the case>     # ticket inherited from case.json
 trace.py  --ticket PAY-4419
 ```
 
-The ticket propagates through the whole trace: every question, every hop, every
-span, every index record. Query it back from either side of the house. That is
-the Flight Recorder's actual product.
+The ticket propagates through the whole trace: every question, every hop,
+every span, every index record. Rev 18: `case.py open --ticket` now PERSISTS
+the ticket in `case.json` and `hunt.py` inherits it from there — the ticket
+no longer has to be typed twice (the old flow accepted it at case-open and
+dropped it). `trace.py` reconstructs it from the trajectory's STC line, or
+falls back to `case.json`. Query it back from either side of the house. That
+is the Flight Recorder's actual product.
+
+## Rev 18 hardening
+
+- **Trace ids are collision-safe.** `stc.trace_id` is now sha256(case)[:32] —
+  the old scheme gave two cases opened in the same second (and every default
+  `admin-walk` hunt) the SAME OTel trace id, merging unrelated walks in
+  Grafana.
+- **The hop index ages out honestly.** Entries older than `KEEP_DAYS` (30)
+  are shed at trim; `seen_before()` returns `(seen, honest)` — `honest=False`
+  means "beyond what the index can see", never a confident False.
+- **Blindness reaches the thinker.** census records `blind_count` and
+  `raw_4624_24h` in its history; three consecutive blind censuses produce a
+  CRITICAL thinker finding. Census owns the silent-host book (Rev 17's L2
+  cooldown): its knock clears/marks silence, so one blip never blinds a hunt.
+- **OTel spans reach a live gateway.** The emit URL is configurable
+  (`RMAgent_OTEL_URL` env → `~/.rmagent/config.json otel_gateway_url` →
+  default `http://127.0.0.1:17888`), with optional bearer token. The old
+  hard-coded port 8765 pointed at nothing — 326 spans were found buffered,
+  zero delivered.
+- **`trace_merge` resolves current trees.** The remote script no longer
+  hard-codes the legacy `~/.claude/skills` path.
 
 ## The honest limit
 

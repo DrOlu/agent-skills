@@ -17,7 +17,18 @@ from pathlib import Path
 
 REMOTE_SCRIPT = '''
 import json, sys
-sys.path.insert(0, str(__import__("pathlib").Path.home() / ".claude" / "skills" / "rmagent-windows" / "scripts"))
+# REV 18 (M5): resolve the engine from CURRENT trees, not the legacy
+# ~/.claude path (which holds a stale pre-Rev-17 lib). Same candidate order
+# as rmagent-actuate's import fix. A remote set up from ~/.agents/skills
+# used to return [] silently.
+from pathlib import Path as _P
+_home = _P.home()
+for _c in (_home / ".agents" / "skills" / "rmagent-windows" / "scripts",
+           _home / ".agents" / "skills" / "rmagent-so" / "scripts",
+           _home / ".claude" / "skills" / "rmagent-windows" / "scripts"):
+    if (_c / "hop_index.py").exists():
+        sys.path.insert(0, str(_c))
+        break
 import hop_index
 case = sys.argv[1] if len(sys.argv) > 1 else None
 entries = hop_index.read_all()

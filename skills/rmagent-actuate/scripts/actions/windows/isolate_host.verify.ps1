@@ -1,4 +1,4 @@
-# verify: isolate_host — the block rule must exist and all profiles must be on.
-$r = Get-NetFirewallRule -DisplayName 'RMAgent-Isolate-BlockInbound' -ErrorAction SilentlyContinue
-$p = @(Get-NetFirewallProfile | Where-Object { $_.Enabled -eq $true })
-if ($r -and $p.Count -ge 3) { 'VERIFIED' } else { 'NOT-VERIFIED' }
+# verify: isolate_host — profile defaults must be Block and the WinRM rule present.
+$defaults = @(Get-NetFirewallProfile | ForEach-Object { [string]$_.DefaultInboundAction })
+$winrm = Get-NetFirewallRule -DisplayName 'RMAgent-Isolate-AllowWinRM' -ErrorAction SilentlyContinue
+if (($defaults | Where-Object { $_ -ne 'Block' }).Count -eq 0 -and $winrm) { 'VERIFIED' } else { 'NOT_VERIFIED' }

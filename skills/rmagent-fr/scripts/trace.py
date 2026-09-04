@@ -60,7 +60,11 @@ def load_trajectory(case_dir: Path) -> list[dict]:
 
 
 def load_stc(case_dir: Path) -> dict | None:
-    """Reconstruct the STC from the trajectory's first STC thought entry."""
+    """Reconstruct the STC from the trajectory's first STC thought entry.
+
+    REV 18 (H4): falls back to case.json when the trajectory carries no STC
+    line (e.g. census-only cases, or a hunt that died before the STC thought
+    was written). The ticket must survive whichever way the case was made."""
     for e in load_trajectory(case_dir):
         content = str(e.get("content", ""))
         if content.startswith("STC:"):
@@ -68,6 +72,24 @@ def load_stc(case_dir: Path) -> dict | None:
                 return stc_mod.STC.decode(content[4:].strip()).__dict__
             except ValueError:
                 return None
+    # fallback: case.json (written by case.py open --ticket ...)
+    meta_path = case_dir / "case.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text())
+            if meta.get("ticket") or meta.get("title"):
+                return {
+                    "case": case_dir.name,
+                    "principal": meta.get("principal") or "",
+                    "window_h": 2.0,
+                    "origin": "jh1",
+                    "depth": 0,
+                    "ticket": meta.get("ticket"),
+                    "trigger": meta.get("trigger") or "manual",
+                    "app_trace_id": meta.get("app_trace_id"),
+                }
+        except Exception:
+            return None
     return None
 
 

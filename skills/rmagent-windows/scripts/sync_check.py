@@ -31,6 +31,14 @@ ENGINE_SO = [
     "scripts/stc.py", "scripts/traj.py", "scripts/causal.py",
     "scripts/otel_emit.py",
 ]
+# Rev 18 (C1): rmagent-at's engine files were stale copies of rmagent-windows
+# (no Rev 15-17 fixes, and an ALLOWED that predated the app* questions — the
+# at skill could not run its own questions). It now shares the canonical
+# engine like so/fr do. autologger.py is at-specific (not shared).
+ENGINE_AT = [
+    "scripts/lib.py", "scripts/notify.py", "scripts/stc.py",
+    "scripts/traj.py", "scripts/hop_index.py", "scripts/otel_emit.py",
+]
 ENGINE_FR = [
     "scripts/lib.py", "scripts/notify.py", "scripts/stc.py",
     "scripts/traj.py", "scripts/hop_index.py", "scripts/causal.py",
@@ -40,7 +48,12 @@ ENGINE_FR = [
 QUESTION_PAYLOADS = [
     "attest", "sketch", "edges", "explain", "netedges", "pslogs",
     "kernring", "attackmap", "attackmap2", "flowstats", "deepwindow",
-    "profile", "lineage", "dns",
+    "profile", "lineage", "dns", "canary",
+    # rmagent-at (application tracing) — Rev 18: the app payloads are shared
+    # canonical files now. They lived ONLY in rmagent-at while lib.ALLOWED in
+    # the canonical tree already accepted the names — so neither tree could
+    # actually run one (at refused the name; canonical had no payload).
+    "apptrace", "appslow", "apperrors", "appnet", "appproc", "appsysmon",
 ]
 
 
@@ -48,10 +61,13 @@ def _build_shared() -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for rel in ENGINE_SO:
         out.append(("rmagent-so", rel))
+    for rel in ENGINE_AT:
+        out.append(("rmagent-at", rel))
     for rel in ENGINE_FR:
         out.append(("rmagent-fr", rel))
     for q in QUESTION_PAYLOADS:
         out.append(("rmagent-so", f"scripts/questions/windows/{q}.ps1"))
+        out.append(("rmagent-at", f"scripts/questions/windows/{q}.ps1"))
         out.append(("rmagent-fr", f"scripts/questions/windows/{q}.ps1"))
     return out
 
@@ -83,6 +99,13 @@ def main() -> int:
         if not other_p.exists():
             # the skill doesn't carry this file — only a problem if it should
             drift.append({"skill": skill, "file": rel, "issue": "missing_in_skill"})
+            if args.fix:
+                # Rev 17: --fix must also CREATE a missing shared file, not
+                # just overwrite drifted ones (canary.ps1 was missing from
+                # rmagent-fr and --fix silently skipped it every run).
+                other_p.parent.mkdir(parents=True, exist_ok=True)
+                other_p.write_bytes(canon_p.read_bytes())
+                print(f"  FIXED  {skill}/{rel} (created)")
             continue
         checked += 1
         if sha(canon_p) != sha(other_p):

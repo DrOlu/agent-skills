@@ -3,5 +3,5 @@ $u = Get-LocalUser -Name $Target -ErrorAction SilentlyContinue
 if ($u -and $u.PasswordLastSet -and ((Get-Date) - $u.PasswordLastSet).TotalMinutes -lt 10) {
   'VERIFIED'
 } else {
-  'NOT-VERIFIED'
+  'NOT_VERIFIED'
 }

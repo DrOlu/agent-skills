@@ -38,19 +38,13 @@ class STC:
     fanout: int = 0
     ticket: str | None = None
     trigger: str = "manual"
-    # v2 (request-level join): the application-level trace id (OTel trace_id /
-    # W3C traceparent) observed on a witness. Lets ONE case serve both lenses
-    # — "who walked?" (principal) AND "which request was slow?" (app trace).
-    # Identity-led and request-led correlation on the same tape.
-    app_trace_id: str | None = None
 
     def __post_init__(self):
         # INJECTION FIX: the STC is a delimiter-based format ("; k=v"). A ticket
         # or trigger containing ';' or '=' can inject/override arbitrary fields
         # on decode — including principal and depth (the walk budget). Reject
         # them at construction rather than trying to escape.
-        for field_name in ("ticket", "trigger", "case", "principal", "origin",
-                            "app_trace_id"):
+        for field_name in ("ticket", "trigger", "case", "principal", "origin"):
             v = getattr(self, field_name, None)
             if v and (";" in str(v) or "=" in str(v)):
                 raise ValueError(
@@ -63,8 +57,6 @@ class STC:
                f"window={self.window_h}h; origin={self.origin}; depth={self.depth}")
         if self.ticket:
             out += f"; ticket={self.ticket}"
-        if self.app_trace_id:
-            out += f"; apptrace={self.app_trace_id}"
         if self.trigger and self.trigger != "manual":
             out += f"; trigger={self.trigger}"
         return out
@@ -93,7 +85,7 @@ class STC:
             raise ValueError(f"STC missing case/principal: {s!r}")
         # INJECTION FIX: reject values containing the delimiters — a crafted
         # ticket like "X; principal=root; depth=9" would override fields
-        for k in ("ticket", "trigger", "case", "principal", "origin", "apptrace"):
+        for k in ("ticket", "trigger", "case", "principal", "origin"):
             v = parts.get(k)
             if v and (";" in v or "=" in v):
                 raise ValueError(f"STC {k} contains delimiters: {v!r}")
@@ -107,7 +99,6 @@ class STC:
             depth=int(parts.get("depth", "0")),
             ticket=parts.get("ticket") or None,
             trigger=parts.get("trigger", "manual"),
-            app_trace_id=parts.get("apptrace") or None,
         )
 
     # ---------------------------------------------------------------- lineage

@@ -41,7 +41,7 @@ METRICS = [
     ("admin_failed_60s", "up", "failed admin logons (60s)", 3),
     ("admin_ok_5min", "up", "successful admin logons (5min)", 10),
     ("local_admin_count", "up", "local admin count", 0),      # any change is notable
-    ("sys_remote_conns", "up", "SYSTEM remote connections", 5),
+    ("system_remote_conns", "up", "SYSTEM remote connections", 5),
 ]
 
 # Conditions that, if they persist across censuses, are a finding.
@@ -144,48 +144,6 @@ def think(history: list[dict]) -> list[dict]:
                             "what": f"{name} on {w} tripled from {prev} to {last} between censuses",
                             "severity": "medium",
                         })
-
-                    # --- z-score: 3σ deviation from this host's own rolling baseline ---
-                    # A box that always has 20 failed logons (noisy service) stops firing.
-                    # A box that suddenly has 5 (normally 0) fires loudly.
-                    # Needs >= 8 samples so the mean/std mean something.
-                    if len(vals) >= 8:
-                        nums = [v for v in vals[:-1] if isinstance(v, (int, float))]
-                        if len(nums) >= 8:
-                            mean = sum(nums) / len(nums)
-                            var = sum((x - mean) ** 2 for x in nums) / len(nums)
-                            std = var ** 0.5
-                            last = vals[-1]
-                            if isinstance(last, (int, float)) and std > 0:
-                                z = (last - mean) / std
-                                if abs(z) >= 3:
-                                    findings.append({
-                                        "kind": "zscore",
-                                        "witness": w,
-                                        "metric": key,
-                                        "values": vals[-8:],
-                                        "z": round(z, 2),
-                                        "mean": round(mean, 2),
-                                        "std": round(std, 2),
-                                        "what": f"{name} on {w} is {abs(round(z,1))}σ from its own baseline "
-                                                f"(now {last}, normally {round(mean,1)} ± {round(std,1)}) — "
-                                                f"this host's own normal is the reference, not a global threshold",
-                                        "severity": "critical" if abs(z) >= 4 else "high",
-                                    })
-                            elif isinstance(last, (int, float)) and std == 0 and last != mean:
-                                # perfectly flat history, then a change: the loudest signal there is
-                                findings.append({
-                                    "kind": "zscore",
-                                    "witness": w,
-                                    "metric": key,
-                                    "values": vals[-8:],
-                                    "z": None,
-                                    "mean": round(mean, 2),
-                                    "std": 0,
-                                    "what": f"{name} on {w} was flat at {round(mean,1)} for {len(nums)} "
-                                            f"censuses, now {last} — zero-variance baseline broken",
-                                    "severity": "high",
-                                })
 
         # --- persistent conditions ---
         for key, op, val, desc in PERSISTENT:

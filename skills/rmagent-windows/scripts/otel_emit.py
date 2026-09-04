@@ -49,10 +49,6 @@ def span_from_entry(entry: dict, stc) -> dict:
             # enrichment: why this hunt exists, and what business object it touches
             "rmagent.trigger": getattr(stc, "trigger", "manual"),
             "rmagent.ticket": getattr(stc, "ticket", None) or "",
-            # v2: the request-level join. When set, this span can be correlated
-            # with the APPLICATION's own OTel trace in Grafana/Jaeger — one
-            # waterfall showing both the app request and the security walk.
-            "rmagent.app_trace_id": getattr(stc, "app_trace_id", None) or "",
         },
     }
 

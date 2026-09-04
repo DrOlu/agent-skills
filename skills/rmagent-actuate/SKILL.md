@@ -1,15 +1,3 @@
----
-name: rmagent-actuate
-description: >
-  The actuation layer of the RMAgent security observatory — Phase 1 response.
-  Where rmagent-windows (Phase 0) watches and writes holes and rmagent-redteam
-  tests the watcher, this skill ACTS on what Phase 0 finds, but only through a
-  controlled, reversible, audited pipeline: every action changes a production
-  host. Use when a witnessed finding requires a response (disable an account,
-  stop a service, quarantine a host) and a maker/checker record exists. Requires
-  explicit operator approval per action; refuses unscoped or unrecorded changes.
----
-
 # RMAgent Actuate — Phase 1 response
 
 You operate the **actuation layer** of the RMAgent security observatory. Phase 0
@@ -18,7 +6,6 @@ This skill **acts** on what Phase 0 finds — but only through a controlled,
 reversible, audited pipeline.
 
 **This is the dangerous skill.** Every action here changes a production host.
-
 That is why it exists behind three gates: an **allowlist of named actions**
 (no arbitrary shell, ever), a **dry-run-first policy** (every action shows you
 exactly what it will do before it does it), and a **journal** (every action is
@@ -76,32 +63,10 @@ If an action cannot be undone, it is not in this skill.
 | `quarantine_file` | Deny-execution ACL on a file path | restore_file | `pslogs`/4688 references a dropped binary |
 | `restore_file` | Removes the deny ACL | quarantine_file | undo path |
 | `disable_wmi_sub` | Deletes a WMI event subscription (query recorded first) | manual — journal has the query | 5861 fired (fileless persistence) |
-| `rotate_credential` | Forces a random password on a local account; returns it ONCE for the owner | n/a (a rotation cannot be un-rotated) | **any confirmed credential theft** — 4648 chains, shared-logonid, LSASS access |
-| `isolate_host` | Blocks inbound on all firewall profiles (WinRM kept open so undo works) | un_isolate_host | active lateral movement, a live implant quarantine_file can't stop |
-| `un_isolate_host` | Removes the isolation rules | n/a (itself an undo) | undo path |
 | `snapshot` | Read-only: exports task/service/user/firewall state to the journal | n/a | BEFORE any action, to have a baseline |
 
 `snapshot` is not really an action — it is the habit that makes the rest safe.
 Run it before anything else.
-
-### The two enterprise additions (Rev 15)
-
-**`rotate_credential` — containment was not remediation.** `disable_user`
-breaks the account *and the human*. Rotation breaks the **attacker's copy**
-of the credential while keeping the account usable. A random password is
-generated on the host, set, and returned **once** in the answer so the
-operator can hand it to the account owner. It is never written to the
-journal. The journal records only the previous/new `PasswordLastSet` times
-so the change is verifiable without ever storing the secret.
-
-**`isolate_host` — stop lateral movement without powering off.**
-`quarantine_file` stops one binary; a live implant keeps running. Isolation
-blocks inbound on all three firewall profiles while **keeping WinRM
-5985/5986 open** — so the operator can still reach the box to collect
-evidence and to run the undo. Evidence is preserved; the box stops
-participating in the kill chain. The undo removes the rules but deliberately
-does **not** re-disable previously-off profiles (blindly turning a firewall
-back off would be worse than leaving it on).
 
 ## Setup (one time)
 

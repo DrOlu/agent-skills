@@ -110,10 +110,6 @@ def main():
     ap.add_argument("--principal", default=None, help="override track (default: inventory track)")
     ap.add_argument("--limit", type=int, default=50)
     ap.add_argument("--ticket", default=None, help="business ticket — the Flight Recorder join")
-    ap.add_argument("--app-trace-id", default=None, dest="app_trace_id",
-                    help="application trace id (OTel trace_id / W3C traceparent) — "
-                         "joins this hunt to the app request it was triggered by, "
-                         "so one case serves both 'who walked?' and 'which request?'")
     ap.add_argument("--trigger", default="manual", choices=["manual","scheduled","alert","drill","backfill"], help="what started this hunt")
     args = ap.parse_args()
 
@@ -144,7 +140,6 @@ def main():
     T.think(f"Hunt started: tracking {track} across {len(rows)} witnesses since {args.since}")
 
     # --- the thinker: reason over recent census history if available ---
-    findings = []  # thinker findings (for the rollup below)
     census_hist_path = Path.home() / ".rmagent" / "census_history.jsonl"
     if census_hist_path.exists():
         try:
@@ -165,8 +160,7 @@ def main():
     S = stc_mod.STC(case=case_dir.name, principal=(track[0] if track else "unknown"),
                     window_h=since_h,
                     ticket=getattr(args, "ticket", None),
-                    trigger=getattr(args, "trigger", "manual"),
-                    app_trace_id=getattr(args, "app_trace_id", None))
+                    trigger=getattr(args, "trigger", "manual"))
     T.think(f"STC: {S}")
 
     # --- rev 6: clock-skew detection (the silent killer of cross-host timelines) ---
@@ -198,34 +192,6 @@ def main():
             crit = [f for f in df if f.get("severity") == "critical"]
             if crit:
                 notify.alert_smoke("dthinker", [f["what"] for f in crit], case_dir.name)
-
-        # --- severity rollup: a finding that is simultaneously a
-        # temporal_cluster AND a cross_host_chain AND a 3σ deviation should be
-        # ONE critical case, not three warnings. Chain the thinkers. ---
-        all_findings = (findings or []) + (df or [])
-        if len(all_findings) >= 2:
-            by_witness = {}
-            for f in all_findings:
-                w = str(f.get("witness", "")).split("+")[0]
-                by_witness.setdefault(w, []).append(f)
-            for w, fs in by_witness.items():
-                kinds = {f.get("kind") for f in fs}
-                # any two independent detector kinds on the same witness = rollup
-                if len(kinds) >= 2:
-                    sev = sum(1 for f in fs if f.get("severity") in ("critical", "high"))
-                    rolled = {
-                        "kind": "rollup",
-                        "witness": w,
-                        "kinds": sorted(kinds),
-                        "n_findings": len(fs),
-                        "what": f"{w}: {len(fs)} independent detectors agree "
-                                f"({', '.join(sorted(kinds))}) — one story, not {len(fs)} findings",
-                        "severity": "critical" if sev >= 2 else "high",
-                    }
-                    T.think(f"[{rolled['severity']}] {rolled['what']}")
-                    print(f"[rollup] {rolled['what']}")
-                    if rolled["severity"] == "critical":
-                        notify.alert_smoke("rollup", [rolled["what"]], case_dir.name)
 
     seq = 0
     _visited = {r.get("id") for r in rows}  # all inventory witnesses start visited
@@ -433,33 +399,6 @@ def main():
                 h = fs.get("hole") or lib.hole(f"{wid} flowstats", fs.get("error") or "empty")
                 write_hole(case_dir, h)
                 print(f"  {wid:8} flowstats: HOLE — {h['why']}")
-
-        # rev 14: profile — on-device resource profiling + tracked-principal procs
-        if "profile" in (r.get("skills") or []):
-            pf = lib.ask(r, "profile", since_hours=since_h, limit=10)
-            lib.record_ask(case_dir, r, "profile", pf)
-            if pf.get("ok") and pf.get("data"):
-                pd = pf["data"]
-                mem = pd.get("mem") or {}
-                disks = pd.get("disks") or []
-                worst_disk = max((d.get("used_pct") or 0 for d in disks), default=None)
-                n_tracked = len(pd.get("tracked_procs") or [])
-                print(f"  {wid:8} profile: cpu={pd.get('cpu_pct')}% mem={mem.get('used_pct')}% "
-                      f"disk_max={worst_disk}% procs={pd.get('proc_count')} tracked={n_tracked}")
-                T.observe(wid, "profile",
-                          f"cpu={pd.get('cpu_pct')}% mem={mem.get('used_pct')}% "
-                          f"disk={worst_disk}% tracked_procs={n_tracked}")
-                # the identity x resource join: a tracked-principal proc eating CPU
-                hot = [t for t in (pd.get("tracked_procs") or [])
-                       if (t.get("mem") or 0) > 500]
-                if hot:
-                    names = ", ".join(f"{t.get('n')}({t.get('owner')})" for t in hot[:5])
-                    print(f"  {wid:8} profile: {len(hot)} tracked-proc(s) >500MB: {names}")
-                    T.observe(wid, "profile_heavy", f"tracked procs >500MB: {names}")
-            else:
-                h = pf.get("hole") or lib.hole(f"{wid} profile", pf.get("error") or "empty")
-                write_hole(case_dir, h)
-                print(f"  {wid:8} profile: HOLE — {h['why']}")
 
         else:
             h = res.get("hole") or lib.hole(f"{wid} edges", res.get("error") or "empty")

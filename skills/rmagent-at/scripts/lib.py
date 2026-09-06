@@ -26,6 +26,15 @@ try:
 except ImportError:
     winrm = None  # surfaced with a clear message at ask() time
 
+# Rev 19: optional PSRP transport (pypsrp). Same WinRM port/creds, but the
+# script travels in the SOAP body -> no 8191-char command-line budget.
+try:
+    from pypsrp.client import Client as _psrp_client
+    from pypsrp.powershell import PowerShell as _psrp_ps, RunspacePool as _psrp_pool
+    pypsrp = True
+except ImportError:
+    pypsrp = None  # surfaced with a clear message at ask() time
+
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
@@ -368,6 +377,33 @@ def _parse(stdout: str) -> dict:
                                           + stdout[:500])}
 
 
+
+# ---------------------------------------------------------------- PSRP door (Rev 19)
+def _ask_psrp(row: dict, skill: str, script: str, timeout: int) -> dict:
+    """One question over PowerShell Remoting Protocol (pypsrp).
+
+    The script goes INSIDE the message body — no command-line length limit.
+    Returns the same shape as the winrm path: {ok, data?, error?, hole?}.
+    pypsrp.invoke() returns a flat list of output objects; our payloads end
+    with ConvertTo-Json, so output[0] is the JSON string (verified live:
+    edges.ps1 parity, 2026-09-04)."""
+    creds = creds_for(row)
+    client = _psrp_client(row["address"], username=creds["user"],
+                          password=creds["password"], ssl=False,
+                          connection_timeout=timeout)
+    with _psrp_pool(client.wsman) as pool:
+        ps = _psrp_ps(pool)
+        ps.add_script(script)
+        res = ps.invoke()
+    # invoke() returns output objects; errors arrive via ps.had_errors +
+    # ps.stream_error — surface them like a non-zero winrm exit
+    if ps.had_errors:
+        err = "; ".join(str(e) for e in ps.stream_error)[:500]
+        return {"ok": False, "error": err}
+    out = str(res[0]) if res else ""
+    return _parse(out)
+
+
 # ---------------------------------------------------------------- preamble + ask
 # Rev 8 FP allowlist: OS-default registry values that are NOT persistence.
 # Applied ENGINE-SIDE to attackmap answers (the payload itself cannot grow —
@@ -472,7 +508,9 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
                 "hole": hole(f"{row.get('id')} {skill}", "pywinrm not installed")}
 
     door = (row.get("door") or "winrm").lower()
-    if door != "winrm":
+    # Rev 19: psrp is a first-class door (or an opt-in transport on winrm)
+    use_psrp = door == "psrp" or (row.get("transport") or "").lower() == "psrp"
+    if door not in ("winrm", "psrp") and not use_psrp:
         return {"ok": False, "error": f"this skill is Windows-only; door={door}",
                 "hole": hole(f"{row.get('id')} {skill}", f"door {door} not supported")}
 
@@ -490,6 +528,27 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
     timeout = _clamp_timeout(skill, timeout)
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"
     transport = row.get("transport") or DEFAULT_TRANSPORT
+
+    if use_psrp:
+        if not pypsrp:
+            return {"ok": False, "error": "pypsrp not installed (`pip install pypsrp`)",
+                    "hole": hole(f"{row.get('id')} {skill}", "pypsrp not installed")}
+        try:
+            parsed = _ask_psrp(row, skill, script, timeout)
+            if not parsed.get("ok"):
+                mark_silent(row.get("id") or "", f"psrp: {str(parsed.get('error'))[:200]}")
+                return _cap_signal(parsed, row, skill) | {
+                    "hole": hole(f"{row.get('id')} {skill}", f"psrp: {str(parsed.get('error'))[:200]}")}
+            if skill == "attackmap" and isinstance(parsed.get("data"), dict):
+                parsed["data"] = _filter_attackmap_fps(parsed["data"])
+            clear_silent(row.get("id") or "")
+            return _cap_signal(parsed, row, skill)
+        except Exception as e:  # noqa: BLE001 - transport failure is a hole
+            msg = str(e).split("\n")[0][:300]
+            kind = "timeout" if "timed out" in msg.lower() else "unreachable"
+            mark_silent(row.get("id") or "", f"psrp {kind}: {msg}")
+            return _cap_signal({"ok": False, "error": msg}, row, skill) | {
+                "hole": hole(f"{row.get('id')} {skill}", f"psrp {kind}: {msg}")}
 
     try:
         session = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),

@@ -54,10 +54,8 @@ def knock(row, case_dir):
     wid = row.get("id")
     # REV 18 (M2): the census/cooldown contract. Census is the CHEAPEST knock
     # (one attest, 1/min) and runs before any hunt, so it owns the silent-host
-    # book: a successful knock CLEARS the witness's L2 cooldown (lib.ask does
-    # it) and a miss MARKS it. One missed knock does not blind the next hunt
-    # for COOLDOWN_SEC — the hunt defers to whichever census ran last.
-    # COOLDOWN_SEC (5 min) >= 2x the census interval by design.
+    # book: a successful knock CLEARS the witness's L2 cooldown and a miss
+    # MARKS it. One missed knock does not blind the next hunt.
     if res.get("ok"):
         lib.clear_silent(wid)
     else:
@@ -112,7 +110,7 @@ def main():
                   f"admin_fail_60s={d.get('admin_failed_60s')} "
                   f"admin_ok_5m={d.get('admin_ok_5min')} "
                   f"local_admins={d.get('local_admin_count')} "
-                  f"sys_conns={d.get('sys_remote_conns')}")
+                  f"sys_conns={d.get('system_remote_conns')}")
             prev[wid] = 0
             # record history for the thinker (persistent reasoning between knocks)
             _record_history(t, wid, d)

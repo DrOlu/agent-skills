@@ -4,8 +4,9 @@
 # counted SYSTEM-subject events as admin failures; (2) new_local_admins only reports
 # members STILL in the group — deleted drill users lingered as stale SIDs for 24h.
 function F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode("//e:Data[@Name='$n']",$m);if($o){$o.'#text'}}
-function MT($ev){$t=F $ev 'TargetUserName';if($t){foreach($tr in $Track){if($t -like "*$tr*"){return $true}}};return $false}
+function MT($ev){$t=F $ev 'TargetUserName';if($t){$b=($t -split '\\')[-1];foreach($tr in $Track){if($b -eq $tr){return $true}}};return $false}
 $now=[DateTime]::UtcNow; $since=$now.AddHours(-$SinceHours)
+$Max=[int]$Limit*20
 
 $failed=0
 try{$failed=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4625;StartTime=$since}|Where-Object{MT $_}).Count}catch{}
@@ -25,7 +26,7 @@ $svc=@()
 try{$svc=@(Get-CimInstance Win32_Service -Filter "State='Running'"|Where-Object{$_.StartName -match 'LocalSystem|Administrator'}|Select-Object -First $Limit -ExpandProperty Name)}catch{}
 
 $svcNew=0;$taskNew=0
-try{$svcNew=@(Get-WinEvent -FilterHashtable @{LogName='System';Id=7045;StartTime=$since}).Count}catch{}
-try{$taskNew=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4698;StartTime=$since}).Count}catch{}
+try{$svcNew=@(Get-WinEvent -FilterHashtable @{LogName='System';Id=7045;StartTime=$since} -MaxEvents $Max).Count}catch{}
+try{$taskNew=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4698;StartTime=$since} -MaxEvents $Max).Count}catch{}
 
 [pscustomobject]@{skill='sketch';host=$env:COMPUTERNAME;utc=$now.ToString('o');window_hours=$SinceHours;track=$Track;admin_failed=$failed;admin_failed_attack='T1110';new_local_admins=@($newAdmins);new_local_admins_attack='T1136.001';running_priv_svcs=@($svc);new_services=$svcNew;new_services_attack='T1543.003';new_tasks=$taskNew;new_tasks_attack='T1053.005'}|ConvertTo-Json -Compress -Depth 3

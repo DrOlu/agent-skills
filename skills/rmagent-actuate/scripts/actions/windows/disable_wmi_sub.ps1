@@ -1,22 +1,36 @@
-# disable_wmi_sub — delete a WMI event subscription, recording the query first
-# (the query goes to the journal via result_detail so it can be recreated).
-# Engine injects $Target (subscription name — the __EventFilter Name, or the
-# CommandLineEventConsumer Name; we search both namespaces).
-$found = $null; $query = $null; $class = $null
-foreach ($ns in @('root\subscription')) {
+# disable_wmi_sub - delete a WMI event subscription, recording the FULL
+# triple first (Rev 17, M3): the __EventFilter (name + query), the consumers
+# bound to it, and the __FilterToConsumerBinding count. The old payload
+# captured only the filter query.
+# Engine injects $Target (the __EventFilter Name).
+$ErrorActionPreference = 'Stop'
+try {
+  $ns = 'root\subscription'
   $f = Get-CimInstance -Namespace $ns -ClassName '__EventFilter' -ErrorAction SilentlyContinue |
-       Where-Object { $_.Name -eq $Target }
-  if ($f) { $found = $f; $query = $f.Query; $class = '__EventFilter'; break }
-}
-if (-not $found) {
-  [pscustomobject]@{ action='disable_wmi_sub'; target=$Target; status='not-found' } | ConvertTo-Json -Compress
-} else {
-  # remove the filter and anything bound to it
-  Get-CimInstance -Namespace 'root\subscription' -ClassName '__FilterToConsumerBinding' -ErrorAction SilentlyContinue |
-    Where-Object { $_.Filter -match $Target } | Remove-CimInstance -ErrorAction SilentlyContinue
-  Remove-CimInstance -InputObject $found -ErrorAction SilentlyContinue
-  $still = Get-CimInstance -Namespace 'root\subscription' -ClassName '__EventFilter' -ErrorAction SilentlyContinue |
-           Where-Object { $_.Name -eq $Target }
-  [pscustomobject]@{ action='disable_wmi_sub'; target=$Target; status= if($still){'failed'}else{'deleted' };
-                     query=$query; wmi_class=$class } | ConvertTo-Json -Compress -Depth 3
+       Where-Object { $_.Name -eq $Target } | Select-Object -First 1
+  if (-not $f) {
+    [pscustomobject]@{ action='disable_wmi_sub'; target=$Target; status='not-found' } | ConvertTo-Json -Compress
+  } else {
+    # capture the full triple BEFORE deleting anything
+    $bindings = @(Get-CimInstance -Namespace $ns -ClassName '__FilterToConsumerBinding' -ErrorAction SilentlyContinue |
+      Where-Object { ($_.Filter -replace '^.*\\\\','') -match [regex]::Escape($Target) })
+    $consumers = @()
+    foreach ($b in $bindings) {
+      $cRef = $b.Consumer
+      if ($cRef) {
+        $consumers += [pscustomobject]@{ ref=$cRef }
+      }
+    }
+    foreach ($b in $bindings) { Remove-CimInstance -InputObject $b -ErrorAction SilentlyContinue }
+    Remove-CimInstance -InputObject $f -ErrorAction Stop
+    $still = Get-CimInstance -Namespace $ns -ClassName '__EventFilter' -ErrorAction SilentlyContinue |
+             Where-Object { $_.Name -eq $Target }
+    [pscustomobject]@{ action='disable_wmi_sub'; target=$Target;
+                       status= if($still){'failed'}else{'deleted'};
+                       filter_query=$f.Query;
+                       bindings_removed=@($bindings).Count;
+                       consumers=$consumers } | ConvertTo-Json -Compress -Depth 4
+  }
+} catch {
+  [pscustomobject]@{ok=$false; action='disable_wmi_sub'; target=$Target; error="$($_.Exception.Message)"} | ConvertTo-Json -Compress
 }

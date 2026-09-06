@@ -114,7 +114,7 @@ for needle in ("raw_4624_24h", "blind_check", "blind_count", "auditpol"):
 # blind_check must be computed from UNFILTERED 4624 (no track filter) —
 # the WS2 bug was that a track-filtered count looked fine while raw was 0.
 import re as _re
-m = _re.search(r"raw4624 = @\(Get-WinEvent.*?\)\.Count", text, _re.S)
+m = _re.search(r"raw4624\s*=\s*@\(Get-WinEvent.*?\)\.Count", text, _re.S)
 assert m and "Where-Object" not in m.group(0), "raw4624 must not be track-filtered"
 
 # --- attackmap allowlist: default netsh helpers suppressed, real one fires ---

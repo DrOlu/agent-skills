@@ -4,7 +4,7 @@
 # and you have the full C2 story. Requires Sysmon with <DnsQuery onmatch="exclude">.
 # Engine injects: $ErrorActionPreference; $Track; $SinceHours; $Limit
 function F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode("//e:Data[@Name='$n']",$m);if($o){$o.'#text'}}
-function MT($u){ if(-not $u){return $false}; foreach($t in $Track){ if($u -like "*$t*"){return $true} }; return $false }
+function MT($u){ if(-not $u){return $false}; foreach($t in $Track){ if((($u -split '\\')[-1]) -eq $t){return $true} }; return $false }
 $since = (Get-Date).AddHours(-$SinceHours)
 $conns = @()
 try {

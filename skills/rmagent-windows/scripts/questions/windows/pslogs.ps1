@@ -8,9 +8,10 @@
 # Engine injects: $ErrorActionPreference; $Track; $SinceHours; $Limit
 function F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode("//e:Data[@Name='$n']",$m);if($o){$o.'#text'}}
 $since=(Get-Date).AddHours(-$SinceHours)
+$Max=[int]$Limit*20
 $blocks=@()
 try{
-  $blocks=@(Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-PowerShell/Operational';Id=4104;StartTime=$since}|
+  $blocks=@(Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-PowerShell/Operational';Id=4104;StartTime=$since} -MaxEvents $Max|
             Select-Object -First $Limit|
             ForEach-Object{
               $sb=(F $_ 'ScriptBlockText')

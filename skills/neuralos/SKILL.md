@@ -1,6 +1,6 @@
 ---
 name: neuralos
-description: Install, configure, run, administer, and manage the standalone neuralOS backend (neuralos / rterm-backend / gybackend) completely headlessly on macOS, Linux, and Windows. neuralOS is the headless AI-native backend for RTerm — the RTerm desktop app stays RTerm; neuralOS is the standalone backend daemon. Use when an agent needs to set up RTerm-as-a-service — install the daemon, configure its data dir and gateway, run it as a service, manage saved connections/automation/schedules, and drive it over its WebSocket JSON-RPC gateway. Pair with the rterm-gateway skill for the RPC method reference and client examples.
+description: Install, configure, run, administer, and manage the standalone neuralOS backend (neuralos / rterm-backend / gybackend) AND the rterm-cli command client, completely headlessly on macOS, Linux, and Windows. neuralOS is the headless AI-native backend for RTerm — the RTerm desktop app stays RTerm; neuralOS is the standalone backend daemon. Use when an agent needs to set up RTerm-as-a-service — install/update the daemon and CLI (together or individually), configure the data dir and gateway, run it as a service, manage saved connections/automation/schedules, and drive it over its WebSocket JSON-RPC gateway. Pair with the rterm-gateway skill for the RPC method reference and client examples.
 ---
 
 # neuralOS — Headless Install & Operations Skill
@@ -13,30 +13,55 @@ SSH/WinRM/Serial/local terminals, fleet orchestration, scheduled automation, and
 change management, and serves them over a **WebSocket JSON-RPC gateway**
 (default `ws://<host>:17888`).
 
-Use this skill to install, configure, run, and administer it **completely
-headlessly** on **macOS, Linux, or Windows** — then drive it with the
-[`rterm-gateway`](../rterm-gateway/SKILL.md) skill for the actual RPC calls.
+**rterm-cli** (`rterm-cli` on npm, bins `rterm` / `rterm-cli`) is the official
+command-line client for that gateway — a tiny zero-dependency script with 14
+one-shot commands (`ping`, `run`, `fleet`, `metrics`, …) plus an **interactive
+persistent chat** (`rterm chat`) that gives the desktop chat experience in any
+terminal: streaming replies, session resume with history replay, command
+approvals, and slash commands. The engine (neuralos) does the work; the CLI is
+how scripts, CI, and humans talk to it.
+
+Use this skill to install, configure, run, and administer the stack **completely
+headlessly** on **macOS, Linux, or Windows** — the bundled lifecycle script
+manages **backend and CLI together or individually** — then drive it with the
+[`rterm-gateway`](../rterm-gateway/SKILL.md) skill for the RPC reference.
 
 ---
 
 ## 1. The 60-second path (any OS)
 
 ```bash
+# one command: installs BOTH packages (if missing), starts the daemon, verifies
+node scripts/neuralos.mjs setup
+# -> installs neuralos@latest + rterm-cli@latest
+# -> starts the gateway (daemon by default)
+# -> verify: gateway ping + CLI→gateway round-trip + terminals listing
+
+# then use it from any shell:
+rterm ping
+rterm chat          # interactive persistent chat (desktop experience)
+```
+
+Prefer the manual path:
+
+```bash
 # 1. install (Node >= 18 required)
-npm install -g neuralos   # or: npm install -g neuralos
+npm install -g neuralos rterm-cli
 
 # 2. run it
 neuralos
 # -> [neuralos] WebSocket RPC endpoint: ws://0.0.0.0:17888
 
 # 3. verify (in another shell)
-echo '{"id":"1","method":"gateway:ping"}' | websocat -n1 ws://127.0.0.1:17888
-# -> {"type":"gateway:response","id":"1","ok":true,"result":{"pong":true,...}}
+rterm ping
+# -> {"pong": true, ...}
 ```
 
 The bundled **`scripts/neuralos.mjs`** CLI wraps every lifecycle step
-(install, start, stop, status, logs, config, service) into one cross-platform
-command. Run any of these with `node scripts/neuralos.mjs <cmd>`.
+(doctor, install, update, setup, verify, start/stop/restart, status, logs,
+config, service, uninstall) into one cross-platform command — managing
+**neuralos and rterm-cli together or individually** (`--backend` / `--cli`
+flags). Run any of these with `node scripts/neuralos.mjs <cmd>`.
 
 ---
 
@@ -74,11 +99,62 @@ command. Run any of these with `node scripts/neuralos.mjs <cmd>`.
 ### 3.2 Install from npm (recommended)
 
 ```bash
-npm install -g neuralos   # or: npm install -g neuralos
+# both packages in one shot (backend + CLI)
+npm install -g neuralos rterm-cli
+
+# or individually
+npm install -g neuralos      # the daemon (bins: neuralos, gybackend)
+npm install -g rterm-cli     # the CLI client (bins: rterm, rterm-cli)
+
 neuralos --version 2>/dev/null || which neuralos || where neuralos
+rterm version   # asks the running gateway; also proves CLI↔gateway connectivity
 ```
 
-Or without a global install: `npx -y neuralos`.
+Or without a global install: `npx -y neuralos` / `npx -y rterm-cli ping`.
+
+### 3.2b Install & update with the lifecycle script (handles both, individually or together)
+
+```bash
+node scripts/neuralos.mjs install              # BOTH neuralos + rterm-cli
+node scripts/neuralos.mjs install --backend    # daemon only
+node scripts/neuralos.mjs install --cli        # CLI only
+
+node scripts/neuralos.mjs update               # both → latest (registry-checked)
+node scripts/neuralos.mjs update --backend     # daemon only
+node scripts/neuralos.mjs update --cli         # CLI only
+# update compares installed vs registry version first; skips when already
+# latest, and reminds you to `restart` the daemon when it did update.
+
+node scripts/neuralos.mjs uninstall            # stop + remove BOTH
+node scripts/neuralos.mjs uninstall --keep-cli # stop daemon, keep the CLI
+```
+
+The script auto-recovers from the classic `EACCES … cache folder contains
+root-owned files` npm failure by retrying once with a fresh temp cache — no
+sudo needed.
+
+### 3.2c One-shot server setup (new machine → working stack)
+
+```bash
+# fresh server: install + start + verify in one command
+node scripts/neuralos.mjs setup
+# idempotent: re-running on a healthy machine changes nothing and just verifies
+
+# with options
+node scripts/neuralos.mjs setup --port 17889 --data /var/lib/neuralos --daemon
+
+# end-to-end health check any time (also exits non-zero on failure — CI-friendly)
+node scripts/neuralos.mjs verify
+# -> ✔ gateway ping (ws://127.0.0.1:17888)
+# -> ✔ rterm-cli 3.7.3 present
+# -> ✔ CLI→gateway round-trip: backend 3.0.0, 132 RPC methods
+# -> ✔ CLI terminals listing: 3 tab(s)
+# -> ✔ verify PASSED
+```
+
+`verify` exercises the full path: raw WebSocket ping → CLI installed → CLI
+`version` round-trip through the gateway → CLI `terminals` (terminal
+subsystem). Use it after install, after update, and in CI health gates.
 
 ### 3.3 Install from a repo checkout (development)
 
@@ -177,20 +253,24 @@ settings:addCommandPolicyRule {list:"allowlist", rule:"systemctl *"}
 ## 5. Run & administer
 
 The bundled **`scripts/neuralos.mjs`** handles the lifecycle cross-platform
-(uses only Node built-ins — no dependencies):
+(uses only Node built-ins — no dependencies). It manages **backend and CLI
+together or individually**:
 
 ```bash
-node scripts/neuralos.mjs doctor          # check Node, npm pkg, data dir, port
-node scripts/neuralos.mjs install         # npm i -g neuralos
+node scripts/neuralos.mjs doctor          # check Node, npm pkgs (both), data dir, port, gateway + CLI round-trip
+node scripts/neuralos.mjs install         # npm i -g neuralos + rterm-cli (--backend / --cli for one)
+node scripts/neuralos.mjs update          # registry-checked update to latest (both; --backend / --cli)
+node scripts/neuralos.mjs setup           # install-if-missing + start + verify (idempotent one-shot)
+node scripts/neuralos.mjs verify          # gateway ping + CLI round-trip + terminals (exit 1 on fail)
 node scripts/neuralos.mjs start [--port N] [--host H] [--data DIR] [--daemon]
 node scripts/neuralos.mjs stop
 node scripts/neuralos.mjs restart
 node scripts/neuralos.mjs status
 node scripts/neuralos.mjs logs [--lines N]
 node scripts/neuralos.mjs ping [--url ws://...]
-node scripts/neuralos.mjs config-show     # effective env + data dir
+node scripts/neuralos.mjs config-show     # effective env + data dir + installed versions of both pkgs
 node scripts/neuralos.mjs install-service # print service unit + enable cmd for this OS
-node scripts/neuralos.mjs uninstall       # stop + npm uninstall -g
+node scripts/neuralos.mjs uninstall [--keep-cli]  # stop + npm uninstall (both; keep CLI)
 ```
 
 ### Boot output (healthy)
@@ -206,6 +286,82 @@ node scripts/neuralos.mjs uninstall       # stop + npm uninstall -g
 
 - **Foreground:** `gybackend` (Ctrl+C to stop) — good for first-run debugging.
 - **Background/service:** systemd / launchd / Task Scheduler, or `... start --daemon` (uses `nohup`/`Start-Process` and writes a pidfile + log).
+
+---
+
+## 5b. rterm-cli — the official command-line client
+
+`rterm-cli` (npm) installs two bins: `rterm` and `rterm-cli` (identical). It
+speaks the gateway natively — zero dependencies, ~41 kB, works from any machine
+that can reach the gateway (point it at a remote daemon with `--url` or
+`RTERM_URL`).
+
+### One-shot commands (scripting / CI)
+
+```bash
+rterm ping                                 # liveness
+rterm version                              # backend version + method count
+rterm methods [--category agent]           # self-describing RPC surface
+rterm call <method> [json]                 # raw JSON-RPC call (ANY method)
+rterm terminals                            # list terminal tabs
+rterm connections                          # saved SSH/WinRM/Serial connections
+rterm open <connection-name>               # open a tab for a saved connection
+rterm close <tabIdOrName>                  # close a tab
+rterm run <tabIdOrName> <command>          # run a command in a tab (waits for output)
+rterm fleet <tab1,tab2,...> <command>      # run on many tabs at once
+rterm sessions                             # list chat sessions
+rterm chat <sessionId> <message>           # one-shot agent message (blocking)
+rterm dashboard                            # live dashboard state (JSON)
+rterm metrics [--format prometheus]        # host metrics
+```
+
+Fleet example (the classic ops loop):
+
+```bash
+rterm open web-01 && rterm open web-02
+rterm fleet web-01,web-02 "df -h / && systemctl is-active nginx"
+rterm metrics
+```
+
+Remote gateway (CLI on your laptop, daemon on a server):
+
+```bash
+RTERM_URL=ws://10.0.0.5:17888 RTERM_TOKEN=<token> rterm ping
+rterm --url ws://10.0.0.5:17888 --token <token> run web-01 "uptime"
+```
+
+### Interactive persistent chat (`rterm chat`)
+
+`rterm chat` with no arguments is the **desktop chat experience in a terminal** —
+same sessions, same events, same approvals the desktop app uses:
+
+```text
+$ rterm chat
+Connected to ws://127.0.0.1:17888 — session 96c153ac…
+── resuming (4 messages) ──
+you> Reply with exactly one word: PONG
+· Reasoning... The user wants exactly one word: PONG
+assistant> PONG
+you> /exit
+session 96c153ac… kept server-side — rerun "rterm chat" to resume.
+```
+
+- **Streaming** — replies, reasoning, and tool output render live (`say`,
+  `sub_tool_*`, `command_*` gateway events).
+- **Persistent** — sessions live server-side (SQLite); the last session id is
+  saved in `~/.rterm-cli/chat-state.json` and auto-resumed with history replay.
+  Exit, kill the terminal, reboot — the conversation survives.
+- **Command approvals** — when the agent asks to run a command, the CLI pauses
+  for `allow? [y/N]` and replies via `agent:replyCommandApproval` (any non-y
+  answer denies).
+- **Slash commands**: `/new` `/sessions` `/rename <t>` `/branch` `/export
+  [--simple]` `/search <q>` `/stop` `/verbose` `/exit` (or Ctrl-D).
+- **Flags**: `--session <id>` resume a specific session; `--verbose` start with
+  raw events on.
+
+CI / unattended usage of the same session machinery: `rterm call agent:startTask
+'{"sessionId":"...","userInput":"..."}'` (blocking) or `agent:startTaskAsync` +
+event watching (see the `rterm-gateway` skill).
 
 ---
 
@@ -491,14 +647,21 @@ See `examples/` for runnable programs.
 | `METHOD_NOT_FOUND` | RPC not in this build; use a supported method |
 | `BAD_JSON`/`BAD_REQUEST` | malformed frame or wrong param type |
 | WinRM "ready" but no output | you used `terminal:write` on WinRM (a no-op) — drive via the agent |
-| task stalls awaiting approval | policy is `standard` — answer `agent:replyCommandApproval`, allowlist, or use `smart` |
-| blocking `startTask` times out | long task — use `agent:startTaskAsync` + watch events |
+| PSRP session opens, then commands fail with `w:InvalidSelectors` | (fixed in 3.7.4 — update) was the dest byte + INIT_RUNSPACEPOOL payload; see the v3.7.x section. If you hand-wrote a PSRP client: every client→server message is `dest=2`, and PSThreadOptions/ApartmentState/HostInfo must be full serialized objects, not `<Nil/>` |
+| PSRP command "succeeds" but a failed script reports exit 0 | PSRP pipelines don't propagate process exit codes — RTerm maps `hadErrors` → exit 1; check stderr / hadErrors, not just exitCode |
+| task stalls awaiting approval | policy is `standard` — answer `agent:replyCommandApproval` (or `y` in `rterm chat`), allowlist, or use `smart` |
+| blocking `startTask` times out | long task — use `agent:startTaskAsync` + watch events (or `rterm chat`, which does this for you) |
 | SSH "All configured authentication methods failed" | supply a credential (password **or** privateKey) — authMethod is inferred |
 | native module load error | no prebuilt binary for your platform — install a C/C++ toolchain and reinstall |
 | port already in use | another gybackend/RTerm app holds it — `... stop` or use a different `GYBACKEND_WS_PORT` |
+| npm `EACCES … root-owned files` during install/update | the lifecycle script auto-retries with a fresh temp cache; manual fix: `npm install -g <pkg> --cache /tmp/npm-fresh` (or `sudo chown -R $(whoami) ~/.npm*`) |
+| `rterm chat` resumes a session that no longer exists | the saved session was deleted server-side — the CLI detects it and starts fresh; pick another with `/sessions` |
+| `history:search is not available` in `rterm chat` | this daemon has no history bridge — `/search` degrades gracefully; everything else works |
+| `update` says "restart the daemon" | the new code loads on next start — run `node scripts/neuralos.mjs restart` |
 
 **Artifacts to collect:** the run-ledger entry (status+error), the session log for
-the terminal, the gateway boot log, and a minimal RPC repro (a websocat one-liner).
+the terminal, the gateway boot log, and a minimal RPC repro (a websocat one-liner
+or `rterm call <method> '<json>'`).
 
 ---
 
@@ -517,12 +680,48 @@ the terminal, the gateway boot log, and a minimal RPC repro (a websocat one-line
   simulation; target allowlist required on every call, denies by default). All follow the rmagent rule:
   authorized estate only. See the `rterm-plugin` skill for the governance-gate pattern.
 
+## v3.7.x — rterm-cli interactive chat + duplicate-tools fix + PSRP opt-in
+
+- **v3.7.4 — PSRP (PowerShell Remoting) as an opt-in WinRM transport.** Managed
+  Connections → WinRM now offers `transport: 'psrp'` next to http/https: same
+  port (5985) and Basic auth, but commands run in a real PowerShell runspace
+  pool instead of cmd.exe, so the script travels **inside the WS-Man message
+  body — no 8191-char CommandLine limit** (live: a 20 000-char script runs,
+  exit 0, full output). Default WinRM path unchanged; strictly opt-in. PSRP
+  exit codes: the pipeline reports `ExitCode 0` even after `exit 3` — RTerm
+  maps `hadErrors` → exit 1 so a failed command is never reported as success.
+- **v3.7.4 — `rterm-cli` token fix.** On Node ≥ 21 the CLI dropped the
+  `Authorization: Bearer` header (native WebSocket built without the options
+  object), so every remote command against a token-protected gateway failed
+  with "Connection closed before response". Fixed: the token is now sent both
+  as `?access_token=` (works everywhere) and as the header. Published as
+  `rterm-cli@3.7.4`.
+- **v3.7.3 — duplicate tool definitions fix.** Every plugin tool was sent to
+  the model **twice** (two commits each appending the same schemas); strict
+  providers (Grok, Fable) rejected the whole request with HTTP 400.
+  `dedupeToolsByName()` now guards every `bindTools()` call.
+- All three packages ship in lockstep: `neuralos`, `rterm-backend`,
+  `rterm-cli` are at the same version (`latest` = 3.7.4 at time of writing).
+
 ## Supporting files
 
-- `scripts/neuralos.mjs` — cross-platform lifecycle CLI (install/start/stop/restart/status/logs/ping/config-show/install-service/uninstall/doctor). No dependencies.
+- `scripts/neuralos.mjs` — cross-platform lifecycle CLI (doctor/install/update/setup/verify/start/stop/restart/status/logs/ping/config-show/install-service/uninstall). Manages **neuralos + rterm-cli together or individually**. No dependencies.
 - `service/neuralos.service` — systemd unit (Linux).
 - `service/ng.hyperspace.neuralos.plist` — launchd plist (macOS).
 - `service/install-windows-service.ps1` — Task Scheduler registration (Windows).
+- `examples/provision-server.mjs` — provision a NEW server over SSH: upload the lifecycle script → `setup --daemon` → `verify`. One command turns a bare Node box into a neuralOS node.
 - `examples/fleet-health-gate.mjs` — CI/CD post-deploy gate.
 - `examples/schedule-weekly-av.mjs` — create a weekly AV-update cron task headlessly.
 - `examples/mop-approved-change.mjs` — approval-gated change (plan → approve → run).
+
+### CI health gate (setup + verify in a pipeline)
+
+```yaml
+# GitHub Actions — fail the pipeline if the node is not healthy
+- name: neuralos health gate
+  run: |
+    node scripts/neuralos.mjs verify --url ws://${{ secrets.NODE_HOST }}:17888
+```
+
+`verify` exits 1 on any failed check (gateway down, CLI missing, round-trip
+broken), so it drops straight into CI as a gate.

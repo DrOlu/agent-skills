@@ -1,26 +1,33 @@
 #!/usr/bin/env node
 /**
- * neuralos.mjs — cross-platform lifecycle manager for the RTerm backend.
+ * neuralos.mjs — cross-platform lifecycle manager for the RTerm backend + CLI.
  *
  * Pure Node (>= 18) built-ins only — no npm dependencies, works on macOS, Linux,
- * and Windows. Manages install, start/stop/restart (foreground or background
- * daemon), status, logs, ping, config, service install, and uninstall of the
- * standalone `neuralos` (gybackend) daemon.
+ * and Windows. Manages install, update, setup, verify, start/stop/restart,
+ * status, logs, ping, config, service install, and uninstall of:
+ *   - the standalone `neuralos` (gybackend) daemon
+ *   - the `rterm-cli` command client (bin: rterm / rterm-cli)
+ * — together or individually.
  *
  * Usage:
  *   node neuralos.mjs <command> [flags]
  *
  * Commands:
- *   doctor                 Check Node, npm pkg, data dir, port, gateway.
- *   install                npm install -g neuralos
- *   uninstall              stop + npm uninstall -g neuralos
+ *   doctor                 Check Node, npm pkgs, data dir, port, gateway, CLI.
+ *   install [--cli] [--backend]   npm install -g neuralos and/or rterm-cli.
+ *   update  [--cli] [--backend]   update to latest from the registry (both by default).
+ *   setup   [--host H] [--port N] [--data DIR] [--daemon]
+ *                          install (if missing) + start + verify in one shot.
+ *   verify  [--url ws://host:port]
+ *                          end-to-end health: gateway ping + CLI round-trip.
+ *   uninstall [--keep-cli] stop + npm uninstall -g (keep CLI with --keep-cli).
  *   start [--port N] [--host H] [--data DIR] [--daemon] [--log FILE]
  *   stop
  *   restart
  *   status
  *   logs [--lines N]
  *   ping [--url ws://host:port]
- *   config-show            Print effective env + data dir.
+ *   config-show            Print effective env + data dir + installed versions.
  *   install-service        Print the service unit + enable command for this OS.
  *
  * Flags:
@@ -29,7 +36,7 @@
  *   --data DIR      data dir (default ./.gybackend-data / GYBACKEND_DATA_DIR)
  *   --daemon        run detached in background (nohup / Start-Process)
  *   --log FILE      daemon log file (default <data>/gybackend.log)
- *   --url URL       full ws url for ping (default ws://127.0.0.1:<port>)
+ *   --url URL       full ws url for ping/verify (default ws://127.0.0.1:<port>)
  */
 import process from 'node:process'
 import os from 'node:os'
@@ -38,7 +45,7 @@ import path from 'node:path'
 import net from 'node:net'
 import http from 'node:http'
 import crypto from 'node:crypto'
-import { spawn, spawnSync, execFileSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const IS_WIN = process.platform === 'win32'
@@ -78,9 +85,15 @@ const c = {
   head: (s) => console.log(`\n${s}`),
 }
 
+// --------------------------------------------------------------------------
+// helpers
+// --------------------------------------------------------------------------
 function sh(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: opts.quiet ? 'pipe' : 'inherit', shell: false, ...opts })
-  return { code: r.status ?? 0, stdout: (r.stdout || '').trim(), stderr: (r.stderr || '').trim() }
+  // Node >= 18.20 spawn-security fix: spawning .cmd/.bat without shell throws
+  // EINVAL (status null → our `?? 0` masked it as success). Wrap those.
+  const needsShell = IS_WIN && /\.(cmd|bat)$/i.test(cmd)
+  const r = spawnSync(cmd, args, { encoding: 'utf8', stdio: 'pipe', shell: needsShell, windowsVerbatimArguments: needsShell, ...opts })
+  return { code: r.status ?? (r.error ? 1 : 0), stdout: (r.stdout || '').trim(), stderr: (r.stderr || (r.error ? r.error.message : '')).trim() }
 }
 function which(bin) {
   const cmd = IS_WIN ? 'where' : 'which'
@@ -88,25 +101,117 @@ function which(bin) {
   return r.status === 0 ? (r.stdout || '').split('\n')[0].trim() : null
 }
 function nodeMajor() {
-  const m = String(process.versions.node).split('.')[0]
-  return Number(m)
+  return Number(String(process.versions.node).split('.')[0])
 }
 function npmBin() {
+  if (IS_WIN) {
+    // `where npm` lists npm (bash shim), npm.cmd, npm.ps1 — only npm.cmd is
+    // spawnable from Node (the bash shim ENOENTs, npm.ps1 needs a PS host).
+    const r = spawnSync('where', ['npm'], { encoding: 'utf8' })
+    if (r.status === 0) {
+      const lines = (r.stdout || '').split('\n').map((l) => l.trim()).filter(Boolean)
+      const cmd = lines.find((l) => l.toLowerCase().endsWith('npm.cmd'))
+      if (cmd) return cmd
+    }
+    return 'npm.cmd'
+  }
   const nb = which('npm')
-  return nb || (IS_WIN ? 'npm.cmd' : 'npm')
+  return nb || 'npm'
+}
+
+/**
+ * Full spawn spec for an npm invocation. On Windows we run
+ * `node <npm-cli.js>` directly — .cmd shims need shell:true (Node >= 18.20
+ * spawn policy) and shell:true breaks on spaces in "C:\Program Files\...".
+ * node + npm-cli.js sidesteps both.
+ */
+function npmSpawn(args) {
+  if (IS_WIN) {
+    const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    if (fs.existsSync(npmCli)) return { cmd: process.execPath, args: [npmCli, ...args] }
+    return { cmd: 'npm.cmd', args }
+  }
+  return { cmd: npmBin(), args }
 }
 function nodeBin() {
   return process.execPath
 }
+
+/** Installed global version of an npm package (null when absent). */
+function globalVersion(pkg) {
+  const spec = npmSpawn(['ls', '-g', pkg, '--depth=0'])
+  const r = sh(spec.cmd, spec.args)
+  if (r.code !== 0) return null
+  const m = r.stdout.match(new RegExp(`${pkg}@(\\S+)`))
+  return m ? m[1] : null
+}
+
+/** Latest version on the npm registry (null when unreachable). */
+function registryVersion(pkg) {
+  const spec = npmSpawn(['view', pkg, 'version'])
+  const r = sh(spec.cmd, spec.args)
+  return r.code === 0 && r.stdout ? r.stdout : null
+}
+
+/**
+ * npm install -g with one retry on EACCES using a fresh temp cache.
+ * Root-owned files in the user cache (from past `sudo npm`) are a common
+ * real-world failure; a clean cache dir sidesteps them without sudo.
+ */
+function npmInstallG(args) {
+  const spec = npmSpawn(args)
+  let r = sh(spec.cmd, spec.args)
+  if (r.code === 0) return r
+  if (/EACCES/i.test(r.stderr) || /cache folder contains root-owned/i.test(r.stderr)) {
+    const fresh = path.join(os.tmpdir(), `npm-cache-neuralos-${process.pid}`)
+    fs.rmSync(fresh, { recursive: true, force: true })
+    c.warn('npm cache has root-owned files (EACCES) — retrying with a fresh temp cache')
+    r = sh(spec.cmd, [...spec.args, '--cache', fresh])
+    try { fs.rmSync(fresh, { recursive: true, force: true }) } catch {}
+  }
+  return r
+}
+
+/** Semver-ish compare — enough for update checks (ignores prerelease nuance). */
+function isNewer(candidate, current) {
+  if (!candidate || !current) return false
+  const a = candidate.split('.').map((x) => Number(x) || 0)
+  const b = current.split('.').map((x) => Number(x) || 0)
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] || 0) > (b[i] || 0)) return true
+    if ((a[i] || 0) < (b[i] || 0)) return false
+  }
+  return false
+}
+
 // Resolve how to launch gybackend: prefer the on-PATH shim, else resolve
 // node + the globally-installed package script via `npm root -g`.
 function gybackendLaunch() {
-  const shim = which('gybackend') || (IS_WIN ? 'gybackend.cmd' : 'gybackend')
+  if (IS_WIN) {
+    // .cmd shims need shell (blocked by Node >= 18.20 policy); launch the
+    // real JS entry via node instead. Try npm root -g first.
+    try {
+      const spec = npmSpawn(['root', '-g'])
+      const root = sh(spec.cmd, spec.args).stdout
+      for (const rel of [
+        path.join('neuralos', 'bin', 'gybackend.js'),
+        path.join('neuralos', 'bin', 'gybackend.cjs'),
+      ]) {
+        const script = path.join(root, rel)
+        if (fs.existsSync(script)) return { cmd: nodeBin(), args: [script] }
+      }
+    } catch {}
+    const shim = which('gybackend')
+    if (shim) return { cmd: 'cmd.exe', args: ['/c', shim] }
+    return null
+  }
+  const shim = which('gybackend') || 'gybackend'
   if (shim && fs.existsSync(shim)) {
-    return IS_WIN ? { cmd: 'cmd.exe', args: ['/c', shim] } : { cmd: shim, args: [] }
+    return { cmd: shim, args: [] }
   }
   try {
-    const root = sh(npmBin(), ['root', '-g'], { quiet: true }).stdout
+    const spec = npmSpawn(['root', '-g'])
+    const root = sh(spec.cmd, spec.args).stdout
     const script = path.join(root, 'neuralos', 'bin', 'gybackend.js')
     if (fs.existsSync(script)) {
       return { cmd: nodeBin(), args: [script] }
@@ -114,6 +219,7 @@ function gybackendLaunch() {
   } catch {}
   return null
 }
+
 function portInUse(port, host = '127.0.0.1') {
   return new Promise((resolve) => {
     const s = net.connect({ port, host })
@@ -171,6 +277,21 @@ function wsPing(url, timeoutMs = 4000) {
   })
 }
 
+/** Run an rterm-cli one-shot command against WS_URL; returns stdout or throws. */
+function cliCall(args, timeoutMs = 30000) {
+  const shim = which('rterm-cli') || which('rterm')
+  if (!shim) throw new Error('rterm-cli not installed (npm i -g rterm-cli)')
+  const r = spawnSync(shim, args, {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    env: { ...process.env, RTERM_URL: WS_URL },
+  })
+  if (r.status !== 0) {
+    throw new Error((r.stderr || r.stdout || `exit ${r.status}`).trim().slice(0, 300))
+  }
+  return (r.stdout || '').trim()
+}
+
 // --------------------------------------------------------------------------
 // commands
 // --------------------------------------------------------------------------
@@ -179,30 +300,78 @@ async function doctor() {
   const nm = nodeMajor()
   nm >= 18 ? c.ok(`Node ${process.versions.node}`) : c.err(`Node ${process.versions.node} — need >= 18`)
   const npm = npmBin(); npm ? c.ok(`npm: ${npm}`) : c.err('npm not found')
-  const gyb = (gybackendLaunch() || {}).cmd; gyb ? c.ok(`gybackend: ${gyb}`) : c.warn('gybackend not on PATH (install with: install)')
+  const vBackend = globalVersion('neuralos')
+  const vCli = globalVersion('rterm-cli')
+  vBackend ? c.ok(`neuralos ${vBackend} (gybackend)`) : c.warn('neuralos not installed — run: install')
+  vCli ? c.ok(`rterm-cli ${vCli}`) : c.warn('rterm-cli not installed (optional) — run: install --cli')
+  const gyb = (gybackendLaunch() || {}).cmd; gyb ? c.ok(`gybackend: ${gyb}`) : c.warn('gybackend not on PATH')
   c.info(`platform: ${process.platform} ${process.arch}`)
   c.info(`data dir: ${DATA_DIR} ${fs.existsSync(DATA_DIR) ? '(exists)' : '(will be created)'}`)
   const busy = await portInUse(PORT)
   c.info(`port ${PORT}: ${busy ? 'in use (running?)' : 'free'}`)
   try { await wsPing(WS_URL); c.ok(`gateway ping OK (${WS_URL})`) }
   catch { c.warn(`gateway not answering at ${WS_URL}`) }
+  if (vCli) {
+    try { cliCall(['ping']); c.ok('rterm-cli round-trip OK') }
+    catch (e) { c.warn(`rterm-cli round-trip failed: ${e.message}`) }
+  }
 }
 
-async function install() {
-  c.head('Installing neuralos globally')
+async function installPkgs({ backend, cli }) {
   const npm = npmBin()
-  const r = sh(npm, ['install', '-g', 'neuralos'])
-  if (r.code !== 0) { c.err('npm install failed'); process.exit(r.code) }
-  c.ok('installed')
-  const gyb = (gybackendLaunch() || {}).cmd; gyb && c.ok(`gybackend at ${gyb}`)
+  const targets = []
+  if (backend) targets.push('neuralos')
+  if (cli) targets.push('rterm-cli')
+  if (targets.length === 0) targets.push('neuralos', 'rterm-cli')
+  c.head(`Installing: ${targets.join(' + ')}`)
+  const r = npmInstallG(targets)
+  if (r.code !== 0) { c.err(`npm install failed: ${r.stderr.slice(0, 300)}`); process.exit(r.code) }
+  for (const t of targets) {
+    const v = globalVersion(t)
+    if (v) c.ok(`${t}@${v} installed`)
+    else { c.err(`${t} still not resolvable after install`); process.exit(1) }
+  }
 }
 
-async function uninstall() {
+async function updatePkgs({ backend, cli }) {
+  const npm = npmBin()
+  const targets = []
+  if (backend) targets.push('neuralos')
+  if (cli) targets.push('rterm-cli')
+  if (targets.length === 0) targets.push('neuralos', 'rterm-cli')
+  c.head('Checking for updates')
+  let updated = 0
+  for (const pkg of targets) {
+    const cur = globalVersion(pkg)
+    const latest = registryVersion(pkg)
+    if (!latest) { c.warn(`${pkg}: registry unreachable — skipping`); continue }
+    if (!cur) { c.info(`${pkg}: not installed — skipping (use install)`); continue }
+    if (!isNewer(latest, cur)) {
+      c.ok(`${pkg} ${cur} — already latest (registry ${latest})`)
+      continue
+    }
+    c.info(`${pkg} ${cur} → ${latest} — updating…`)
+    const r = npmInstallG([`${pkg}@latest`])
+    if (r.code !== 0) { c.err(`${pkg} update failed: ${r.stderr.slice(0, 200)}`); continue }
+    const now = globalVersion(pkg)
+    if (now === latest) { c.ok(`${pkg} updated to ${now}`); updated += 1 }
+    else c.warn(`${pkg} reports ${now} (expected ${latest})`)
+  }
+  if (updated > 0) {
+    c.info('note: restart the daemon to run the new version (restart)')
+  }
+}
+
+async function uninstallPkgs({ keepCli }) {
   await stop()
-  c.head('Uninstalling neuralos')
   const npm = npmBin()
+  c.head('Uninstalling')
+  if (!keepCli) {
+    sh(npm, ['uninstall', '-g', 'rterm-cli'])
+    c.ok('rterm-cli uninstalled')
+  }
   sh(npm, ['uninstall', '-g', 'neuralos'])
-  c.ok('uninstalled')
+  c.ok('neuralos uninstalled')
 }
 
 async function start() {
@@ -235,8 +404,7 @@ async function start() {
   } else {
     c.info('foreground mode (Ctrl+C to stop)')
     const child = spawn(launch.cmd, launch.args, { env, stdio: 'inherit' })
-    child.on('exit', (code) => process.exit(code ?? 0)
-    )
+    child.on('exit', (code) => process.exit(code ?? 0))
   }
 }
 
@@ -286,7 +454,11 @@ async function ping() {
 
 function configShow() {
   c.head('effective configuration')
+  const vBackend = globalVersion('neuralos')
+  const vCli = globalVersion('rterm-cli')
   const rows = [
+    ['neuralos (installed)', vBackend || '(not installed)'],
+    ['rterm-cli (installed)', vCli || '(not installed)'],
     ['GYBACKEND_WS_ENABLE', '1'],
     ['GYBACKEND_WS_HOST', HOST],
     ['GYBACKEND_WS_PORT', String(PORT)],
@@ -322,11 +494,89 @@ function installService() {
   }
 }
 
+/**
+ * One-shot: install what's missing, start (daemon by default), verify.
+ * Idempotent — safe to re-run; an already-running healthy daemon is left alone.
+ */
+async function setup() {
+  c.head('neuralos setup')
+  const steps = []
+  const daemon = argv.daemon !== false // default true for setup
+
+  // 1. install what's missing
+  const needBackend = !globalVersion('neuralos')
+  const needCli = !globalVersion('rterm-cli')
+  if (needBackend || needCli) {
+    await installPkgs({ backend: needBackend, cli: needCli })
+  } else {
+    c.ok('neuralos + rterm-cli already installed')
+  }
+
+  // 2. start if not already running
+  const busy = await portInUse(PORT)
+  if (busy) {
+    try { await wsPing(WS_URL); c.ok(`gateway already running at ${WS_URL}`) }
+    catch {
+      c.warn(`port ${PORT} busy but gateway not answering — another service?`)
+      c.info('continuing to verify (it may still fail)')
+    }
+  } else {
+    const prevDaemon = argv.daemon
+    argv.daemon = daemon
+    await start()
+    argv.daemon = prevDaemon
+  }
+
+  // 3. verify
+  await verify()
+}
+
+/**
+ * End-to-end health check: gateway ping over raw WS + rterm-cli round-trip
+ * (the CLI is the primary programmatic client, so it must work).
+ */
+async function verify() {
+  c.head('verify')
+  let failures = 0
+
+  // 1. raw gateway ping
+  try { await wsPing(WS_URL); c.ok(`gateway ping (${WS_URL})`) }
+  catch (e) { c.err(`gateway ping failed: ${e.message}`); failures += 1 }
+
+  // 2. rterm-cli installed?
+  const vCli = globalVersion('rterm-cli')
+  if (!vCli) {
+    c.warn('rterm-cli not installed — skipping CLI round-trip (install with: install --cli)')
+  } else {
+    c.ok(`rterm-cli ${vCli} present`)
+    // 3. CLI → gateway version round-trip
+    try {
+      const out = cliCall(['version'])
+      const v = JSON.parse(out)
+      c.ok(`CLI→gateway round-trip: backend ${v.version}, ${v.methodCount} RPC methods`)
+    } catch (e) { c.err(`CLI round-trip failed: ${e.message}`); failures += 1 }
+    // 4. CLI → terminals (exercises the terminal subsystem)
+    try {
+      const out = cliCall(['terminals'])
+      const t = JSON.parse(out)
+      const n = Array.isArray(t.terminals) ? t.terminals.length : 0
+      c.ok(`CLI terminals listing: ${n} tab(s)`)
+    } catch (e) { c.warn(`CLI terminals listing failed: ${e.message}`) }
+  }
+
+  console.log('')
+  if (failures > 0) { c.err(`verify FAILED (${failures} failure(s))`); process.exit(1) }
+  c.ok('verify PASSED')
+}
+
 async function main() {
   switch (CMD) {
     case 'doctor': return doctor()
-    case 'install': return install()
-    case 'uninstall': return uninstall()
+    case 'install': return installPkgs({ backend: argv.backend === true, cli: argv.cli === true })
+    case 'update': return updatePkgs({ backend: argv.backend === true, cli: argv.cli === true })
+    case 'setup': return setup()
+    case 'verify': return verify()
+    case 'uninstall': return uninstallPkgs({ keepCli: argv['keep-cli'] === true })
     case 'start': return start()
     case 'stop': return stop()
     case 'restart': return restart()
@@ -337,7 +587,7 @@ async function main() {
     case 'install-service': return installService()
     default:
       console.error(`unknown command: ${CMD || '(none)'}\n`)
-      console.error('commands: doctor | install | uninstall | start | stop | restart | status | logs | ping | config-show | install-service')
+      console.error('commands: doctor | install | update | setup | verify | uninstall | start | stop | restart | status | logs | ping | config-show | install-service')
       process.exit(2)
   }
 }

@@ -13,7 +13,8 @@ The remote needs only: ssh access + the rmagent scripts in the same location.
 from __future__ import annotations
 import json
 import subprocess
-from pathlib import Path
+import sys  # REV 20 (P0): pull_and_merge inserts into sys.path — the missing
+from pathlib import Path  # import made multi-jump-host merging a NameError
 
 REMOTE_SCRIPT = '''
 import json, sys
@@ -82,7 +83,13 @@ def pull_and_merge(remotes: list[str], case: str | None = None) -> tuple[list[di
     all_remote = []
     for r in remotes:
         hops = pull_remote_hops(r, case)
-        status[r] = len(hops)
+        # REV 20 (P0): an unreachable remote is a HOLE, not "zero hops". The
+        # old silent [] made a dead site indistinguishable from a clean site
+        # and merged confidently incomplete traces.
+        if not hops:
+            status[r] = {"hops": 0, "hole": "remote-unreachable-or-empty"}
+        else:
+            status[r] = {"hops": len(hops)}
         all_remote.extend(hops)
 
     return merge_traces(local, all_remote), status

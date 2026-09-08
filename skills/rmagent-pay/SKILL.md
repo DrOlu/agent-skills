@@ -88,7 +88,9 @@ trace.py --ticket RRN-…  → one case file
 
 ## Packet sniff
 
-Only if `pay_attest` says both hops **cannot** join. Then SPAN at Segment C is a **last-resort payload**, mask on the sensor, cap JSON, no pcap warehouse. Not shipped in v1.
+Only if `pay_attest` says both hops **cannot** join. Then SPAN at Segment C is a **last-resort payload**, mask on the sensor, cap JSON, no pcap warehouse. Not shipped in v1. Any SPAN/ingest sensor is an estate change: **MOP-level**, dry-run default, tested **teardown**. Questions never start a capture.
+
+WinRM payloads are compact and must respect the ~8191-char UTF-16LE base64 command budget (same rule as the other rmagent Windows skills; a budget test is part of validation).
 
 ## Scripts
 

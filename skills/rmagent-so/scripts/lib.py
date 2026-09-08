@@ -255,21 +255,30 @@ _CRITICAL_FIELDS = {
     "appsysmon":   ["proc_hashes", "lsass_access", "image_loads", "registry_sets", "guid_conns"],
 }
 # Event IDs that must survive any trim — a row carrying one of these is critical.
+# REV 20 (P0): these are matched against TYPED fields (eid / id / event_id /
+# eventid) as exact tokens, never as substrings of arbitrary text. The old
+# substring scan made "port 4624 open" or a random numeric string look like a
+# critical 4688 row.
 _CRITICAL_EVENT_IDS = {"4648", "4672", "5861", "1102", "4104", "4698", "7045", "4732", "4688"}
+# fields whose exact value is compared against _CRITICAL_EVENT_IDS
+_ROW_EVENT_FIELDS = ("eid", "id", "event_id", "eventid", "event")
 # Rev 16: hard row cap per critical field in the last-resort path — the
 # critical-fields-only answer can never itself become a lake.
 _CRITICAL_FIELD_KEEP = 25
 
 
 def _row_signal(row) -> int:
-    """0 = noise, 1 = normal, 2 = critical. Pure."""
+    """0 = noise, 1 = normal, 2 = critical. Pure.
+
+    REV 20: critical classification is EXACT-match on typed event-ID fields
+    only. Prose, IPs, ports and message text no longer escalate a row."""
     if not isinstance(row, dict):
         return 1
-    # any field carrying a critical event id / technique marker
-    for k, v in row.items():
-        s = str(v)
-        if any(eid in s for eid in _CRITICAL_EVENT_IDS):
-            return 2
+    for f in _ROW_EVENT_FIELDS:
+        if f in row:
+            v = str(row.get(f) or "").strip()
+            if v in _CRITICAL_EVENT_IDS:
+                return 2
     return 1
 
 
@@ -353,8 +362,12 @@ def _cap_signal(result: dict, row: dict, skill: str) -> dict:
 
 def _parse(stdout: str) -> dict:
     stdout = (stdout or "").strip()
+    # REV 20 (P0): an EMPTY answer is not a clean answer. The old code returned
+    # ok=True with {"raw": ""}, which downstream readers treated as a sighted,
+    # quiet box. It is a hole — the payload did not emit JSON at all.
     if not stdout:
-        return {"ok": True, "data": {"raw": ""}}
+        return {"ok": False, "error": "empty answer (payload emitted nothing)",
+                "hole": hole("parse", "empty stdout; payload produced no JSON")}
     try:
         return {"ok": True, "data": json.loads(stdout)}
     except json.JSONDecodeError:
@@ -433,22 +446,50 @@ FP_ALLOWLIST = {
 
 def _filter_attackmap_fps(data: dict) -> dict:
     """Drop OS-default values from attackmap findings. Pure. A non-default
-    value (a real attacker netsh helper / SSP) still fires."""
+    value (a real attacker netsh helper / SSP) still fires.
+
+    REV 20 (P0): EXACT value matching, not substring. The old substring test
+    ('dotnet' in value) suppressed any finding whose text merely CONTAINED a
+    known-good name — e.g. a malicious helper 'evil-dotnet-helper.dll' was
+    silenced. A value is now allowed only when it exactly equals a known-good
+    token (case-insensitive, surrounding whitespace stripped) or the value is
+    a name=dll pair whose DLL path resolves to an exactly allowed bare name.
+    Suppressed counts are reported per finding."""
     findings = data.get("findings")
     if not isinstance(findings, list):
         return data
     kept = []
+    suppressed_total = 0
     for f in findings:
         t = f.get("t")
         allowed = FP_ALLOWLIST.get(t)
         if not allowed:
             kept.append(f)
             continue
-        vals = [v for v in (f.get("v") or [])
-                if not any(a in str(v).lower() for a in allowed)]
-        if vals:
-            kept.append({**f, "c": len(vals), "v": vals})
+        allowed_set = {a.lower() for a in allowed}
+        kept_vals = []
+        for v in (f.get("v") or []):
+            sv = str(v).strip()
+            low = sv.lower()
+            # the whole value may be exactly a known-good token...
+            if low in allowed_set:
+                suppressed_total += 1
+                continue
+            # ...or a name=dll pair where the DLL basename is known-good
+            parts = low.replace("\\", "/").split("/")
+            dll = parts[-1] if parts else ""
+            stem = dll.rsplit(".", 1)[0] if dll.endswith(".dll") else dll
+            if stem and stem in allowed_set:
+                suppressed_total += 1
+                continue
+            kept_vals.append(sv)
+        if kept_vals:
+            kept.append({**f, "c": len(kept_vals), "v": kept_vals})
+        else:
+            suppressed_total += int(f.get("c") or 0)
     out = {**data, "findings": kept, "found": len(kept)}
+    if suppressed_total:
+        out["fp_suppressed"] = suppressed_total
     return out
 
 

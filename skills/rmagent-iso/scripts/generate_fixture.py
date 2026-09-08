@@ -69,8 +69,11 @@ def generate(out: Path) -> None:
          tid="ATM00001", amount="000000020000",
          b_req=0.025, d=2.375, b_resp=0.030, rc="00", dispense=False)
 
-    # timeout — last_seen = cba_0200
-    _put(acq, cba, ej, t0=t_base + 920, stan="654321", rrn="654321000001",
+    # timeout — last_seen = cba_0200. REV 20: placed EARLY in the stream so
+    # >60 s of later ring activity exists after it — a txn with no 0210 is
+    # only a TIMEOUT once the ~60 s completion deadline has visibly passed;
+    # a request near the head of the ring is honestly in-flight.
+    _put(acq, cba, ej, t0=t_base + 100, stan="654321", rrn="654321000001",
          tid="ATM00002", amount="000000005000",
          b_req=0.022, drop_resp=True)
 

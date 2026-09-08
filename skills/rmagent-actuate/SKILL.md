@@ -1,3 +1,13 @@
+---
+name: rmagent-actuate
+description: >
+  Phase 1 response — named, journaled, reversible actions on Windows witnesses
+  you administer (block_ip, disable_user, isolate_host, rotate_credential, …).
+  Dry-run first; --apply requires a plan id from a seen dry-run. No arbitrary
+  shell. Complements rmagent-so (watch) and rmagent-redteam (drill). Use after
+  Phase 0 finds smoke you have confirmed is real.
+---
+
 # RMAgent Actuate — Phase 1 response
 
 You operate the **actuation layer** of the RMAgent security observatory. Phase 0

@@ -20,10 +20,8 @@ from unittest import mock
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import lib          # rmagent-so engine
+from _test_imports import lib, correlate, patient_zero  # REV 20: shared cross-tree loader
 import drift        # rmagent-so drift
-import correlate    # rmagent-so correlate
-import patient_zero # rmagent-so patient-zero walk
 
 PASS = 0
 FAIL = 0

@@ -108,7 +108,25 @@ def reconstruct(recs: list[dict], stan: str, rrn: str) -> dict[str, Any]:
     elif acq_req:
         last_seen = "acq_0200"
 
-    timeout = acq_req is not None and acq_resp is None
+    # REV 20 (P0): a request without a response is NOT automatically a
+    # timeout. It is a timeout only once the completion deadline has passed;
+    # before that it is honestly "in-flight". The ring cannot know wall-clock
+    # "now" at analysis time, so the deadline is expressed relative to the
+    # newest event seen across the rings: if the newest ring event is older
+    # than INFLIGHT_GRACE_S past the request, the txn can no longer complete
+    # within the deadline and IS a timeout.
+    INFLIGHT_GRACE_S = 60.0  # ISO financial txn completion deadline (industry ~30-60s)
+    newest_anywhere = None
+    for r in recs:
+        rt = r.get("t")
+        if rt is not None and (newest_anywhere is None or rt > newest_anywhere):
+            newest_anywhere = rt
+    timeout = False
+    if acq_req is not None and acq_resp is None:
+        if newest_anywhere is None:
+            timeout = True  # nothing newer anywhere — the txn cannot have completed silently
+        else:
+            timeout = (newest_anywhere - acq_req.get("t", 0)) > INFLIGHT_GRACE_S
     rc = (acq_resp or cba_resp or {}).get("rc")
     approved = rc == "00"
     ej_present = any(r.get("tap") == EJ for r in recs)

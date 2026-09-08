@@ -277,6 +277,12 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
     # --- hunt explain hops: proc_spawns + service/task/group events ---
     # (only signals we verified we staged — otherwise real background activity
     #  like routine service restarts would count as drill detections)
+    # REV 20 (P0): a bare nonzero count is NOT detection. sketch's new_services
+    # / new_tasks are whole-window counts that include routine background
+    # activity; proc_spawns counts every 4688. The old code credited the drill
+    # whenever the count was >0 — background traffic earned drill credit. Now
+    # the per-host path only credits when staged; and the sketch path above
+    # must ALSO be drill-name-scoped where the payload provides names.
     pj = hunt_case_dir / "path.json"
     if pj.exists():
         try:
@@ -284,16 +290,23 @@ def score(rows: list[dict], census_out: str, hunt_case_dir: Path,
                 wid = h.get("witness")
                 if h.get("skill") == "explain":
                     if staged_on("new_service", wid) and h.get("service_events", 0):
-                        found["new_service"] = True
+                        found.setdefault("new_service", {})  # per-host credit map
+                        found["new_service"][wid] = True
                     if staged_on("new_scheduled_task", wid) and h.get("task_events", 0):
-                        found["new_scheduled_task"] = True
+                        found.setdefault("new_scheduled_task", {})
+                        found["new_scheduled_task"][wid] = True
                     if staged_on("new_local_admin", wid) and \
                             (h.get("group_changes", 0) or h.get("identity_changes", 0)):
-                        found["new_local_admin"] = True
+                        found.setdefault("new_local_admin", {})
+                        found["new_local_admin"][wid] = True
                     if staged_on("powershell_spawns", wid) and h.get("proc_spawns", 0):
-                        found["powershell_spawns"] = True
+                        found.setdefault("powershell_spawns", {})
+                        found["powershell_spawns"][wid] = True
         except Exception:
             pass
+    # normalize: the sketch/netedges/attackmap paths above set True (bool);
+    # the path.json path sets {wid: True}. Either shape means "detected on
+    # >=1 host"; the per-host detail is kept when available.
     return found
 
 # --- modes ---------------------------------------------------------------------
@@ -319,13 +332,28 @@ def clean(rows):
     print(f"[redteam] cleaning drill artifacts on {len(rows)} box(es)")
     all_clean = True
     for r in rows:
-        res = run_payload(r, "clean", timeout=90)
+        try:
+            res = run_payload(r, "clean", timeout=90)
+        except Exception as e:  # transport/controller failure is NOT 'cleaned'
+            all_clean = False
+            print(f"  {r['id']:6} CLEAN-UNKNOWN — transport/verify failed: "
+                  f"{str(e).splitlines()[0][:120]}")
+            continue
         ok = res.get("ok")
         data = res.get("data") or {}
+        # REV 20 (P0): a raw/empty/failed response is UNKNOWN, not success.
+        # The old code trusted ok=True and only checked still_present, so a
+        # payload that failed to even emit its verification JSON passed as
+        # 'cleaned' — the exact opposite of what a drill must guarantee.
+        verified = isinstance(data, dict) and "cleaned" in data or "still_present" in data
         still = data.get("still_present") or []
-        if still:
+        if not ok or still or not verified:
             all_clean = False
-        print(f"  {r['id']:6} {'cleaned' if ok else 'FAIL'} — {data.get('cleaned', res.get('error'))}"
+        print(f"  {r['id']:6} "
+              + ("cleaned" if (ok and verified and not still)
+                 else "CLEAN-UNKNOWN" if not verified
+                 else "FAIL")
+              + f" — {data.get('cleaned', res.get('error'))}"
               + (f"  ⚠ STILL PRESENT: {still}" if still else ""))
     return all_clean
 
@@ -335,85 +363,115 @@ def run_full(rows, inventory, keep_dirty: bool):
     case_dir = case_root / f"redteam-{time.strftime('%Y%m%d-%H%M%S')}"
     case_dir.mkdir(parents=True, exist_ok=True)
 
+    # REV 20 (P0): persist a RUN MANIFEST before anything is staged. If the
+    # controller dies mid-drill, the next operator (or a recovery run) can
+    # find which boxes hold staged RMAgentDrill_ artifacts. The old flow kept
+    # this only in memory — a crash after stage() left artifacts on hosts
+    # with no record anywhere.
+    manifest = {
+        "case": case_dir.name, "inventory": inventory,
+        "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "witnesses": [r.get("id") for r in rows],
+        "expected": sorted(EXPECTED.keys()),
+        "cleanup": "pending",
+    }
+    (case_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2))
+
     telegram_send(f"🛰️ RMAgent red-team drill started\nStaging LOTL artifacts on "
                   f"{len(rows)} box(es): {[r['id'] for r in rows]}\n"
                   f"Expect: {', '.join(EXPECTED.keys())}")
 
-    _, staged_verified = stage(rows)
-    print("[redteam] waiting 8s for events to settle in the logs...")
-    time.sleep(8)
+    detected, missed = [], []
+    try:
+        _, staged_verified = stage(rows)
+        print("[redteam] waiting 8s for events to settle in the logs...")
+        time.sleep(8)
 
-    # run rmagent census + hunt
-    census = subprocess.run(
-        [sys.executable, str(RMA / "census.py"), "--inventory", inventory,
-         "--case-dir", str(case_dir)],
-        capture_output=True, text=True)
-    census_out = census.stdout
-    print("--- census ---"); print(census_out)
+        # run rmagent census + hunt
+        census = subprocess.run(
+            [sys.executable, str(RMA / "census.py"), "--inventory", inventory,
+             "--case-dir", str(case_dir)],
+            capture_output=True, text=True)
+        census_out = census.stdout
+        print("--- census ---"); print(census_out)
 
-    hunt = subprocess.run(
-        [sys.executable, str(RMA / "hunt.py"), "--inventory", inventory,
-         "--since", "1h", "--case-dir", str(case_dir), "--limit", "8"],
-        capture_output=True, text=True)
-    print("--- hunt ---"); print(hunt.stdout)
+        hunt = subprocess.run(
+            [sys.executable, str(RMA / "hunt.py"), "--inventory", inventory,
+             "--since", "1h", "--case-dir", str(case_dir), "--limit", "8"],
+            capture_output=True, text=True)
+        print("--- hunt ---"); print(hunt.stdout)
 
-    found = score(rows, census_out, case_dir, staged_verified)
-    detected = list(found.keys())
-    missed = [k for k in EXPECTED if k not in found]
+        found = score(rows, census_out, case_dir, staged_verified)
+        detected = list(found.keys())
+        missed = [k for k in EXPECTED if k not in found]
 
-    # distinguish "not staged" (drill couldn't create it — env limitation) from
-    # "not detected" (rmagent missed something that WAS staged). A signal counts
-    # as staged if it landed on at least one box.
-    _DRILL_KEY = {
-        "failed_admin_logons": "failed_logons",
-        "new_local_admin": "new_local_admin",
-        "new_scheduled_task": "scheduled_task",
-        "new_service": "new_service",
-        "powershell_spawns": "powershell_spawns",
-        "system_outbound_conn": "scheduled_task",
-        "run_key": "run_key",
-        "ifeo_hijack": "ifeo_hijack",
-    }
-    def _staged_anywhere(sig: str) -> bool:
-        return bool(staged_verified.get(_DRILL_KEY.get(sig, sig)))
+        # distinguish "not staged" (drill couldn't create it — env limitation) from
+        # "not detected" (rmagent missed something that WAS staged). A signal counts
+        # as staged if it landed on at least one box.
+        _DRILL_KEY = {
+            "failed_admin_logons": "failed_logons",
+            "new_local_admin": "new_local_admin",
+            "new_scheduled_task": "scheduled_task",
+            "new_service": "new_service",
+            "powershell_spawns": "powershell_spawns",
+            "system_outbound_conn": "scheduled_task",
+            "run_key": "run_key",
+            "ifeo_hijack": "ifeo_hijack",
+        }
+        def _staged_anywhere(sig: str) -> bool:
+            return bool(staged_verified.get(_DRILL_KEY.get(sig, sig)))
 
-    not_staged = [k for k in EXPECTED if not _staged_anywhere(k)]
-    not_detected = [k for k in missed if _staged_anywhere(k)]
+        not_staged = [k for k in EXPECTED if not _staged_anywhere(k)]
+        not_detected = [k for k in missed if _staged_anywhere(k)]
 
-    WHY = {
-        "new_local_admin": "4732 needs 'Audit Security Group Management' on; sketch's regex may miss workgroup-format names",
-        "new_scheduled_task": "4698 needs 'Audit Other Object Access Events' on (off by default)",
-        "powershell_spawns": "4688 needs 'Audit Process Creation' on (off by default)",
-        "system_outbound_conn": "netedges (Sysmon EID3 ring) missed it — check Sysmon NetworkConnect config is on",
-        "failed_admin_logons": "4625 needs 'Audit Logon' failure auditing ON (ws2 has it OFF — run: auditpol /set /subcategory:\"Logon\" /failure:enable)",
-        "new_service": "7045 needs no extra audit policy; check the service was created",
-        "run_key": "attackmap needs the run_key check; verify the registry value was created (HKLM Run key)",
-        "ifeo_hijack": "attackmap needs the ifeo_dbg check; verify the IFEO Debugger value was created",
-    }
-    summary = (f"✅ RMAgent drill — detection report\n"
-               f"Detected ({len(detected)}/{len(EXPECTED)}):\n"
-               + ("".join(f"  • {k} — {EXPECTED[k]}\n" for k in detected) or "  (none)\n"))
-    if not_staged:
-        summary += (f"\nNot staged ({len(not_staged)}) — environment limitation, not a rmagent miss:\n"
-                    + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in not_staged))
-    if not_detected:
-        summary += (f"\nNot detected ({len(not_detected)}) — staged but rmagent missed:\n"
-                    + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in not_detected))
-    if not missed:
-        summary += "\nFull coverage. 🎯"
-    summary += f"\nCase: {case_dir.name}"
-    print("\n" + summary)
-    ok = telegram_send(summary)
-    print(f"[telegram] report sent: {ok}")
-
-    if not keep_dirty:
-        print("\n[redteam] cleaning up staged artifacts...")
-        all_clean = clean(rows)
-        telegram_send("🧹 Drill artifacts cleaned. Estate restored."
-                      if all_clean else
-                      "⚠️ Drill cleanup INCOMPLETE — artifacts still present! Check still_present in output.")
-    else:
-        print("\n[redteam] keeping artifacts (--keep). Clean later with: redteam.py clean")
+        WHY = {
+            "new_local_admin": "4732 needs 'Audit Security Group Management' on; sketch's regex may miss workgroup-format names",
+            "new_scheduled_task": "4698 needs 'Audit Other Object Access Events' on (off by default)",
+            "powershell_spawns": "4688 needs 'Audit Process Creation' on (off by default)",
+            "system_outbound_conn": "netedges (Sysmon EID3 ring) missed it — check Sysmon NetworkConnect config is on",
+            "failed_admin_logons": "4625 needs 'Audit Logon' failure auditing ON (ws2 has it OFF — run: auditpol /set /subcategory:\"Logon\" /failure:enable)",
+            "new_service": "7045 needs no extra audit policy; check the service was created",
+            "run_key": "attackmap needs the run_key check; verify the registry value was created (HKLM Run key)",
+            "ifeo_hijack": "attackmap needs the ifeo_dbg check; verify the IFEO Debugger value was created",
+        }
+        summary = (f"✅ RMAgent drill — detection report\n"
+                   f"Detected ({len(detected)}/{len(EXPECTED)}):\n"
+                   + ("".join(f"  • {k} — {EXPECTED[k]}\n" for k in detected) or "  (none)\n"))
+        if not_staged:
+            summary += (f"\nNot staged ({len(not_staged)}) — environment limitation, not a rmagent miss:\n"
+                        + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in not_staged))
+        if not_detected:
+            summary += (f"\nNot detected ({len(not_detected)}) — staged but rmagent missed:\n"
+                        + "".join(f"  • {k} — {WHY.get(k, EXPECTED[k])}\n" for k in not_detected))
+        if not missed:
+            summary += "\nFull coverage. 🎯"
+        summary += f"\nCase: {case_dir.name}"
+        print("\n" + summary)
+        ok = telegram_send(summary)
+        print(f"[telegram] report sent: {ok}")
+    finally:
+        # REV 20 (P0): cleanup runs even if scoring/subprocesses raise. A
+        # crashed drill must never leave staged artifacts behind silently.
+        if not keep_dirty:
+            print("\n[redteam] cleaning up staged artifacts (finally)...")
+            try:
+                all_clean = clean(rows)
+            except Exception as e:
+                all_clean = False
+                print(f"[redteam] cleanup raised: {e}")
+            manifest["cleanup"] = "verified" if all_clean else "INCOMPLETE-OR-UNKNOWN"
+            manifest["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            (case_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2))
+            if not all_clean:
+                telegram_send("⚠️ Drill cleanup INCOMPLETE or UNKNOWN — artifacts may still be "
+                              f"present on: {[r.get('id') for r in rows]}. Case: {case_dir.name}. "
+                              "Re-run `redteam.py clean` and verify manually.")
+            else:
+                telegram_send("🧹 Drill artifacts cleaned. Estate restored.")
+        else:
+            manifest["cleanup"] = "deferred (--keep)"
+            (case_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2))
+            print("\n[redteam] keeping artifacts (--keep). Clean later with: redteam.py clean")
 
     print(f"\n[redteam] done. case: {case_dir}")
     return detected, missed

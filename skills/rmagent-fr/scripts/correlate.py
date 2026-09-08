@@ -39,16 +39,31 @@ def _to_hours(s: str) -> float:
 
 
 def _load_answers(case_dir: Path) -> dict:
-    """Re-use answers hunt.py already pulled (answers/*.json)."""
+    """Re-use answers hunt.py already pulled (answers/*.json).
+
+    REV 20: answers are now full ENVELOPES (witness/skill/t/ok/capped/data)
+    written by record_ask. Unwrap to the bare data the joiners expect, but
+    keep the envelope as `_envelope` so future readers can see trim
+    provenance. Legacy bare-data files (pre-Rev 20) still load unchanged."""
     out = {}
     adir = case_dir / "answers"
     if not adir.exists():
         return out
     for f in sorted(adir.glob("*.json")):
         try:
-            out[f.stem] = json.loads(f.read_text())
+            doc = json.loads(f.read_text())
         except Exception:
             continue
+        if isinstance(doc, dict) and "data" in doc and ("witness" in doc or "skill" in doc):
+            d = doc.get("data")
+            if isinstance(d, dict):
+                d = dict(d)
+                d["_envelope"] = {k: doc.get(k) for k in
+                                  ("witness", "skill", "t", "ok", "error",
+                                   "hole", "capped", "cap_note")}
+                out[f.stem] = d
+        else:
+            out[f.stem] = doc
     return out
 
 

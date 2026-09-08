@@ -60,13 +60,17 @@ def ask(question: str, **params: Any) -> dict[str, Any]:
 
 
 def _attest(question: str, **params: Any) -> dict[str, Any]:
-    """Sightedness first. Replace with a real door."""
+    """Sightedness first. REPLACE with a real door before trusting anything.
+
+    REV 20: the skeleton used to return ok=True with blind_check='unknown' —
+    a stub that looked like a sighted witness. A scaffold must NEVER claim
+    success. Unimplemented = hole, honestly."""
     return {
-        "ok": True,
-        "question": "attest",
-        "blind_check": "unknown",
-        "blind_count": None,
-        "note": "skeleton attest — implement a real blind_check before trusting emptiness",
+        "hole": True,
+        "asked": question,
+        "empty": True,
+        "why": "not-implemented (scaffold): wire a real door + blind_check "
+               "before any question is trusted",
     }
 
 

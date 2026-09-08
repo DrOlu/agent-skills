@@ -258,12 +258,12 @@ answers = {
 res = correlate.correlate(answers, ROWS)
 kinds = [f["kind"] for f in res["findings"]]
 ok("canary_tripped" in kinds, "correlate surfaces the canary hit")
-ok("shared-logonid" in kinds, "correlate still finds shared-logonid")
+ok("shared-logonid-candidate" in kinds, "correlate finds the shared-logonid join (candidate, Rev 20)")
 ok("lateral-hop" in kinds, "correlate still finds lateral-hop")
 order = [f["kind"] for f in res["findings"]]
-ok(order.index("canary_tripped") < order.index("shared-logonid"),
+ok(order.index("canary_tripped") < order.index("shared-logonid-candidate"),
    "canary outranks shared-logonid (rank 0 < rank 1)")
-ok(order.index("shared-logonid") < order.index("lateral-hop"),
+ok(order.index("shared-logonid-candidate") < order.index("lateral-hop"),
    "shared-logonid outranks lateral-hop")
 ct = next(f for f in res["findings"] if f["kind"] == "canary_tripped")
 ok("block_ip" in ct.get("recommended_actions", []), "canary finding recommends block_ip first")

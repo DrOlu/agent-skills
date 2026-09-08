@@ -175,12 +175,14 @@ def _parse(stdout: str) -> dict:
 
 
 def _cap(parsed: dict) -> dict:
+    """Bound the answer to MAX_PULL_BYTES. REV 20 (P0): trim rows, then
+    RE-MEASURE the serialized result — the old code trimmed once and returned
+    without re-checking, so a 32 KB single row (or a big envelope) could still
+    pass through, and the cap_note lied about the final size."""
     if not parsed.get("ok"):
         return parsed
-    blob = json.dumps(parsed.get("data") or {}, default=str)
-    if len(blob.encode()) <= MAX_PULL_BYTES:
-        return parsed
     data = parsed.get("data") or {}
+    trimmed = False
     for key in ("rows", "txns", "hits"):
         if isinstance(data.get(key), list) and len(data[key]) > 3:
             data = dict(data)
@@ -189,10 +191,14 @@ def _cap(parsed: dict) -> dict:
             data["cap_note"] = "trimmed to 3 rows (32 KB)"
             parsed["data"] = data
             parsed["capped"] = True
-            return parsed
+            trimmed = True
+    # re-measure the COMPLETE serialized answer (envelope + diagnostics included)
+    if len(json.dumps(parsed, default=str).encode()) <= MAX_PULL_BYTES:
+        return parsed
+    # still over cap → the honest answer is a hole, not a truncated lie
     parsed["ok"] = False
-    parsed["error"] = "over cap"
-    parsed["hole"] = hole("cap", "answer > 32 KB")
+    parsed["error"] = "answer exceeded 32 KB even after row trim"
+    parsed["hole"] = hole("cap", "answer > 32 KB after trim")
     parsed["data"] = None
     return parsed
 
@@ -409,9 +415,15 @@ def hop_delta(switch: dict, core: dict) -> dict:
         ingress_ms = int((t_recv - t_in).total_seconds() * 1000) if (t_in and t_recv) else None
         core_ms = int((t_post - t_recv).total_seconds() * 1000) if (t_recv and t_post) else None
         switch_ms = int((t_out - t_in).total_seconds() * 1000) if (t_in and t_out) else None
+        # REV 20 (P0): absence of a core row is NOT proof the txn never reached
+        # the core. If the core hop itself failed/blind/cooldowned, the only
+        # honest per-hop verdict is "not-observed-at-core". "never-reached-core"
+        # is reserved for the case where the core hop answered, was sighted, and
+        # genuinely had no row for this grain in its window.
+        core_ok = bool(core.get("ok"))
         where = "unknown"
         if c is None:
-            where = "never-reached-core" if srows else "no-signal"
+            where = "not-observed-at-core" if not core_ok else "never-reached-core"
         elif core_ms is not None and ingress_ms is not None:
             where = "finacle-posting" if core_ms >= ingress_ms else "postilion-ingress"
         elif core_ms is not None:
@@ -422,6 +434,9 @@ def hop_delta(switch: dict, core: dict) -> dict:
             "switch_rc": s.get("rc"), "core_rc": (c or {}).get("rc"),
             "ingress_ms": ingress_ms, "core_ms": core_ms, "switch_e2e_ms": switch_ms,
             "delay_on": where,
+            "core_hop_ok": core_ok,
+            "evidence_class": ("corroborated" if where in ("finacle-posting", "postilion-ingress")
+                               else "candidate-association"),
         })
     term = "origin"
     if not switch.get("ok"):
@@ -439,6 +454,12 @@ def hop_delta(switch: dict, core: dict) -> dict:
 
 def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 20,
         timeout: int = ASK_TIMEOUT_SEC, ticket: str = "", creds: dict | None = None) -> dict:
+    # REV 20: explicit actuate refusal — the payments plane is watch-only.
+    # Configuration changes belong to Postilion/Finacle change management,
+    # never to this knock.
+    if skill == "actuate":
+        return {"ok": False, "error": "actuate is off (payments plane is watch-only)",
+                "hole": hole(f"{row.get('id')} actuate", "watch is not actuate")}
     if skill not in ALLOWED:
         return {"ok": False, "error": f"skill not allowlisted: {skill}"}
     if skill not in (row.get("skills") or []):

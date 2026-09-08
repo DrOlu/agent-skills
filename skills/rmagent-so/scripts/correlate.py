@@ -199,15 +199,30 @@ def correlate(answers: dict, rows: list) -> dict:
                     close = abs((t1 - t0).total_seconds()) <= 600
                 except (ValueError, TypeError):
                     close = True  # unparseable timestamps — do not downgrade on a parse error
+            # REV 20 (P0): honesty fix. A LogonId is a PER-BOOT, PER-HOST LSA
+            # counter — the same (lid, user) on two machines is NEVER proof of
+            # one session on two boxes. The strongest honest claim is a
+            # "candidate association" that corroborates (or is corroborated by)
+            # other evidence such as a lateral-hop or explicit-cred join. The
+            # old "critical / same session on two boxes" wording manufactured
+            # a stolen-credential verdict out of a counter coincidence.
+            kind = "shared-logonid-candidate"
+            if close:
+                detail = ("LogonId %s for '%s' appears on %d witnesses (%s) within "
+                          "10 minutes — CANDIDATE association; corroborate with "
+                          "lateral-hop / 4648 / source IP before acting"
+                          % (lid, user, len(hosts), ", ".join(sorted(hosts))))
+            else:
+                detail = ("LogonId %s for '%s' appears on %d witnesses (%s) but far "
+                          "apart — likely per-boot coincidence"
+                          % (lid, user, len(hosts), ", ".join(sorted(hosts))))
             findings.append({
-                "kind": "shared-logonid",
-                "severity": "critical" if close else "info",
-                "detail": "LogonId %s for '%s' appears on %d witnesses (%s)%s"
-                          % (lid, user, len(hosts), ", ".join(sorted(hosts)),
-                             " — same session on two boxes" if close
-                             else " — observations far apart; likely per-boot coincidence"),
+                "kind": kind,
+                "severity": "warning" if close else "info",
+                "detail": detail,
                 "logon_id": lid, "account": user, "hosts": sorted(hosts),
                 "observed_at": ts,
+                "evidence_class": "candidate-association",
             })
 
     # --- 5. canary tripwire (Rev 15) — any hit is critical, no correlation needed ---
@@ -279,8 +294,10 @@ def correlate(answers: dict, rows: list) -> dict:
                                 ["block_ip", "disable_user", "kill_process"]),
         "bruteforce_source":   (1, "a named source is guessing a tracked account — block_ip has its target",
                                 ["block_ip"]),
-        "shared-logonid":      (2, "same session on two boxes — stolen credential in active use",
-                                ["disable_user", "block_ip"]),
+        "shared-logonid-candidate": (2, "same (LogonId, user) on two boxes within "
+                                     "10 min — CANDIDATE association, corroborate "
+                                     "with lateral-hop/4648 before acting",
+                                     []),  # no auto-actuate on a counter coincidence (Rev 20)
         "lateral-hop":         (3, "one witness connecting to another — active movement",
                                 ["block_ip", "kill_process"]),
         "new_admins":          (4, "an account gained admin since baseline",

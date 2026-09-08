@@ -29,8 +29,13 @@ except ImportError:
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions"
 
-ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
-           "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2", "canary"}
+# REV 20 (P0): the allowlist now matches the SKILL.md question set (agents,
+# agentstate, agenttrace, agentnet, agentmodels, agentdrift, agentdeep). The
+# old copy listed the SECURITY questions (attest/sketch/edges/...) — every
+# documented agent question was refused as "not allowlisted" and the skill
+# could not answer its own description.
+ALLOWED = {"agents", "agentstate", "agenttrace", "agentnet", "agentmodels",
+           "agentdrift", "agentdeep"}
 PHASE0_SKILLS = ALLOWED
 MAX_PULL_BYTES = 32 * 1024
 WALK_DEPTH = 8
@@ -156,7 +161,9 @@ def creds_for(row: dict) -> dict:
         sec = _scrt(_SCRT_KEY_MAP.get((row.get("id") or "").lower(), ""))
         if sec:
             pw = sec
-            os.environ[f"RMAgent_{rid}_PASS"] = pw   # cache for later calls in this process
+            # REV 20 (P0): the resolved password stays in the in-process cache
+            # ONLY. The old code wrote it back into os.environ, exposing it to
+            # `ps -E` and to every subprocess spawned afterwards.
     if not pw:
         raise SystemExit(
             f"No credential for {row.get('id')}. Set RMAgent_{rid}_PASS / RMAgent_{rid}_USER "
@@ -322,8 +329,11 @@ def _cap_signal(result: dict, row: dict, skill: str) -> dict:
 
 def _parse(stdout: str) -> dict:
     stdout = (stdout or "").strip()
+    # REV 20 (P0): empty/garbage output is a hole, never ok/raw — same rule
+    # as the rmagent-so engine.
     if not stdout:
-        return {"ok": True, "data": {"raw": ""}}
+        return {"ok": False, "error": "empty answer (payload emitted nothing)",
+                "hole": hole("parse", "empty stdout; payload produced no JSON")}
     try:
         return {"ok": True, "data": json.loads(stdout)}
     except json.JSONDecodeError:
@@ -335,7 +345,8 @@ def _parse(stdout: str) -> dict:
                 return {"ok": True, "data": json.loads(stdout[i:])}
             except json.JSONDecodeError:
                 pass
-        return {"ok": True, "data": {"raw": stdout[:4000]}}
+        return {"ok": False, "error": "unparseable answer (payload did not emit JSON)",
+                "hole": hole("parse", "not JSON; first 400 chars: " + stdout[:400])}
 
 
 # ---------------------------------------------------------------- preamble + ask
@@ -422,6 +433,20 @@ def _preamble(row: dict, since_hours: float, limit: int, skill: str = "") -> str
     return out
 
 
+def _sh_preamble(row: dict, since_hours: float, limit: int, skill: str = "") -> str:
+    """Shell preamble for the SSH door. The ao payloads read $Limit /
+    $SinceHours-style env names in lower case (lim / SinceHours) — export
+    both spellings so either convention works."""
+    track = row.get("track") or ["root"]
+    t_items = ",".join(str(t).replace("'", "") for t in track)
+    return (
+        "export TRACK='" + t_items + "'\n"
+        f"export SinceHours={float(since_hours)}\n"
+        f"export Limit={int(limit)}\n"
+        f"export lim={int(limit)}\n"
+    )
+
+
 def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
         timeout: int = 25, creds: dict | None = None) -> dict:
     """Send ONE allowlisted named question. Returns {ok, data?, error?, hole?}."""
@@ -433,14 +458,50 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
     if skill not in (row.get("skills") or []):
         return {"ok": False, "error": f"{row.get('id')} does not advertise {skill}",
                 "hole": hole(f"{row.get('id')} {skill}", f"not advertised")}
+
+    door = (row.get("door") or ("ssh" if (row.get("os") or "linux").lower()
+                                in ("linux", "darwin", "aix", "unix") else "winrm")).lower()
+    osname = (row.get("os") or ("windows" if door in ("winrm", "psrp") else "linux")).lower()
+
+    if door == "ssh" or osname in ("linux", "darwin", "aix", "unix"):
+        # REV 20 (P0): the SSH door exists — SKILL.md documents SSH witnesses
+        # (the example inventory itself has door: ssh), but the old engine
+        # rejected every non-WinRM door, so the skill could not run on the
+        # very estate its own README shows.
+        payload = QDIR / "linux" / f"{skill}.sh"
+        if not payload.exists():
+            return {"ok": False, "error": f"no payload {payload.name}",
+                    "hole": hole(f"{row.get('id')} {skill}", f"no payload {payload.name}")}
+        sh = _sh_preamble(row, since_hours, limit, skill) + "\n" + payload.read_text()
+        try:
+            r = subprocess.run(
+                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                 "-p", str(row.get("port") or 22),
+                 f"{row.get('user')}@{row['address']}", "bash -s"],
+                input=sh.encode(), capture_output=True, timeout=_clamp_timeout(skill, timeout))
+        except FileNotFoundError:
+            return {"ok": False, "error": "ssh binary not found on the jump host",
+                    "hole": hole(f"{row.get('id')} {skill}", "no ssh binary")}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "ssh timeout",
+                    "hole": hole(f"{row.get('id')} {skill}", "timeout")}
+        except Exception as e:  # noqa: BLE001
+            msg = str(e).split("\n")[0][:300]
+            return {"ok": False, "error": msg,
+                    "hole": hole(f"{row.get('id')} {skill}", f"unreachable: {msg}")}
+        out = r.stdout.decode("utf-8", "replace")
+        if r.returncode != 0 and not out.strip().startswith("{"):
+            err = r.stderr.decode("utf-8", "replace")
+            return {"ok": False, "error": (err or out)[-400:],
+                    "hole": hole(f"{row.get('id')} {skill}", (err or out)[-200:] or f"exit {r.returncode}")}
+        return _cap_signal(_parse(out), row, skill)
+
+    if door not in ("winrm", "psrp"):
+        return {"ok": False, "error": f"door={door} not supported (use winrm or ssh)",
+                "hole": hole(f"{row.get('id')} {skill}", f"door {door} not supported")}
     if winrm is None:
         return {"ok": False, "error": "pywinrm not installed (`pip install pywinrm`)",
                 "hole": hole(f"{row.get('id')} {skill}", "pywinrm not installed")}
-
-    door = (row.get("door") or "winrm").lower()
-    if door != "winrm":
-        return {"ok": False, "error": f"this skill is Windows-only; door={door}",
-                "hole": hole(f"{row.get('id')} {skill}", f"door {door} not supported")}
 
     payload = QDIR / "windows" / f"{skill}.ps1"
     if not payload.exists():

@@ -351,11 +351,32 @@ def main():
         u = e["undo"]
         print(f"[undo] reversing entry {args.journal_entry}: "
               f"{u['action']} {u['target']} on {e['witness']}")
-        res = run_action(row, u["action"], u["target"])
+        # REV 20 (P0): undo payloads need the CAPTURED PRE-STATE, not just the
+        # target name. recreate_task needs the journaled task XML;
+        # un_isolate_host needs the previous firewall rule names / defaults.
+        # The old undo ran with $Target only, so recreate_task ALWAYS answered
+        # 'no task XML provided' and un_isolate_host could not re-enable the
+        # rules isolation disabled — undos that could not undo.
+        detail = e.get("result_detail") or {}
+        undo_target = u["target"]
+        if u["action"] == "recreate_task":
+            xml = detail.get("task_xml") or ""
+            if xml:
+                undo_target = json.dumps({"task": u["target"], "xml": xml})
+        elif u["action"] == "un_isolate_host":
+            prev_rules = detail.get("disabled_allow_rules") or \
+                detail.get("previous_allow_rules") or []
+            prev_default = detail.get("previous_default_inbound") or ""
+            if prev_rules or prev_default:
+                undo_target = json.dumps({
+                    "rules": [str(r) for r in prev_rules][:200],
+                    "defaults": prev_default,
+                })
+        res = run_action(row, u["action"], undo_target)
         ok = res.get("ok")
-        print(f"  {'ok' if ok else 'FAIL'} - {res.get('data') or res.get('error')}")
+        print(f"  {'ok' if ok else 'FAIL'} - {json.dumps(redact(res.get('data')), default=str)[:300]}")
         if ok:
-            verified = verify_action(row, u["action"], u["target"])
+            verified = verify_action(row, u["action"], undo_target if u["action"] != "recreate_task" and u["action"] != "un_isolate_host" else e["target"])
             journal.append(e["witness"], f"undo:{u['action']}", u["target"],
                            f"undo of entry {args.journal_entry}: {e.get('reason','')}",
                            None, "undone", bool(verified))
@@ -432,13 +453,19 @@ def main():
         return
 
     # ---- H1: --apply requires the matching dry-run plan
+    # REV 20 (P0): the plan must bind the ACTION as well as witness and
+    # target. The old check compared witness+target only, so a plan shown for
+    # one action could authorize a DIFFERENT action against the same target
+    # (e.g. a disable_user dry-run approving a rotate_credential apply).
     if not args.plan:
         sys.exit("REFUSED - --apply requires --plan <id> from a dry-run you have seen.\n"
                  "Run the dry-run first; it prints the plan id.")
     plan = find_plan(args.plan)
-    if not plan or plan.get("witness") != args.witness or plan.get("target") != target:
+    if not plan or plan.get("witness") != args.witness or plan.get("target") != target \
+            or plan.get("action") != args.action:
         sys.exit(f"REFUSED - no matching dry-run plan {args.plan} for "
-                 f"{args.witness} {args.action} {target} (plans expire after 60 min)")
+                 f"{args.witness} {args.action} {target} "
+                 f"(plans bind witness + action + target and expire after 60 min)")
 
     # ---- M5: precheck - never act on a box that cannot see
     if args.precheck:
@@ -463,12 +490,18 @@ def main():
         sys.exit(1)
     verified = verify_action(row, args.action, target)
 
-    # C5: redact before journaling; the secret is printed ONCE, never stored
+    # C5 (Rev 20): redact before journaling AND before console output.
+    # The old flow printed the RAW result first and then deliberately printed
+    # secret values as "one-time" output — both leak credentials into shell
+    # history / scrollback / session logs. The operator is told which key
+    # was produced; the VALUE is never printed at all.
     detail = redact(res.get("data"))
     extra: dict = {"result_detail": detail, "plan_id": pid_}
     if isinstance(res.get("data"), dict):
         for k in REDACT_KEYS & set(res["data"]):
-            print(f"  >>> ONE-TIME {k}: {res['data'][k]}  (not journaled; hand it to the owner now)")
+            print(f"  >>> SECRET PRODUCED for key '{k}' — value withheld (never printed, never journaled). "
+                  f"Collect it through the approved credential hand-off channel.")
+        print(f"  detail: {json.dumps(detail, default=str)[:400]}")
 
     # M5: postcheck - did the action change what the observatory sees?
     post_ev: dict = {}

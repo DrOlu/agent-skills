@@ -52,6 +52,20 @@ def check(skill_dir: Path) -> list[str]:
             fails.append(f"{lib.name}: no 32 KB cap constant")
         if "hole" not in ltxt.lower():
             fails.append(f"{lib.name}: hole never used")
+        # REV 20 (P1): fail-closed contracts the linter can actually prove.
+        # A comment saying "actuate refused" used to satisfy the check.
+        # Now the parse path must mark empty/garbage output as NOT ok, and
+        # the skeleton must not fake a sighted attest.
+        if "def _parse" in ltxt or "def parse" in ltxt:
+            empty_block = ltxt[ltxt.find("def _parse"):] if "def _parse" in ltxt else ltxt[ltxt.find("def parse"):]
+            block = empty_block[:1800]
+            if 'ok": True, "data": {"raw"' in block or "'ok': True, 'data': {'raw'" in block:
+                fails.append(f"{lib.name}: _parse returns ok/raw on empty or garbage "
+                             "output — must be a hole")
+        if lib.name == "lib_skeleton.py":
+            if '"blind_check": "unknown"' in ltxt and '"ok": True' in ltxt:
+                fails.append("lib_skeleton.py: skeleton attest returns ok=True with "
+                             "unknown sightedness — must be a hole / not-implemented")
 
     tests = list(skill_dir.glob("scripts/test_*.py")) + list(skill_dir.glob("scripts/test*.py"))
     if not tests and skill_dir.name != "rmagent-template":

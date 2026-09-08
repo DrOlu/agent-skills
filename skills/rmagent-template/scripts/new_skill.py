@@ -72,7 +72,12 @@ if __name__ == "__main__":
     (out / "scripts" / "hunt.py").write_text(hunt)
 
     test = f'''#!/usr/bin/env python3
-"""Skeleton tests for {name} — extend with domain fixtures."""
+"""Skeleton tests for {name} — extend with domain fixtures.
+
+REV 20: the scaffold test asserts FAIL-CLOSED behavior, not existence:
+attest is an honest not-implemented hole, actuate is refused, and a
+sub-baseline n is refused. A scaffold can no longer pass by merely existing.
+"""
 from __future__ import annotations
 import sys
 from pathlib import Path
@@ -92,7 +97,9 @@ def main() -> int:
     b = ask("baseline", n=3)
     check(b.get("reason") == "baseline-n-too-small", "n<30 baseline is a hole")
     t = ask("attest")
-    check(t.get("question") == "attest", "attest exists")
+    # REV 20: an unimplemented attest is a HOLE, never a fake sighted answer
+    check(t.get("hole") is True, "unimplemented attest is an honest hole")
+    check(not (t.get("ok") is True), "scaffold attest never claims ok=True")
     print(f"{{n-f}}/{{n}} passed")
     return 1 if f else 0
 

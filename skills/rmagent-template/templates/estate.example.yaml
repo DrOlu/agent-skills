@@ -1,0 +1,22 @@
+# Credentials NEVER live here.
+# RMAgent_<ID>_USER / RMAgent_<ID>_PASS or ~/.rmagent/creds.json (mode 600).
+
+witnesses:
+  - id: w1
+    name: Replace me
+    plane: endpoint   # endpoint | network | payments | agent | dc | ml | plat
+    os: linux         # windows | linux | darwin | iosxe | other
+    door: ssh         # winrm | ssh | ring | http-local | snmp
+    address: 10.0.0.10
+    user: deploy
+    skills: [attest, sketch, edges]
+    track: [root]
+    optional: false
+
+policy:
+  max_pull_bytes: 32768
+  baseline_min_n: 30
+  actuate: false
+  cooldown_sec: 300
+  walk_depth: 8
+  walk_fanout: 3

@@ -1,0 +1,19 @@
+# Demo inventory — door: fixture reads examples/fixtures/*.jsonl (no network).
+witnesses:
+  - id: postilion-1
+    role: fep
+    os: windows
+    door: fixture
+    fixture: postilion
+    skills: [pay_attest, switch_txn, pay_sketch]
+  - id: finacle-1
+    role: cba
+    os: linux
+    door: fixture
+    fixture: finacle
+    skills: [pay_attest, core_auth, pay_sketch]
+  - id: blind-hop
+    role: fep
+    door: fixture
+    fixture: blind
+    skills: [pay_attest, switch_txn]

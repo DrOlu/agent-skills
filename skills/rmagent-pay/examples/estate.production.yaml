@@ -1,0 +1,21 @@
+# Template for a real estate. Fill address/user/artifacts; creds in env or ~/.rmagent/creds.json
+witnesses:
+  - id: postilion-1
+    role: fep
+    os: windows
+    address: 10.0.0.10
+    door: psrp
+    transport: psrp
+    skills: [pay_attest, switch_txn, pay_sketch]
+    artifacts:
+      iso_trace: "D:\\Postilion\\trace\\*.jnl"
+  - id: finacle-1
+    role: cba
+    os: linux
+    address: 10.0.0.20
+    user: finadm
+    door: ssh
+    port: 22
+    skills: [pay_attest, core_auth, pay_sketch]
+    artifacts:
+      auth_log: /finacle/log/authorization.log

@@ -1,0 +1,51 @@
+# rmagent-iso inventory — taps, not Windows admins.
+# Credentials never live here. Ring paths are local files on the sensor host.
+#
+# Two rings are enough for a working observatory:
+#   tap-fep-acq  Segment B  acquirer ↔ Postilion
+#   tap-fep-cba  Segment C  Postilion ↔ Finacle
+# Segment A (terminal) is optional (ATM EJ). Segment D is inferred.
+
+taps:
+  - id: tap-fep-acq
+    name: Postilion FEP acquirer ingress
+    segment: B
+    door: ring
+    ring: examples/rings/tap-fep-acq.jsonl
+    peers:
+      acquirer: 10.10.1.10
+      postilion: 10.10.2.20
+    port: 5000
+    skills: [txnattest, txntrace, txnhops, txnslow, txnfail, txnbaseline]
+
+  - id: tap-fep-cba
+    name: Postilion ↔ Finacle CBA interface
+    segment: C
+    door: ring
+    ring: examples/rings/tap-fep-cba.jsonl
+    peers:
+      postilion: 10.10.2.20
+      finacle: 10.10.3.30
+    port: 6000
+    skills: [txnattest, txntrace, txnhops, txnslow, txnfail, txnbaseline]
+
+  - id: tap-term-ej
+    name: Optional ATM electronic journal (Segment A)
+    segment: A
+    door: ring
+    ring: examples/rings/tap-term-ej.jsonl
+    optional: true
+    skills: [txnattest, txntrace, txnfail]
+
+layout:
+  acq_tap: tap-fep-acq
+  cba_tap: tap-fep-cba
+  ej_tap: tap-term-ej
+
+policy:
+  max_pull_bytes: 32768
+  baseline_min_n: 30
+  slow_threshold_ms: 800
+  clock_skew_warn_ms: 50
+  pan_policy: mask_first6_last4
+  actuate: false

@@ -1,0 +1,80 @@
+---
+name: {{NAME}}
+description: >
+  Follow one {{GRAIN}} across {{SCOPE}} without a warehouse, by asking
+  allowlisted questions on devices you administer. Lake-less, on-device,
+  holes instead of dumps. Clone of rmagent-template for the {{PLANE}} plane.
+---
+
+# {{NAME}} — {{TITLE}}
+
+> Follow **one {{GRAIN}}** across **{{SCOPE}}** without a warehouse,
+> by asking named questions on devices we administer.
+
+Sensor: **{{SENSOR}}**. Door: inventory `door:`.
+
+## Constitution
+
+1. Watch only (Phase 0). No actuate in the question set.
+2. Allowlisted questions only. `ask()` refuses unknown names and `actuate`.
+3. Capped answers (32 KB). Oversized → hole, never a truncated lie.
+4. A hole is an answer. `{asked, empty, why}` — same shape as a hop.
+5. Never trust “no findings” until the witness can see. `*attest` + `blind_check`.
+6. On-device rings, not shipped lakes. Cases are megabytes; events stay put.
+7. Context propagates; data does not. Depth ≤ 8, fan-out ≤ 3.
+8. Credentials never in inventory, skill, or case.
+9. Your estate only. Else hole.
+10. No tight retry on a silent host. Two missed attests = Critical.
+11. Secrets / PAN / prompts never stored raw. Mask or names-only.
+12. Persistent rings are MOP. Dry-run default, `--apply`, tested `--teardown`.
+13. Honest fidelity gaps. No silent degrade that looks like a better sensor.
+14. Keep the existing sensor. The knock is not a rip-and-replace.
+
+## Grain
+
+`{{GRAIN}}`
+
+Not a grain: (fill — e.g. source IP, PAN, “the outage”).
+
+## Questions
+
+| Question | Returns | Must NOT return |
+|---|---|---|
+| attest | alive, clock, blind_check, oldest event | full log / dump |
+| sketch | deltas in window | raw lists |
+| edges | capped join-keyed hops | whole table |
+| explain | what changed in window | whole journal |
+| trace | one reconstructed grain | every event |
+| hops | per-hop localization | continuous stream |
+| fail | timeouts / mismatches / candidates | dumps |
+| baseline | p50/p95/p99; n<30 → hole | warehouse |
+
+Rename to domain prefixes (`netattest`, `txntrace`, …). Keep the jobs.
+
+## Setup
+
+```bash
+python3 scripts/hunt.py attest --inventory estate.yaml
+python3 scripts/test_{{SLUG}}.py
+```
+
+## Fidelity gaps
+
+- (ring overwrite window)
+- (what you cannot see — TLS, off-estate, n<30)
+- (blind conditions)
+
+## Will not do
+
+- actuate
+- become a lake
+- boxes we do not administer
+
+## Relationship
+
+Side tape: `rmagent-fr` for the ticket case; `rmagent-so` / `rmagent-linux`
+if the hop was a host; see rmagent-template COOKBOOK.md.
+
+## Scripts
+
+`scripts/lib.py` `scripts/hunt.py` `scripts/test_{{SLUG}}.py`

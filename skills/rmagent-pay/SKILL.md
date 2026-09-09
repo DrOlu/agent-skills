@@ -11,10 +11,14 @@ description: >
   bank hosts.
 ---
 
-# rmagent-pay — Payment hop observatory
+# rmagent-pay — Payment hop observatory (the default)
 
-Pull **one STAN/RRN** from Postilion and Finacle **on each hop’s own artifact**.
-Compare ingress vs posting. **No lake, no SPAN by default, no PAN home.**
+**Load this first.** Pull **one STAN/RRN** from Postilion and Finacle **on each
+hop’s own diary** (switch journal / CBA posting log). Compare ingress vs posting.
+**No lake, no SPAN by default, no PAN home.**
+
+`rmagent-iso` is the **last-resort wire adapter** — only if `pay_attest` cannot
+join both hops. Do not SPAN a bank link because this skill exists.
 
 Use when Switching asks: *was the delay on Postilion ingress or Finacle posting?*
 Not for ATM packet capture. Not APM inside the apps. Sibling of `rmagent-so`

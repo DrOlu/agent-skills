@@ -28,12 +28,20 @@ def check(skill_dir: Path) -> list[str]:
         return [f"missing SKILL.md in {skill_dir}"]
     text = _read(skill).lower()
 
-    if "constitution" not in text and "watch only" not in text:
+    skip_watch = skill_dir.name in ("rmagent-actuate", "rmagent-redteam")
+    if not skip_watch and "constitution" not in text and "watch only" not in text:
         fails.append("SKILL.md: no constitution / watch-only wording")
-    if "hole" not in text:
+    if not skip_watch and "hole" not in text:
         fails.append("SKILL.md: never mentions holes")
     if "32" not in text and "capped" not in text:
         fails.append("SKILL.md: no cap / 32 KB wording")
+    if "~/.claude/skills" in _read(skill):
+        fails.append("SKILL.md: stale ~/.claude/skills path — use ~/.agents/skills")
+    # Scripts named in SKILL.md must exist (linux advertised census/hunt it didn't ship).
+    for m in re.finditer(r"scripts/([a-zA-Z0-9_./-]+\.py)", _read(skill)):
+        rel = m.group(0)
+        if not (skill_dir / rel).exists() and not (skill_dir / "scripts" / Path(rel).name).exists():
+            fails.append(f"SKILL.md names {rel} but file missing")
 
     lib = None
     for cand in (skill_dir / "scripts" / "lib.py", skill_dir / "scripts" / "lib_skeleton.py"):
@@ -41,7 +49,10 @@ def check(skill_dir: Path) -> list[str]:
             lib = cand
             break
     if lib is None:
-        fails.append("no scripts/lib.py (or lib_skeleton.py)")
+        if skill_dir.name in ("rmagent-actuate", "rmagent-redteam"):
+            pass  # uses so engine / drill — not a witness
+        else:
+            fails.append("no scripts/lib.py (or lib_skeleton.py)")
     else:
         ltxt = _read(lib)
         if "ALLOWED" not in ltxt and "ask(" not in ltxt:
@@ -52,6 +63,23 @@ def check(skill_dir: Path) -> list[str]:
             fails.append(f"{lib.name}: no 32 KB cap constant")
         if "hole" not in ltxt.lower():
             fails.append(f"{lib.name}: hole never used")
+        # Grain firewall: identity skills must not allowlist app ETW names.
+        name = skill_dir.name
+        app_names = ("apptrace", "appslow", "apperrors", "appnet", "appproc", "appsysmon")
+        ident_names = ("attest", "sketch", "edges", "explain")
+        if name in ("rmagent-so", "rmagent-windows") and any(a in ltxt.split("ALLOWED", 1)[-1][:800] for a in app_names if f'"{a}"' in ltxt or f"'{a}'" in ltxt):
+            # only fail if they appear inside ALLOWED set, not comments later
+            allowed_blob = ltxt[ltxt.find("ALLOWED"):ltxt.find("PHASE0_SKILLS") if "PHASE0_SKILLS" in ltxt else ltxt.find("ALLOWED")+800]
+            if any(f'"{a}"' in allowed_blob or f"'{a}'" in allowed_blob for a in app_names):
+                fails.append(f"{lib.name}: identity skill ALLOWED contains app grain names")
+        if name == "rmagent-at":
+            allowed_blob = ltxt[ltxt.find("ALLOWED"):ltxt.find("PHASE0_SKILLS") if "PHASE0_SKILLS" in ltxt else ltxt.find("ALLOWED")+400]
+            if any(f'"{a}"' in allowed_blob for a in ident_names):
+                fails.append(f"{lib.name}: at ALLOWED contains identity grain names")
+        if name == "rmagent-fr":
+            allowed_blob = ltxt[ltxt.find("ALLOWED"):ltxt.find("PHASE0_SKILLS") if "PHASE0_SKILLS" in ltxt else ltxt.find("ALLOWED")+400]
+            if "attest" in allowed_blob and "ALLOWED = set()" not in allowed_blob:
+                fails.append(f"{lib.name}: fr must not knock (ALLOWED should be empty)")
         # REV 20 (P1): fail-closed contracts the linter can actually prove.
         # A comment saying "actuate refused" used to satisfy the check.
         # Now the parse path must mark empty/garbage output as NOT ok, and

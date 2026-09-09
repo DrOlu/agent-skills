@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse, json, sys, time
 from pathlib import Path
 
-CASES = Path("./cases")
+# Writable state lives under ~/.rmagent — a skill checkout that grows cases/
+# is a lake by accretion (rmagent-core/scripts/paths.py).
+CASES = Path.home() / ".rmagent" / "cases"
 
 
 def cmd_open(args):

@@ -73,10 +73,9 @@ payload returns a hole saying so — it never prompts.
 
 | Job | Script | Notes |
 |---|---|---|
-| Census | `scripts/census.py` | reuses the Windows engine; SSH door |
-| Walk | `scripts/hunt.py` | same; writes path.json + holes.jsonl |
-| Correlate | `scripts/correlate.py` | joins Linux answers with Windows ones |
-| Drift | `scripts/drift.py` | baseline + diff for admins/sudoers |
+| Census | `scripts/census.py` | SSH door; 2 misses = Critical; history in `~/.rmagent` |
+| Walk | `scripts/hunt.py` | identity grain only; writes `~/.rmagent/cases` |
+| Drift | `scripts/drift.py` | baseline + diff for sudoers / suid / blind_count |
 | Allowlisted payloads | `scripts/questions/linux/*.sh` | attest / sketch / edges / explain / attackmap |
 
 The engine (`lib.py`) is shared with rmagent-windows — only the door differs

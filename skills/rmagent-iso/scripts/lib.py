@@ -7,11 +7,14 @@ Oversized answers become holes. PAN never leaves unpack_record().
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
 
-from iso import BASELINE_MIN_N, MAX_PULL_BYTES, SLOW_THRESHOLD_MS, cap
+from iso import BASELINE_MIN_N, MAX_PULL_BYTES, SLOW_THRESHOLD_MS, cap  # noqa: F401
+# Re-export so constitution lint sees MAX_PULL_BYTES in this file.
+_ = MAX_PULL_BYTES
 from ring import Ring, load_all
 from txn import journeys, percentile, reconstruct
 
@@ -82,12 +85,28 @@ def _txnattest(ring_dir: Path) -> dict[str, Any]:
         taps.append(st)
     required = [t for t in taps if t["tap"] in ("tap-fep-acq", "tap-fep-cba")]
     blind = [t["tap"] for t in required if t.get("blind")]
+    pan_leaked = False
+    decode_errors = 0
+    for name in ("tap-fep-acq.jsonl", "tap-fep-cba.jsonl", "tap-term-ej.jsonl"):
+        p = ring_dir / name
+        if not p.exists():
+            continue
+        try:
+            for line in p.read_text(encoding="utf-8", errors="replace").splitlines()[:200]:
+                if '"pan"' in line.lower() and "******" not in line and re.search(r"\d{13,19}", line):
+                    pan_leaked = True
+                if "decode_error" in line or "unpack_error" in line:
+                    decode_errors += 1
+        except OSError:
+            pass
     return {
         "question": "txnattest",
         "taps": taps,
         "blind_check": "BLIND" if blind else "ok",
         "blind": blind,
-        "note": "never trust no-findings while blind_check=BLIND",
+        "pan_in_ring": pan_leaked,  # critical if True — mask failed
+        "decode_errors": decode_errors,
+        "note": "never trust no-findings while blind_check=BLIND; pan_in_ring=true is critical",
     }
 
 

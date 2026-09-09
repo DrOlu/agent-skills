@@ -35,11 +35,12 @@ HERE = Path(__file__).resolve().parent
 SKILLS = HERE.parent.parent  # skills/ directory
 
 # the shared engine files, mirroring sync_check.py's list
-ENGINE_SO = ["lib.py", "notify.py", "hunt.py", "correlate.py", "drift.py",
+ENGINE_SO = ["notify.py", "hunt.py", "correlate.py", "drift.py",
              "case.py", "thinker.py", "dthinker.py", "hop_index.py",
              "stc.py", "traj.py", "causal.py", "otel_emit.py"]
-ENGINE_FR = ["lib.py", "notify.py", "stc.py", "traj.py", "hop_index.py",
+ENGINE_FR = ["notify.py", "stc.py", "traj.py", "hop_index.py",
              "causal.py", "dthinker.py", "thinker.py", "otel_emit.py", "census.py"]
+# lib.py is a per-skill grain facade (rmagent-core loader) — not identical
 QUESTIONS = ["attest", "sketch", "edges", "explain", "netedges", "pslogs",
              "kernring", "attackmap", "attackmap2", "flowstats", "deepwindow",
              "profile", "lineage", "dns"]

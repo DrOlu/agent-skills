@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
-QDIR = SKILL_DIR / "questions" / "linux"
+QDIR = SKILL_DIR / "scripts" / "questions" / "linux"
 
 # ---- resolve the shared engine (rmagent-so preferred, windows fallback) ----
 # REV 20 note: we deliberately do NOT sys.path.insert the shared dir and
@@ -62,6 +62,34 @@ clear_silent = _shared.clear_silent
 MAX_PULL_BYTES = _shared.MAX_PULL_BYTES
 _cap_signal = _shared._cap_signal
 _parse = _shared._parse
+record_ask = getattr(_shared, "record_ask", lambda *a, **k: None)
+
+# Distro-default persistence that is not a finding (netsh×17 lesson).
+_ATTACKMAP_FP = (
+    "anacron", "cron.deny", "0hourly", "0anacron", "sysstat",
+    "e2scrub_all", "mdadm", "logrotate", "apt-compat", "dpkg",
+    "popularity-contest", "phpsessionclean",
+)
+
+
+def _filter_attackmap_fps(data: dict) -> dict:
+    """Drop known-good cron/timer names; keep unexpected persistence."""
+    if not isinstance(data, dict):
+        return data
+    cron = str(data.get("cron") or "")
+    kept = []
+    for part in cron.split(";"):
+        p = part.strip()
+        if not p:
+            continue
+        if any(fp in p.lower() for fp in _ATTACKMAP_FP):
+            continue
+        kept.append(p)
+    data = dict(data)
+    data["cron"] = ";".join(kept)
+    data["n_cron"] = len(kept)
+    data["fp_shed"] = True
+    return data
 
 
 def _sh_preamble(row: dict, since_hours: float, limit: int) -> str:
@@ -124,4 +152,7 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
         return {"ok": False, "error": (err or out)[-400:],
                 "hole": hole(f"{wid} {skill}", (err or out)[-200:] or f"exit {r.returncode}")}
     _shared.clear_silent(wid)
-    return _shared._cap_signal(_shared._parse(out), row, skill)
+    parsed = _shared._cap_signal(_shared._parse(out), row, skill)
+    if skill == "attackmap" and parsed.get("ok") and isinstance(parsed.get("data"), dict):
+        parsed["data"] = _filter_attackmap_fps(parsed["data"])
+    return parsed

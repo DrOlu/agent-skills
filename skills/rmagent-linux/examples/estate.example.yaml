@@ -1,0 +1,16 @@
+# Linux sibling inventory — no secrets.
+witnesses:
+  - id: lx1
+    name: App server
+    plane: endpoint
+    os: linux
+    door: ssh
+    address: 10.0.0.20
+    port: 22
+    user: deploy
+    skills: [attest, sketch, edges, explain, attackmap]
+    track: [root, deploy]
+    optional: false
+policy:
+  max_pull_bytes: 32768
+  actuate: false

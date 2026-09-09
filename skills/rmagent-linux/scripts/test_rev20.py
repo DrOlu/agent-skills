@@ -28,7 +28,7 @@ def ok(cond, label):
 print("== allowlist / payloads exist ==")
 for q in ("attest", "sketch", "edges", "explain", "attackmap"):
     ok(q in lib.ALLOWED, f"{q} allowlisted")
-    ok((HERE.parent / "questions" / "linux" / f"{q}.sh").exists(),
+    ok((HERE / "questions" / "linux" / f"{q}.sh").exists(),
        f"{q}.sh payload exists")
 
 print("== contract checks ==")

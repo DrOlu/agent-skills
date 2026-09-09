@@ -34,7 +34,7 @@ Rev 17 hardening (gap analysis 2026-09-03):
       finding's question after apply and journals the delta.
 """
 from __future__ import annotations
-import argparse, hashlib, json, re, sys, time
+import argparse, hashlib, json, re, shlex, subprocess, sys, time
 from pathlib import Path
 
 # ---------------------------------------------------------------- engine (H2)
@@ -59,6 +59,8 @@ import journal  # noqa: E402
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 ADIR = SKILL_DIR / "scripts" / "actions" / "windows"
+LDIR = SKILL_DIR / "scripts" / "actions" / "linux"
+LINUX_ACTIONS = {"block_ip", "disable_user", "kill_process", "quarantine_file", "stop_service"}
 
 # ---------------------------------------------------------------- allowlist
 # action -> (undo_action or None, target_kind, description)
@@ -119,8 +121,9 @@ def validate_target(target: str, kind: str) -> tuple[bool, str]:
         if not _NAME_RE.match(t):
             return (False, f"not a valid task name: {t!r}")
     elif kind == "path":
-        if not _PATH_RE.match(t):
-            return (False, f"not an absolute Windows path (no quotes/backticks/$ allowed): {t!r}")
+        unix = bool(re.match(r"^/[^\n\r`'\"$;|&<>]{0,240}$", t))
+        if not _PATH_RE.match(t) and not unix:
+            return (False, f"not an absolute Windows or Unix path (no quotes/backticks/$ allowed): {t!r}")
     elif kind == "wmi":
         if not _WMI_RE.match(t):
             return (False, f"not a valid WMI object name: {t!r}")
@@ -161,8 +164,59 @@ def _clean(out: str) -> str:
     return (out or "").replace("PowerShell is ready!", "").strip()
 
 
-def run_action(row: dict, action: str, target: str) -> dict:
-    """Run one allowlisted action payload over WinRM. Returns {ok, data|error}."""
+def _is_linux_row(row: dict) -> bool:
+    door = (row.get("door") or "").lower()
+    osname = (row.get("os") or "").lower()
+    return door == "ssh" or osname in ("linux", "darwin", "aix", "unix")
+
+
+def _sh_quote(s: str) -> str:
+    return str(s).replace("'", "'\"'\"'")
+
+
+def run_action_ssh(row: dict, action: str, target: str, apply_flag: bool = False) -> dict:
+    """Named Linux action over SSH. Never iptables -F. Never a god-shell."""
+    if action not in LINUX_ACTIONS:
+        return {"ok": False, "error": f"linux door does not allow {action}"}
+    payload = LDIR / f"{action}.sh"
+    if not payload.exists():
+        return {"ok": False, "error": f"no linux payload {payload.name}"}
+    ok_t, why = validate_target(target, ACTIONS[action][1])
+    if not ok_t:
+        return {"ok": False, "error": why}
+    apply = "1" if apply_flag else "0"
+    script = f"TARGET='{_sh_quote(target)}'\nAPPLY={apply}\n" + payload.read_text()
+    try:
+        r = subprocess.run(
+            ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+             "-p", str(row.get("port") or 22),
+             f"{row.get('user')}@{row['address']}", "bash -s"],
+            input=script.encode(), capture_output=True, timeout=25)
+    except FileNotFoundError:
+        return {"ok": False, "error": "ssh binary not found"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "ssh timeout"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e).split("\n")[0][:300]}
+    out = r.stdout.decode("utf-8", "replace")
+    err = r.stderr.decode("utf-8", "replace")
+    if r.returncode != 0 and not out.strip().startswith("{"):
+        return {"ok": False, "error": (err or out)[-400:]}
+    try:
+        i = out.find("{")
+        data = json.loads(out[i:] if i >= 0 else out)
+        if isinstance(data, dict) and data.get("ok") is False:
+            return {"ok": False, "error": str(data.get("error") or data)[:400]}
+        return {"ok": True, "data": data}
+    except (json.JSONDecodeError, ValueError):
+        return {"ok": False, "error": "unparseable linux action output",
+                "data": {"raw": out[:500]}}
+
+
+def run_action(row: dict, action: str, target: str, apply_flag: bool = False) -> dict:
+    """Run one allowlisted action. SSH door for linux rows, WinRM otherwise."""
+    if _is_linux_row(row):
+        return run_action_ssh(row, action, target, apply_flag=apply_flag)
     try:
         s = _session(row)
     except SystemExit as e:
@@ -467,6 +521,20 @@ def main():
                  f"{args.witness} {args.action} {target} "
                  f"(plans bind witness + action + target and expire after 60 min)")
 
+    # Snapshot-first: refuse --apply unless a snapshot for this witness exists
+    # in the last 60 minutes (the habit that makes undo possible).
+    if args.action != "snapshot":
+        snap_ok = False
+        for e in reversed(journal.read_all()):
+            if e.get("witness") == args.witness and e.get("action") == "snapshot":
+                age = time.time() - _parse_ts(e.get("t"))
+                if age <= 60 * 60:
+                    snap_ok = True
+                    break
+        if not snap_ok:
+            sys.exit("REFUSED - no recent snapshot for this witness "
+                     "(run actuate.py snapshot --witness … first)")
+
     # ---- M5: precheck - never act on a box that cannot see
     if args.precheck:
         ok_p, why = precheck(row)
@@ -480,7 +548,7 @@ def main():
 
     # ---- apply
     print(f"[apply] {args.action} on {args.witness} target={target}")
-    res = run_action(row, args.action, target)
+    res = run_action(row, args.action, target, apply_flag=True)
     ok = res.get("ok")
     print(f"  {'ok' if ok else 'FAIL'} - {res.get('data') or res.get('error')}")
     if not ok:

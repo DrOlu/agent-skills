@@ -1,30 +1,30 @@
 ---
 name: rmagent-iso
-description: The payments Flight Recorder — reconstruct one ATM/POS/FEP transaction across Postilion and Finacle from passive ISO 8583 taps, without modifying the switch or CBA. Pull-based, capped, STAN/RRN-grained, holes instead of a packet lake. Use when a withdrawal is slow, a debit-without-dispense dispute needs hop localization, or channel/switch/core teams cannot agree which segment failed.
+description: Last-resort payments wire adapter — reconstruct one STAN/RRN from passive ISO 8583 SPAN rings ONLY after rmagent-pay cannot join hop diaries. Circular decoded JSONL, not a PCAP lake. PAN masked. Hunt never runs tshark.
 ---
 
-# rmagent-iso — The payments Flight Recorder
+# rmagent-iso — last-resort SPAN adapter (not the default)
 
-Follow **one card transaction** (STAN + RRN) across the ATM/POS → acquirer →
-Postilion FEP → Finacle CBA path **without a span warehouse and without
-changing Postilion or Finacle**.
+**Default payments skill is `rmagent-pay`.** Load iso only after `pay_attest`
+cannot join both hops. Same grain (STAN+RRN). Different sensor: decoded
+circular JSONL from a SPAN you already own — **not** a PCAP lake, **not**
+MITM of FEP–CBA TLS.
 
-The ISO sibling of `rmagent-fr` (ticket-led Flight Recorder) and `rmagent-at`
-(Windows ETW ring). Same constitution: **pull-only, named questions, capped
-answers, holes instead of dumps.** Different grain, different sensor.
+Follow **one card transaction** (STAN + RRN) across acquirer → Postilion →
+Finacle **without changing the switch or CBA**. Hunt never runs tshark.
+Ingest is a separate MOP door with teardown.
 
 > Push tools answer the questions you knew to ask. This answers: *where did
-> STAN 123456 wait?*
+> STAN 123456 wait on the wire?* after the diaries could not.
 
 ## When to use
 
-- Channel / switch / core cannot agree where a delay sat.
-- Debit-without-dispense / timeout disputes.
-- Per-hop latency vs a baseline, **without** instrumenting the apps.
-- You have (or can get) SPAN/ERSPAN on FEP ingress and the CBA interface.
+- `pay_attest` is blind on a hop you administer **and** you already have SPAN.
+- Debit-without-dispense **candidates** when an EJ ring is sighted.
+- Per-hop wire latency vs baseline (`n≥30` or hole).
 
-**Do not use** for identity-led compromise (`rmagent-so` / `rmagent-linux`) or
-Windows process tracing (`rmagent-at`). Those are the host tape beside this.
+**Do not use** as the first payments knock. Do not use for identity (`rmagent-so`)
+or Windows process tracing (`rmagent-at`).
 
 ## Non-negotiables
 

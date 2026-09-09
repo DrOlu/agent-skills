@@ -22,9 +22,15 @@ from __future__ import annotations
 import argparse, json, os, subprocess, sys, time
 from pathlib import Path
 
-RMA = Path.home() / ".claude" / "skills" / "rmagent-windows" / "scripts"
+# Score rmagent-so (identity grain), not the windows mega-skill.
+_RMA_CANDIDATES = [
+    Path.home() / ".agents" / "skills" / "rmagent-so" / "scripts",
+    Path.home() / ".agents" / "skills" / "rmagent-windows" / "scripts",
+    Path.home() / ".claude" / "skills" / "rmagent-windows" / "scripts",
+]
+RMA = next((p for p in _RMA_CANDIDATES if (p / "lib.py").exists()), _RMA_CANDIDATES[0])
 sys.path.insert(0, str(RMA))
-import lib as rma  # noqa: E402 — reuse the rmagent engine
+import lib as rma  # noqa: E402 — reuse the rmagent-so engine
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 QDIR = SKILL_DIR / "scripts" / "questions" / "windows"
@@ -358,7 +364,7 @@ def clean(rows):
     return all_clean
 
 def run_full(rows, inventory, keep_dirty: bool):
-    case_root = Path("./cases")
+    case_root = Path.home() / ".rmagent" / "drill"
     case_root.mkdir(parents=True, exist_ok=True)
     case_dir = case_root / f"redteam-{time.strftime('%Y%m%d-%H%M%S')}"
     case_dir.mkdir(parents=True, exist_ok=True)

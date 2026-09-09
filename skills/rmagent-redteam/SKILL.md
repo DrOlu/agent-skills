@@ -17,7 +17,7 @@ description: >
 
 A **purple-team drill** that stages living-off-the-land artifacts on your Windows estate (WS1/WS2), then runs the `rmagent-windows` skill to score what it detects — and Telegrams you the report. This is how you answer "does rmagent actually work?"
 
-It is a **DRILL, not a real attack.** Every artifact is prefixed `RMAgentDrill_`, uses benign payloads (a network test to `1.1.1.1`, an echo to a temp file), is non-persistent, and is fully reversible with `clean`. It requires `--confirm` and never runs against a box you do not administer.
+It is a **DRILL, not a real attack.** Every artifact is prefixed `RMAgentDrill_`, uses benign payloads (a network test to `1.1.1.1`, an echo to a temp file), is non-persistent, and is fully reversible with `clean`. It requires `--confirm` and never runs against a box you do not administer. Misses that are `witness_blind` are **holes**, not so bugs. Drill cases live in `~/.rmagent/drill/`. Payloads stay under the WinRM ~8191-char budget.
 
 ## The attack this simulates (the Ada story, class 03 "Walk")
 
@@ -53,8 +53,8 @@ The drill stages the exact kind of movement rmagent is built to catch — **iden
 ## Run
 
 ```bash
-export SKILL_DIR=~/.claude/skills/rmagent-redteam
-cp ~/.claude/skills/rmagent-windows/assets/inventory.example.yaml ./estate.yaml
+export SKILL_DIR=~/.agents/skills/rmagent-redteam
+cp ~/.agents/skills/rmagent-windows/assets/inventory.example.yaml ./estate.yaml
 
 # Full loop: stage -> rmagent census+hunt -> score -> telegram -> clean
 python3 "$SKILL_DIR/scripts/redteam.py" run --inventory ./estate.yaml --confirm

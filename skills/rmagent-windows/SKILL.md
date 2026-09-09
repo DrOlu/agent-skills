@@ -41,7 +41,7 @@ The jump host is the trusted desk that knocks. It runs on macOS, Linux, or Windo
 ```bash
 python3 --version          # 3.11+
 pip3 install pywinrm pyyaml
-export SKILL_DIR=~/.claude/skills/rmagent-windows
+export SKILL_DIR=~/.agents/skills/rmagent-windows
 ls "$SKILL_DIR/scripts"/{census,hunt,case,lib}.py
 ls "$SKILL_DIR/scripts/questions/windows/"   # attest sketch edges explain netedges
 ```

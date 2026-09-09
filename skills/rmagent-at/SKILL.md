@@ -164,6 +164,7 @@ lib.ask(row, "apperrors", since_hours=1, limit=30)
 - **The ring is bounded.** You chose the size; the kernel enforces it.
   Nothing is retained beyond the ring.
 - **Pull-only questions.** Named, allowlisted, capped, read-only.
+- **Never trust a quiet ring.** `ringhealth` is the attest/blind_check of this plane: Stopped AutoLogger → `witness_blind`, not a quiet app.
 - **Fully reversible.** `--teardown` stops the sessions, deletes the
   registry keys, and removes the files.
 - **Your estate only.**

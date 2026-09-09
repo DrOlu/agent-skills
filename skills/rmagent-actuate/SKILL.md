@@ -15,6 +15,8 @@ You operate the **actuation layer** of the RMAgent security observatory. Phase 0
 This skill **acts** on what Phase 0 finds — but only through a controlled,
 reversible, audited pipeline.
 
+Watch-only is Phase 0 (`rmagent-so`). This skill is Phase 1: named, dry-run, journaled, reversible. Payloads stay under the WinRM ~8191-char budget. Isolation keeps WinRM open so undo works (MOP, not a SPAN/ring).
+
 **This is the dangerous skill.** Every action here changes a production host.
 That is why it exists behind three gates: an **allowlist of named actions**
 (no arbitrary shell, ever), a **dry-run-first policy** (every action shows you
@@ -82,7 +84,7 @@ Run it before anything else.
 
 ```bash
 # same jump host + inventory as rmagent-windows
-export SKILL_DIR=~/.claude/skills/rmagent-actuate
+export SKILL_DIR=~/.agents/skills/rmagent-actuate
 ls "$SKILL_DIR/scripts"/{actuate,journal}.py
 ls "$SKILL_DIR/scripts/actions/windows/"   # one .ps1 per action
 ```
@@ -259,7 +261,7 @@ it is the one whose actions you can always take back.
 
 ## Supporting Files
 
-Skill directory: ~/.claude/skills/rmagent-actuate
+Skill directory: ~/.agents/skills/rmagent-actuate
 
 - scripts/actuate.py — the CLI: allowlist check, dry-run/apply, journal, undo
 - scripts/journal.py — journal read/append/verify helpers

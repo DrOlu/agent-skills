@@ -86,7 +86,7 @@ is the Flight Recorder's actual product.
   hard-coded port 8765 pointed at nothing — 326 spans were found buffered,
   zero delivered.
 - **`trace_merge` resolves current trees.** The remote script no longer
-  hard-codes the legacy `~/.claude/skills` path.
+  hard-codes the legacy path (now resolved via rmagent-core loader).
 
 ## The honest limit
 

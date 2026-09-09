@@ -106,6 +106,8 @@ witnesses:
 - **Capped answers** (32 KB). Oversized pulls become holes.
 - **Your estate only.**
 - **A hole is an answer.** Tier 4 agents are recorded as holes, not guessed at.
+- **WinRM payloads stay under the ~8191-char UTF-16LE budget** (same as so).
+- **Never trust “no agents”** until `agents` census ran; unknown binary + unknown egress is Tier 4 (blind), not empty.
 
 ## Relationship to the other skills
 

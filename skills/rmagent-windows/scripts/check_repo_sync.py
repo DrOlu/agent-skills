@@ -26,7 +26,8 @@ LIVE = Path.home() / ".agents" / "skills"
 REPO = Path.home() / "work" / "agent-skills" / "skills"
 
 SKILLS = ["rmagent-windows", "rmagent-actuate", "rmagent-redteam",
-          "rmagent-so", "rmagent-fr", "rmagent-linux", "rmagent-ao", "rmagent-at"]
+          "rmagent-so", "rmagent-fr", "rmagent-linux", "rmagent-ao", "rmagent-at",
+          "rmagent-core", "rmagent-pay", "rmagent-iso", "rmagent-template"]
 
 EXCLUDE_DIRS = {"__pycache__", "cases", "baselines", "agent-baselines", ".git"}
 EXCLUDE_SUFFIX = {".pyc", ".DS_Store"}

@@ -57,6 +57,28 @@ ok("appslow" in eng.ALLOWED, "apply_grain at keeps appslow")
 ok("ringhealth" in eng.ALLOWED, "apply_grain at keeps ringhealth")
 loader.apply_grain(eng, "rmagent-fr")
 ok(len(eng.ALLOWED) == 0, "apply_grain fr is empty")
+loader.apply_grain(eng, "rmagent-so")
+ok("regedges" in eng.ALLOWED, "bind so keeps regedges")
+ok("apptrace" not in eng.ALLOWED, "bind so still drops apptrace")
+
+print("== yaml formatter ==")
+inv = {
+    "witnesses": [{
+        "id": "ws1",
+        "skills": ["attest", "sketch", "edges", "explain", "netedges",
+                   "pslogs", "kernring", "attackmap", "flowstats",
+                   "deepwindow", "regedges"],
+        "track": ["Administrator", "SYSTEM"],
+    }]
+}
+dumped = eng.dump_inventory(inv)
+ok("skills:" in dumped and "- attest" in dumped, "dump_inventory uses block lists")
+ok("[attest" not in dumped, "dump_inventory does not flow-wrap skills")
+ok("deepwindow" in dumped and "deepwi\n" not in dumped, "skill names never split")
+import yaml
+roundtrip = yaml.safe_load(dumped)
+ok(roundtrip["witnesses"][0]["skills"][-1] == "regedges", "block yaml round-trips")
+ok(roundtrip["witnesses"][0]["skills"][-2] == "deepwindow", "deepwindow intact")
 
 print()
 if F:

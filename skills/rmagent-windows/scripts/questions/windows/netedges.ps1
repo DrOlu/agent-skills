@@ -2,6 +2,7 @@
 # REV 3 (2026-08-19): + Sysmon 22 DNS queries (C2 domain resolution) — the domain
 # a beacon resolves BEFORE the connection. Pair a DNS query with the netedges conn
 # and you have the full C2 story. Requires Sysmon with <DnsQuery onmatch="exclude">.
+# Honest surface: EID3 conns + EID22 DNS only. Registry SetValue is `regedges`.
 # Engine injects: $ErrorActionPreference; $Track; $SinceHours; $Limit
 function F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode("//e:Data[@Name='$n']",$m);if($o){$o.'#text'}}
 function MT($u){ if(-not $u){return $false}; foreach($t in $Track){ if((($u -split '\\')[-1]) -eq $t){return $true} }; return $false }

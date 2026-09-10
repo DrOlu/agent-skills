@@ -42,10 +42,11 @@ remains the complete, runnable skill; `rmagent-fr` is the Flight Recorder
 | `sketch` | admin failed in window, new local admins 24h, running priv services, new services/tasks | raw event lists |
 | `edges` | tracked logons (src IP, LogonId, auth pkg) + explicit-cred uses (4648) + special-priv grants (4672) + outbound conns, capped | the whole connection table |
 | `explain` | identity/svc/task changes + 4648/4672 + WMI subs + audit-cleared (1102) + LOLBin spawns w/ cmdline, capped | the whole ring/tenant export |
-| `netedges` | Sysmon ring: conns + DNS + LSASS access (T1003) + thread injection (T1055) + file creates + registry sets | the full netflow |
+| `netedges` | Sysmon **EID3** outbound conns + **EID22** DNS for tracked principals | the full netflow; **not** LSASS / injection / file creates / registry sets (those are a false claim — see `regedges`) |
 | `pslogs` | PowerShell script blocks (4104) — the ACTUAL CODE being executed, decompiled | the whole PowerShell log |
 | `kernring` | 10-second burst capture of process events from the Sysmon ring | a persistent agent |
-| `attackmap` | 13 registry persistence locations, ATT&CK-tagged, FP-allowlisted | the whole filesystem |
+| `attackmap` | ~16 registry persistence *locations* (Run/RunOnce, IFEO, SilentProcessExit, cmd AutoRun, …), ATT&CK-tagged, FP-allowlisted | the whole hive / filesystem |
+| `regedges` | path-allowlisted Sysmon **13** (Registry value set) on those same latches, tracked principals, + `sysmon_reg` blind_check | a hive dump, unbounded EID13, **or any registry write** |
 | `flowstats` | per-adapter byte totals + top destinations (the T1041 volume baseline) | the full packet capture |
 | `deepwindow` | a short-lived ETW kernel trace, captured at full fidelity, stopped, read back | a persistent agent |
 | `canary` | any auth attempt against a decoy identity (4624/4625/4740) + the source IPs | anything about real accounts |

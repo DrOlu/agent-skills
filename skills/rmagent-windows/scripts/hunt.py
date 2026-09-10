@@ -416,7 +416,7 @@ def main():
                 write_hole(case_dir, h)
                 print(f"  {wid:8} attackmap: HOLE — {h['why']}")
 
-        # rev 9: netedges — Sysmon ring (conns, DNS, LSASS, injection, files, registry)
+        # netedges — Sysmon EID3 conns + EID22 DNS only (no registry/LSASS in this payload)
         if "netedges" in (r.get("skills") or []):
             ne = lib.ask(r, "netedges", since_hours=since_h, limit=args.limit)
             lib.record_ask(case_dir, r, "netedges", ne)
@@ -424,19 +424,8 @@ def main():
                 nd = ne["data"]
                 n_conn = len(nd.get("conns") or [])
                 n_dns = len(nd.get("dns_queries") or [])
-                n_ls = len(nd.get("lsass_access") or [])
-                n_inj = len(nd.get("thread_injection") or [])
-                n_fc = len(nd.get("file_creates") or [])
-                n_rs = len(nd.get("registry_sets") or [])
-                print(f"  {wid:8} netedges: {n_conn} conns, {n_dns} DNS, "
-                      f"{n_ls} LSASS, {n_inj} inject, {n_fc} files, {n_rs} reg")
-                T.observe(wid, "netedges", f"{n_conn} conns, {n_dns} DNS, {n_ls} LSASS, "
-                                          f"{n_inj} inject, {n_fc} files, {n_rs} reg")
-                if n_ls:
-                    T.think(f"{wid}: LSASS access detected (T1003 credential dumping) — "
-                            f"immediate escalation")
-                if n_inj:
-                    T.think(f"{wid}: remote thread injection detected (T1055)")
+                print(f"  {wid:8} netedges: {n_conn} conns, {n_dns} DNS")
+                T.observe(wid, "netedges", f"{n_conn} conns, {n_dns} DNS")
                 # DNS tunneling detection
                 dns_queries = nd.get("dns_queries") or []
                 if dns_queries:
@@ -452,6 +441,35 @@ def main():
                 h = ne.get("hole") or lib.hole(f"{wid} netedges", ne.get("error") or "empty")
                 write_hole(case_dir, h)
                 print(f"  {wid:8} netedges: HOLE — {h['why']}")
+
+        # regedges — path-allowlisted Sysmon 13 on known persistence latches
+        if "regedges" in (r.get("skills") or []):
+            rg = lib.ask(r, "regedges", since_hours=since_h, limit=args.limit)
+            lib.record_ask(case_dir, r, "regedges", rg)
+            if rg.get("ok") and rg.get("data"):
+                rd = rg["data"]
+                n_set = len(rd.get("sets") or [])
+                sight = rd.get("sysmon_reg") or "unknown"
+                print(f"  {wid:8} regedges: {n_set} allowlisted SetValue "
+                      f"(sysmon_reg={sight}, raw_13={rd.get('raw_13')})")
+                T.observe(wid, "regedges", f"{n_set} sets, sysmon_reg={sight}")
+                write_hop(case_dir, {"seq": seq, "plane": r.get("plane"),
+                                     "witness": wid, "skill": "regedges",
+                                     "sets": n_set, "sysmon_reg": sight,
+                                     "raw_13": rd.get("raw_13"),
+                                     "t": rd.get("utc")})
+                if sight in ("blind", "absent"):
+                    T.think(f"{wid}: Sysmon 13 {sight} — registry mutation is a hole, "
+                            f"not a clean 'no sets'. attackmap still photographs state.")
+                if n_set:
+                    findings = [f"{s.get('user')} {s.get('proc')} -> {s.get('key')}"
+                                for s in (rd.get("sets") or [])[:5]]
+                    notify.alert_smoke(wid, [f"{n_set} allowlisted registry set(s)"] + findings,
+                                       case_dir.name)
+            else:
+                h = rg.get("hole") or lib.hole(f"{wid} regedges", rg.get("error") or "empty")
+                write_hole(case_dir, h)
+                print(f"  {wid:8} regedges: HOLE — {h['why']}")
 
         # rev 9: flowstats — volume baseline for T1041 exfiltration detection
         if "flowstats" in (r.get("skills") or []):

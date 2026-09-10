@@ -9,7 +9,7 @@ from __future__ import annotations
 IDENTITY = frozenset({
     "attest", "sketch", "edges", "explain", "netedges", "pslogs",
     "kernring", "attackmap", "flowstats", "deepwindow", "profile",
-    "lineage", "dns", "attackmap2", "canary",
+    "lineage", "dns", "attackmap2", "canary", "regedges",
 })
 
 LINUX_IDENTITY = frozenset({

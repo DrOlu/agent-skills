@@ -42,7 +42,7 @@ QDIR = SKILL_DIR / "scripts" / "questions"
 # Grain firewall (rmagent-core): identity plane only. App ETW names live in
 # rmagent-at. Asking apptrace from so is a foreign grain — refuse it.
 ALLOWED = {"attest", "sketch", "edges", "explain", "netedges", "pslogs", "kernring", "attackmap",
-           "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2", "canary"}
+           "flowstats", "deepwindow", "profile", "lineage", "dns", "attackmap2", "canary", "regedges"}
 PHASE0_SKILLS = ALLOWED
 MAX_PULL_BYTES = 32 * 1024
 WALK_DEPTH = 8
@@ -72,6 +72,45 @@ def load_inventory(path: str) -> dict:
         return yaml.safe_load(text)
     except ImportError:
         raise SystemExit("Install pyyaml (`pip install pyyaml`) or pass a .json inventory")
+
+
+# Flow-style `skills: [a, b, …, deepwindow]` wraps mid-token at ~80–100 cols
+# (PyYAML default_flow_style / prettier printWidth). A wrapped `deepwi\nndow`
+# still parses today, but a wrap inside a quoted scalar or a future skill
+# name is a silent FN. Block lists never split a name.
+_BLOCK_LIST_KEYS = ("skills", "track", "canaries")
+
+
+def dump_inventory(inv: dict) -> str:
+    """Serialize an inventory as block-style YAML. Never flow-wrap lists."""
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        return json.dumps(inv, indent=2) + "\n"
+
+    class _Block(yaml.SafeDumper):
+        pass
+
+    def _str_rep(dumper, data):
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="")
+
+    def _list_rep(dumper, data):
+        return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=False)
+
+    _Block.add_representer(str, _str_rep)
+    _Block.add_representer(list, _list_rep)
+    return yaml.dump(
+        inv,
+        Dumper=_Block,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=10_000,
+    )
+
+
+def write_inventory(path: str, inv: dict) -> None:
+    Path(path).write_text(dump_inventory(inv))
 
 
 def witnesses(inv: dict) -> list[dict]:
@@ -236,7 +275,8 @@ def _cap(result: dict, row: dict, skill: str) -> dict:
 # Field priority per skill. Anything not listed is kept as-is (usually small).
 _CRITICAL_FIELDS = {
     "edges":       ["logons", "failed_sources", "explicit_creds", "special_privs", "conns"],
-    "netedges":    ["lsass_access", "thread_injection", "conns", "dns"],
+    "netedges":    ["conns", "dns"],
+    "regedges":    ["sets"],
     "explain":     ["identity_changes", "wmi_subscriptions", "audit_cleared", "lolbin_spawns"],
     "pslogs":      ["blocks"],
     "sketch":      ["new_local_admins", "failed_admin", "priv_services", "new_services", "new_tasks"],

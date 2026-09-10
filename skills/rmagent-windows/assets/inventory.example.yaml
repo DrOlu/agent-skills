@@ -10,6 +10,12 @@
 # Transport: 'ntlm' works on AWS Windows with zero server-side changes
 # (WinRM + 5985 open). Use 'basic' only after setting Auth\Basic=true and
 # AllowUnencrypted=true on the targets. See SKILL.md §Setup.
+#
+# Skills are a BLOCK list on purpose. A flow list
+#   skills: [attest, …, deepwindow]
+# wraps mid-token at ~80–100 columns (`deepwi` / `ndow`) in editors that
+# reflow YAML. dump_inventory() / write_inventory() in rmagent-core emit
+# this block form so a name is never split.
 
 witnesses:
   - id: ws1
@@ -21,8 +27,21 @@ witnesses:
     address: 44.197.31.152
     endpoint: http://44.197.31.152:5985/wsman
     user: Administrator
-    skills: [attest, sketch, edges, explain, netedges, pslogs, kernring, attackmap, flowstats, deepwindow]
-    track: [Administrator, SYSTEM]
+    skills:
+      - attest
+      - sketch
+      - edges
+      - explain
+      - netedges
+      - pslogs
+      - kernring
+      - attackmap
+      - flowstats
+      - deepwindow
+      - regedges
+    track:
+      - Administrator
+      - SYSTEM
 
   - id: ws2
     name: Windows Server 2
@@ -33,9 +52,21 @@ witnesses:
     address: 52.3.242.251
     endpoint: http://52.3.242.251:5985/wsman
     user: Administrator
-    skills: [attest, sketch, edges, explain, netedges, pslogs, kernring, attackmap, flowstats, deepwindow]
-    track: [Administrator, SYSTEM]
+    skills:
+      - attest
+      - sketch
+      - edges
+      - explain
+      - netedges
+      - pslogs
+      - kernring
+      - attackmap
+      - flowstats
+      - deepwindow
+      - regedges
+    track:
+      - Administrator
+      - SYSTEM
 
-# Phase 0 = these two boxes, four questions, watch only.
+# Phase 0 = these two boxes, named questions, watch only.
 # Grow rooms only after a one-tape walk reconstructs in minutes.
-

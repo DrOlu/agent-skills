@@ -65,6 +65,7 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `inngest-steps` | Use when implementing delays that must survive process restarts (e.g. 24-hour cart abandonment). |
 | `inngest-v3-v4-migration` | Use when upgrading an existing TypeScript codebase from Inngest SDK v3 to v4, or fixing mixed SDKs. |
 | `large-file-reader` | Comprehensive toolkit for AI agents to read, analyze, and extract information fr |
+| `liveagent-gateway` | Drive a LiveAgent instance remotely through its gateway from any agent, shell, or script. HTTP API, v2 WebSocket+Protobuf, chat streaming, per-agent credentials, whitelisted pass-through. |
 | `loop` | Run any task iteratively until completion using Ralph Wiggum methodology. Execut |
 | `lottie` | Lottie and dotLottie adapter patterns for HyperFrames. Use when embedding lottie |
 | `netops` | The ultimate network troubleshooting skill — a CCIE/RHCE-level reference and dec |

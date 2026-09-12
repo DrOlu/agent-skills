@@ -1,0 +1,58 @@
+# ReactorPro Gateway — systemd unit template
+#
+# Install to /etc/systemd/system/reactorpro-gateway.service, then:
+#   systemctl daemon-reload && systemctl enable --now reactorpro-gateway
+#
+# Replace CHANGEME values before use. Keep the token in the EnvironmentFile
+# rather than in this unit: unit files are world-readable, and a secret in
+# ExecStart would also be visible to every user via `ps`.
+
+[Unit]
+Description=ReactorPro Gateway
+Documentation=https://github.com/DrOlu/ReactorPro
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=reactorpro
+Group=reactorpro
+
+# Holds LIVEAGENT_GATEWAY_TOKEN and LIVEAGENT_GATEWAY_DATA_DIR.
+# Mode 0600 root:root is fine — systemd reads this as root before dropping
+# privileges to User= above.
+EnvironmentFile=/etc/reactorpro-gateway.env
+
+# Bind to loopback and put a reverse proxy in front when internet-facing.
+# Use :3000 instead if desktop apps connect to this host directly from the LAN.
+ExecStart=/usr/local/bin/reactorpro-gateway --http-addr=127.0.0.1:3000
+
+Restart=always
+RestartSec=5
+
+StateDirectory=reactorpro-gateway
+WorkingDirectory=/var/lib/reactorpro-gateway
+
+# --- hardening ---------------------------------------------------------------
+# The gateway only needs to write its own state directory.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/reactorpro-gateway
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+# Each connected agent consumes more than one descriptor (control connection
+# plus terminal data plane). Raise this before raising --max-agent-connections,
+# --max-browser-connections or --max-terminal-connections; otherwise clients are
+# refused with 503 and the cause looks like the configured cap.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

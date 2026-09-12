@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ReactorPro Gateway — launchd job template (macOS).
+
+  Place this file at:
+    ~/Library/LaunchAgents/ng.reactorpro.gateway.plist   starts at LOGIN
+    /Library/LaunchDaemons/ng.reactorpro.gateway.plist   starts at BOOT (needs sudo)
+
+  Then:
+    plutil -lint <the plist>
+    launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/ng.reactorpro.gateway.plist
+    launchctl print "gui/$(id -u)/ng.reactorpro.gateway" | grep -E 'state|pid|last exit'
+
+  For a LaunchDaemon use the `system` domain instead of `gui/$(id -u)`, and add
+  <key>UserName</key><string>reactorpro</string> to run as a non-root user.
+
+  Replace every CHANGEME path below.
+
+  Note the indirection through the launcher: plists are world-readable, so the
+  gateway token lives in a separate 0600 file that the launcher reads at start
+  time. Do not put the token in EnvironmentVariables here.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ng.reactorpro.gateway</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/reactorpro-gateway-launch.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- RunAtLoad starts it when the job loads; KeepAlive restarts it after any
+         exit, including a crash. Together they behave like a supervised service. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Keep this stable: it must match the data directory in the launcher, or
+         the gateway will fail to find its mesh identity and mint a new one. -->
+    <key>WorkingDirectory</key>
+    <string>/Users/CHANGEME/Library/Application Support/reactorpro-gateway</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/CHANGEME/Library/Logs/reactorpro-gateway.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/CHANGEME/Library/Logs/reactorpro-gateway.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

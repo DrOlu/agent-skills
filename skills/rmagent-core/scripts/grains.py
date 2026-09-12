@@ -37,6 +37,15 @@ PAY = frozenset({
     "pay_attest", "switch_txn", "core_auth", "pay_sketch", "hop_delta",
 })
 
+# Rev 22: the pack grain — one-shot artifact collection + rule-pack logic.
+# Collection names are the recipe outputs (prefetch, amcache, usb, shimcache);
+# they never overlap the identity or app grains, so a pack can be asked
+# alongside so without a name collision. The rule LOGIC lives in
+# rmagent-pack/scripts/packs/*.py and is pure (no knock).
+PACK = frozenset({
+    "prefetch", "amcache", "usb", "shimcache", "packrun",
+})
+
 # Flight Recorder records investigations. It never knocks.
 FR = frozenset()
 
@@ -49,12 +58,13 @@ BY_SKILL = {
     "rmagent-fr": FR,
     "rmagent-iso": ISO,
     "rmagent-pay": PAY,
+    "rmagent-pack": PACK,
 }
 
 # Names that must not appear on an identity skill (so/windows).
-FOREIGN_ON_SO = APP | AGENT | ISO | PAY
+FOREIGN_ON_SO = APP | AGENT | ISO | PAY | PACK
 # Names that must not appear on the app skill.
-FOREIGN_ON_AT = IDENTITY | AGENT | ISO | PAY
+FOREIGN_ON_AT = IDENTITY | AGENT | ISO | PAY | PACK
 
 
 def allowed_for(skill_name: str) -> frozenset[str]:

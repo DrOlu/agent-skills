@@ -454,6 +454,48 @@ def _ask_psrp(row: dict, skill: str, script: str, timeout: int) -> dict:
     return _parse(out)
 
 
+# ---------------------------------------------------------------- SSH door (Rev 21)
+# Windows witnesses are asked over WinRM/PSRP. Everything else on the estate —
+# Linux app/db hosts, AIX, network gear — is asked over SSH. Same grain, same
+# allowlist, same 32 KB cap, same holes; only the wire and the payload
+# extension change (questions/linux/*.sh instead of questions/windows/*.ps1).
+# The script travels on stdin (bash -s), so there is no command-line budget.
+def _ask_ssh(row: dict, script: str, timeout: int) -> dict:
+    """One question to a POSIX witness over SSH. Script on stdin, JSON back."""
+    user = row.get("user")
+    if not user:
+        try:
+            user = creds_for(row)["user"]
+        except SystemExit:
+            user = "root"
+    host = row["address"]
+    port = str(row.get("port") or 22)
+    key = row.get("key") or row.get("identity_file")
+    cmd = ["ssh", "-o", "BatchMode=yes",
+           "-o", "StrictHostKeyChecking=accept-new",
+           "-o", "ConnectTimeout=10", "-p", port]
+    if key:
+        cmd += ["-i", str(Path(key).expanduser())]
+    cmd += [f"{user}@{host}", "bash -s"]
+    r = subprocess.run(cmd, input=script.encode(), capture_output=True, timeout=timeout)
+    out = r.stdout.decode("utf-8", "replace") if isinstance(r.stdout, bytes) else (r.stdout or "")
+    err = r.stderr.decode("utf-8", "replace") if isinstance(r.stderr, bytes) else (r.stderr or "")
+    if r.returncode != 0 and not out.strip().startswith("{"):
+        return {"ok": False, "error": (err or out)[-400:] or f"ssh exit {r.returncode}"}
+    return _parse(out)
+
+
+def _sh_preamble(row: dict, since_hours: float, limit: int) -> str:
+    """Env preamble for the linux/*.sh payloads (they read $TRACK/$SINCE_HOURS/$LIMIT)."""
+    track = row.get("track") or ["root"]
+    t_items = ",".join(str(t).replace("'", "") for t in track)
+    return (
+        f"export TRACK='{t_items}'\n"
+        f"export SINCE_HOURS={float(since_hours)}\n"
+        f"export LIMIT={int(limit)}\n"
+    )
+
+
 # ---------------------------------------------------------------- preamble + ask
 # Rev 8 FP allowlist: OS-default registry values that are NOT persistence.
 # Applied ENGINE-SIDE to attackmap answers (the payload itself cannot grow —
@@ -581,16 +623,45 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
     if skill not in (row.get("skills") or []):
         return {"ok": False, "error": f"{row.get('id')} does not advertise {skill}",
                 "hole": hole(f"{row.get('id')} {skill}", f"not advertised")}
-    if winrm is None:
-        return {"ok": False, "error": "pywinrm not installed (`pip install pywinrm`)",
-                "hole": hole(f"{row.get('id')} {skill}", "pywinrm not installed")}
-
     door = (row.get("door") or "winrm").lower()
     # Rev 19: psrp is a first-class door (or an opt-in transport on winrm)
     use_psrp = door == "psrp" or (row.get("transport") or "").lower() == "psrp"
-    if door not in ("winrm", "psrp") and not use_psrp:
-        return {"ok": False, "error": f"this skill is Windows-only; door={door}",
+    # Rev 21: ssh is a first-class door for non-Windows witnesses
+    use_ssh = door == "ssh" or (row.get("os") or "").lower() in ("linux", "aix", "unix", "darwin")
+    if door not in ("winrm", "psrp", "ssh") and not use_psrp:
+        return {"ok": False, "error": f"door={door} not supported",
                 "hole": hole(f"{row.get('id')} {skill}", f"door {door} not supported")}
+
+    # pywinrm is only needed for the winrm/psrp doors — the ssh door uses the
+    # system ssh client. Guard AFTER the door split so a pywinrm-less jump host
+    # can still ask Linux witnesses.
+    if not use_ssh and winrm is None:
+        return {"ok": False, "error": "pywinrm not installed (`pip install pywinrm`)",
+                "hole": hole(f"{row.get('id')} {skill}", "pywinrm not installed")}
+
+    if use_ssh:
+        payload = QDIR / "linux" / f"{skill}.sh"
+        if not payload.exists():
+            return {"ok": False, "error": f"no payload {payload.name}",
+                    "hole": hole(f"{row.get('id')} {skill}", f"no payload {payload.name}")}
+        script = _sh_preamble(row, since_hours, limit) + "\n" + payload.read_text()
+        timeout = _clamp_timeout(skill, timeout)
+        try:
+            parsed = _ask_ssh(row, script, timeout)
+            if not parsed.get("ok"):
+                mark_silent(row.get("id") or "", f"ssh: {str(parsed.get('error'))[:200]}")
+                return _cap_signal(parsed, row, skill) | {
+                    "hole": hole(f"{row.get('id')} {skill}", f"ssh: {str(parsed.get('error'))[:200]}")}
+            if skill == "attackmap" and isinstance(parsed.get("data"), dict):
+                parsed["data"] = _filter_attackmap_fps(parsed["data"])
+            clear_silent(row.get("id") or "")
+            return _cap_signal(parsed, row, skill)
+        except Exception as e:  # noqa: BLE001 — transport failure is a hole
+            msg = str(e).split("\n")[0][:300]
+            kind = "timeout" if "timed out" in msg.lower() else "unreachable"
+            mark_silent(row.get("id") or "", f"ssh {kind}: {msg}")
+            return _cap_signal({"ok": False, "error": msg}, row, skill) | {
+                "hole": hole(f"{row.get('id')} {skill}", f"ssh {kind}: {msg}")}
 
     payload = QDIR / "windows" / f"{skill}.ps1"
     if not payload.exists():

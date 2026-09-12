@@ -47,6 +47,9 @@ remains the complete, runnable skill; `rmagent-fr` is the Flight Recorder
 | `kernring` | 10-second burst capture of process events from the Sysmon ring | a persistent agent |
 | `attackmap` | ~16 registry persistence *locations* (Run/RunOnce, IFEO, SilentProcessExit, cmd AutoRun, …), ATT&CK-tagged, FP-allowlisted | the whole hive / filesystem |
 | `regedges` | path-allowlisted Sysmon **13** (Registry value set) on those same latches, tracked principals, + `sysmon_reg` blind_check | a hive dump, unbounded EID13, **or any registry write** |
+| `krb` | **DC only.** 4768 TGT (AS-REP roast), 4769 TGS (**Kerberoasting — RC4 etype 0x17**), 4771 pre-auth spray, 4776 NTLM validation — collapsed per principal/SPN | the whole Kerberos log, a domain dump |
+| `dcsync` | **DC only.** 4662 carrying **DRS replication-rights GUIDs** (DCSync), 5136 directory changes (DCShadow), with the replicating principal + 4624 type-3 context | the whole directory log |
+| `dirchange` | **DC only.** 4720/4726 accounts, 4728/4732/4756 privileged-group adds, 4740 lockouts, **1102 audit cleared** — restricted to the privileged groups that matter | a directory dump |
 | `flowstats` | per-adapter byte totals + top destinations (the T1041 volume baseline) | the full packet capture |
 | `deepwindow` | a short-lived ETW kernel trace, captured at full fidelity, stopped, read back | a persistent agent |
 | `canary` | any auth attempt against a decoy identity (4624/4625/4740) + the source IPs | anything about real accounts |
@@ -66,6 +69,23 @@ correlation needed.
 - A hit surfaces as a **critical** `canary_tripped` finding in both `drift`
   and `correlate`, carrying the source IPs — the shortlist for
   `actuate.py block_ip`
+
+## The doors (Rev 21)
+
+`ask()` dispatches per witness:
+
+| door | For | Payloads | Budget |
+|---|---|---|---|
+| `winrm` (default) | Windows | `questions/windows/*.ps1` | ~8191 cmdline (base64) |
+| `psrp` | Windows | `questions/windows/*.ps1` | none (script in the message body) |
+| `ssh` | Linux / AIX / Unix | `questions/linux/*.sh` (stdin) | none |
+
+Row `os: linux` implies the ssh door. pywinrm is only required for the
+winrm/psrp doors — a jump host without pywinrm can still ask Linux witnesses.
+
+**Deploying a whole kit?** See **HUNT-KIT.md** — so+fr are two halves; the hunt
+driver, the drill, and the response live in `rmagent-windows`, `rmagent-redteam`,
+`rmagent-actuate`, and `rmagent-core`.
 
 ## The scripts
 

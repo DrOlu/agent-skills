@@ -24,8 +24,10 @@ CANON = SKILLS / "rmagent-windows"
 
 # Files that must be byte-identical across the skills that carry them.
 # (skill, relative path) — a skill only checks files it actually has.
+# Rev 21: lib.py is a per-skill grain facade (rmagent-core loader) — each
+# skill's lib.py binds ITS OWN ALLOWED set, so it is deliberately NOT identical.
 ENGINE_SO = [
-    "scripts/lib.py", "scripts/notify.py", "scripts/hunt.py",
+    "scripts/notify.py", "scripts/hunt.py",
     "scripts/correlate.py", "scripts/drift.py", "scripts/case.py",
     "scripts/thinker.py", "scripts/dthinker.py", "scripts/hop_index.py",
     "scripts/stc.py", "scripts/traj.py", "scripts/causal.py",
@@ -36,11 +38,11 @@ ENGINE_SO = [
 # at skill could not run its own questions). It now shares the canonical
 # engine like so/fr do. autologger.py is at-specific (not shared).
 ENGINE_AT = [
-    "scripts/lib.py", "scripts/notify.py", "scripts/stc.py",
+    "scripts/notify.py", "scripts/stc.py",
     "scripts/traj.py", "scripts/hop_index.py", "scripts/otel_emit.py",
 ]
 ENGINE_FR = [
-    "scripts/lib.py", "scripts/notify.py", "scripts/stc.py",
+    "scripts/notify.py", "scripts/stc.py",
     "scripts/traj.py", "scripts/hop_index.py", "scripts/causal.py",
     "scripts/dthinker.py", "scripts/thinker.py", "scripts/otel_emit.py",
     "scripts/census.py",
@@ -53,8 +55,11 @@ QUESTION_PAYLOADS = [
     # canonical files now. They lived ONLY in rmagent-at while lib.ALLOWED in
     # the canonical tree already accepted the names — so neither tree could
     # actually run one (at refused the name; canonical had no payload).
-    "apptrace", "appslow", "apperrors", "appnet", "appproc", "appsysmon",
+    # Rev 21: app payloads live in rmagent-at ONLY (the app-tracing grain).
+    # so/fr no longer carry copies, so they are not part of the shared list.
 ]
+# Rev 21: the DC/domain questions are identity grain, shared by so/fr.
+DC_PAYLOADS = ["krb", "dcsync", "dirchange"]
 
 
 def _build_shared() -> list[tuple[str, str]]:
@@ -65,10 +70,11 @@ def _build_shared() -> list[tuple[str, str]]:
         out.append(("rmagent-at", rel))
     for rel in ENGINE_FR:
         out.append(("rmagent-fr", rel))
-    for q in QUESTION_PAYLOADS:
+    # Rev 21: rmagent-fr is the no-knock tracing half — it carries NO question
+    # payloads (its questions/ dir is empty). Only rmagent-so holds the
+    # windows payloads now, so payloads are not a cross-skill shared file.
+    for q in QUESTION_PAYLOADS + DC_PAYLOADS:
         out.append(("rmagent-so", f"scripts/questions/windows/{q}.ps1"))
-        out.append(("rmagent-at", f"scripts/questions/windows/{q}.ps1"))
-        out.append(("rmagent-fr", f"scripts/questions/windows/{q}.ps1"))
     return out
 
 

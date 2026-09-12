@@ -11,6 +11,15 @@ try{$csv=auditpol /get /category:* /r 2>$null|Out-String -Width 400;foreach($l i
 foreach($w in $want.Values){if(-not $blind.ContainsKey($w)){$blind[$w]='?'}}
 try{$blind['ProcCL']=$(if((gp HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit ProcessCreationIncludeCmdLine_Enabled).ProcessCreationIncludeCmdLine_Enabled -eq 1){'ok'}else{'BLIND'})}catch{$blind['ProcCL']='?'}
 try{$blind['SBL']=$(if((gp HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging EnableScriptBlockLogging).EnableScriptBlockLogging -eq 1){'ok'}else{'BLIND'})}catch{$blind['SBL']='?'}
-$blindCount=@($blind.Values|?{$_ -like 'BLIND*'}).Count;$raw4624=0;try{$raw4624=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4624;StartTime=$now.AddHours(-24)}).Count}catch{}
+$blindCount=@($blind.Values|?{$_ -like 'BLIND*'}).Count
+# Rev 21: on a DC, the domain-level questions (krb/dcsync/dirchange) depend on
+# Kerberos + Directory Service Access auditing. On a member/workgroup box those
+# events do not exist at all — record that honestly so a member server never
+# pretends "no DCSync" is a clean answer.
+if($role -eq 'dc'){
+  try{$blind['DC-Audit']=$(if((auditpol /get /subcategory:'{0CCE923F-69AE-11D9-BED3-505054503030}' /r 2>$null|Out-String) -match 'Success'){'ok'}else{'BLIND'})}catch{$blind['DC-Audit']='?'}
+  $blindCount=@($blind.Values|?{$_ -like 'BLIND*'}).Count
+}
+$raw4624=0;try{$raw4624=@(Get-WinEvent -FilterHashtable @{LogName='Security';Id=4624;StartTime=$now.AddHours(-24)}).Count}catch{}
 $oldest=$null;try{$e=Get-WinEvent -LogName Security -Oldest -MaxEvents 1;if($e){$oldest=$e.TimeCreated.ToUniversalTime().ToString('o')}}catch{}
 [pscustomobject]@{skill='attest';host=$env:COMPUTERNAME;utc=$now.ToString('o');alive=$true;last_boot=$boot.ToString('o');track=$Track;domain_role=$role;domain=$dom;admin_failed_60s=$failed;admin_ok_5min=$ok;local_admin_count=$lac;sysmon_status=$sysmon;raw_4624_24h=$raw4624;oldest_security_event=$oldest;blind_check=$blind;blind_count=$blindCount}|ConvertTo-Json -Compress

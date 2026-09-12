@@ -10,6 +10,10 @@ IDENTITY = frozenset({
     "attest", "sketch", "edges", "explain", "netedges", "pslogs",
     "kernring", "attackmap", "flowstats", "deepwindow", "profile",
     "lineage", "dns", "attackmap2", "canary", "regedges",
+    # Rev 21: domain-controller grain. Same identity skill, DC-level events —
+    # Kerberos abuse, DCSync, privileged directory changes. A member server
+    # answers these with a hole (no DC events); the DC answers them.
+    "krb", "dcsync", "dirchange",
 })
 
 LINUX_IDENTITY = frozenset({

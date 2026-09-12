@@ -29,11 +29,15 @@ from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 SKILLS = HERE.parent.parent
-WIN = SKILLS / "rmagent-windows" / "scripts"
-for p in (HERE, WIN):
-    sys.path.insert(0, str(p))
+# Rev 21: app payloads live in rmagent-at (this skill). Shared tracing/engine
+# modules (stc/hop_index/otel_emit/thinker) come from rmagent-fr. at's own dir
+# goes first so `import lib` binds at's facade and its QDIR.
+FR = SKILLS / "rmagent-fr" / "scripts"
+sys.path.insert(0, str(FR))
+sys.path.insert(0, str(HERE))
+APPDIR = HERE / "questions" / "windows"
 
-import lib                      # canonical engine
+import lib                      # rmagent-at's facade (app payloads)
 import stc as stc_mod
 import hop_index
 import otel_emit
@@ -55,19 +59,24 @@ def ok(cond, label):
         print(f"  FAIL  {label}")
 
 
-APP_SKILLS = ("apptrace", "appslow", "apperrors", "appnet", "appproc", "appsysmon")
+APP_SKILLS = ("apptrace", "appslow", "apperrors", "appnet", "appproc",
+              "appsysmon", "ringhealth")
 
 # ============================================================ C1: the skill runs
 print("\n== C1. rmagent-at is actually runnable ==")
-ok("apptrace" in lib.ALLOWED, "canonical lib allowlists apptrace")
-ok(all(s in lib.ALLOWED for s in APP_SKILLS), "all six app questions allowlisted")
+ok("apptrace" in lib.ALLOWED, "at lib allowlists apptrace")
+ok(all(s in lib.ALLOWED for s in APP_SKILLS), "all app questions allowlisted on at")
 for skill in APP_SKILLS:
-    p = lib.QDIR / "windows" / f"{skill}.ps1"
-    ok(p.exists(), f"canonical payload exists: {skill}.ps1")
-for tree in ("rmagent-at", "rmagent-fr"):
+    p = APPDIR / f"{skill}.ps1"
+    ok(p.exists(), f"at payload exists: {skill}.ps1")
+# Rev 21 grain firewall: app payloads are rmagent-at-ONLY by design. Sharing
+# them into so/windows/fr would put app names on an identity skill (the grain
+# firewall in rmagent-core/scripts/grains.py forbids exactly that). Assert the
+# post-Rev-21 fact instead of the old "shared with fr" shape.
+for tree in ("rmagent-fr", "rmagent-so", "rmagent-windows"):
     for skill in APP_SKILLS:
         p = SKILLS / tree / "scripts" / "questions" / "windows" / f"{skill}.ps1"
-        ok(p.exists(), f"{tree} carries {skill}.ps1 (synced)")
+        ok(not p.exists(), f"{tree} must NOT carry {skill}.ps1 (grain firewall)")
 # at's lib IS the canonical engine
 import importlib
 at_lib = importlib.import_module("lib")
@@ -110,22 +119,22 @@ ok("7b9a21c0" not in str(autologger.SESSIONS).lower(),
 # ============================================================ H2: structured parsing
 print("\n== H2. ETW payloads parse structure, count failures ==")
 for skill in ("apptrace", "appslow", "apperrors", "appnet", "appproc"):
-    t = (lib.QDIR / "windows" / f"{skill}.ps1").read_text()
+    t = (APPDIR / f"{skill}.ps1").read_text()
     ok("parse_failures" in t, f"{skill}.ps1 emits parse_failures")
-ok("$e.Properties" in (lib.QDIR / "windows" / "appnet.ps1").read_text()
-   or "[xml]$_.ToXml()" in (lib.QDIR / "windows" / "appnet.ps1").read_text()
-   or "ToXml" in (lib.QDIR / "windows" / "appnet.ps1").read_text(),
+ok("$e.Properties" in (APPDIR / "appnet.ps1").read_text()
+   or "[xml]$_.ToXml()" in (APPDIR / "appnet.ps1").read_text()
+   or "ToXml" in (APPDIR / "appnet.ps1").read_text(),
    "appnet reads the structured payload (Properties/XML), not just Message")
-ok("ToXml" in (lib.QDIR / "windows" / "appproc.ps1").read_text(),
+ok("ToXml" in (APPDIR / "appproc.ps1").read_text(),
    "appproc reads the structured payload (named XML fields)")
-ok("-MaxEvents" in (lib.QDIR / "windows" / "appnet.ps1").read_text(),
+ok("-MaxEvents" in (APPDIR / "appnet.ps1").read_text(),
    "appnet bounds its read with -MaxEvents (M1 lesson carried over)")
 # every app payload fits the WinRM budget
 PREAMBLE = ("$ErrorActionPreference='SilentlyContinue'\n"
             "$Track = @('Administrator','SYSTEM')\n"
             "$SinceHours = 2.0\n$Limit = 50\n$CanaryList = @('honeyadmin','svcbackup2')\n")
 for skill in APP_SKILLS:
-    t = (lib.QDIR / "windows" / f"{skill}.ps1").read_text()
+    t = (APPDIR / f"{skill}.ps1").read_text()
     body = [l.rstrip() for l in t.splitlines() if l.strip() and not l.strip().startswith("#")]
     enc = base64.b64encode((PREAMBLE + "\n".join(body)).encode("utf-16-le")).decode()
     n = len("powershell -encodedcommand ") + len(enc)
@@ -234,7 +243,7 @@ ok('rmagent-windows' in trace_merge.REMOTE_SCRIPT, "canonical tree is first choi
 
 # ============================================================ M6: appsysmon conns
 print("\n== M6. appsysmon speaks correlate's language ==")
-t = (lib.QDIR / "windows" / "appsysmon.ps1").read_text()
+t = (APPDIR / "appsysmon.ps1").read_text()
 ok("conns=@($conns)" in t, "appsysmon emits a canonical conns list")
 ok("$conns+=[pscustomobject]@{t=$_.TimeCreated.ToString('o');\n          dest=" in t
    or "dest=$d['DestinationIp']" in t,
@@ -245,7 +254,7 @@ print("\n== L5. one $MsgCap for all message truncation ==")
 ok("$MsgCap = 180" in lib._preamble({"canaries": []}, 2.0, 50),
    "engine preamble injects $MsgCap = 180")
 for skill, old in (("apptrace", "Min(160"), ("appslow", "Min(140"), ("apperrors", "Min(180")):
-    t = (lib.QDIR / "windows" / f"{skill}.ps1").read_text()
+    t = (APPDIR / f"{skill}.ps1").read_text()
     ok("$MsgCap" in t, f"{skill}.ps1 truncates with $MsgCap")
     ok(old not in t.replace(f"$MsgCap,({old.split('(')[1]}", ""),
        f"{skill}.ps1: hardcoded {old} literal gone")

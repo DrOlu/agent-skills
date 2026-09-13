@@ -66,13 +66,79 @@ def published_skills(only: str | None = None) -> list[str]:
     return names
 
 
+def _frontmatter_body(p: Path) -> str:
+    """The markdown after the YAML frontmatter (or the whole file)."""
+    t = p.read_text(errors="replace")
+    if t.startswith("---"):
+        end = t.find("\n---", 3)
+        if end != -1:
+            return t[end + 4:].lstrip()
+    return t
+
+
+def _desc(p: Path) -> str:
+    """The frontmatter description, lowercased — for identity comparison."""
+    t = p.read_text(errors="replace").lstrip()
+    if not t.startswith("---"):
+        return ""
+    end = t.find("\n---", 3)
+    fm = t[3:end] if end != -1 else t[3:]
+    grab, out = False, []
+    for line in fm.splitlines():
+        if line.lower().startswith("description:"):
+            grab = True
+            out.append(line.split(":", 1)[1].strip().strip("'\""))
+        elif grab and line.startswith((" ", "\t")):
+            out.append(line.strip())
+        elif grab:
+            break
+    return " ".join(out).lower().strip()
+
+
+def classify(name: str, r: dict) -> str:
+    """One of: in-sync | cosmetic | collision | duplicate | real."""
+    if r["in_sync"]:
+        return "in-sync"
+    if r["live_missing"]:
+        return "repo-only"
+    live_root, repo_root = LIVE / name, REPO / name
+
+    # DUPLICATE: live has a nested dir named like the skill
+    if (live_root / name).is_dir():
+        return "duplicate"
+
+    # COLLISION: SKILL.md descriptions describe different skills
+    ld, rd = _desc(live_root / "SKILL.md"), _desc(repo_root / "SKILL.md")
+    if ld and rd and ld[:60] != rd[:60]:
+        return "collision"
+
+    # COSMETIC: every differing file is a SKILL.md whose BODY is identical,
+    # and nothing else differs. The repo reorders/normalizes frontmatter keys
+    # (description first, name, license) which is a publishing convention, not
+    # drift. Also covers the case where the repo ships one extra frontmatter
+    # key (license/source) and an identical body.
+    # a differing LICENSE.txt that is only the unfilled Apache placeholder is
+    # a packaging nit, not content drift.
+    non_license = [k for k in r["differ"] if not k.endswith("LICENSE")
+                   and not k.endswith("LICENSE.txt")]
+    if (r["differ"] and not non_license and not r["new_in_live"] and not r["stale_in_repo"]):
+        return "cosmetic"
+    only_skill_md = all(k.endswith("SKILL.md") for k in r["differ"])
+    if (only_skill_md and r["differ"] and not r["new_in_live"] and not r["stale_in_repo"]
+            and _frontmatter_body(live_root / "SKILL.md") == _frontmatter_body(repo_root / "SKILL.md")):
+        # a differing LICENSE.txt alongside would not reach here (differ covers it)
+        return "cosmetic"
+
+    return "real"
+
+
 def check_one(name: str) -> dict:
     live, repo = collect(LIVE / name), collect(REPO / name)
     differ = [k for k in sorted(set(live) & set(repo))
               if not filecmp.cmp(live[k], repo[k], shallow=False)]
     live_only = sorted(set(live) - set(repo))
     repo_only = sorted(set(repo) - set(live))
-    return {
+    res = {
         "skill": name,
         "in_sync": not (differ or live_only or repo_only),
         "live_files": len(live),
@@ -83,6 +149,8 @@ def check_one(name: str) -> dict:
         # a published skill with no live counterpart cannot be compared
         "live_missing": not (LIVE / name).exists(),
     }
+    res["class"] = classify(name, res)
+    return res
 
 
 def fix_one(name: str) -> tuple[int, int, int]:

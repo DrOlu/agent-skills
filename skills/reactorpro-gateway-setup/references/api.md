@@ -104,7 +104,7 @@ The single most useful diagnostic on the gateway:
 {
   "enabled": true,
   "connected": true,
-  "agentId": "drolu/reactorpro",
+  "agentId": "acme/lagos/edge-1",
   "fingerprint": "sha256:196e19cc7c370cf9",
   "url": "nats://127.0.0.1:4222",
   "serving": true,
@@ -207,9 +207,30 @@ applies. Note the default is measured in **minutes**, so an explicit `timeoutMs`
 setting for anything interactive — an HTTP client in front of this will usually give up
 first.
 
-**A ReactorPro peer answers `ping`, `describe` and `status`; anything else returns
-`3001 SKILL_NOT_FOUND`**, because those three read-only skills are all it serves. Check
-`skills` on the target's `/api/mesh/status` (or its `describe` output) to see what it will
+**A ReactorPro peer answers `ping`, `describe`, `status` and `invoke`; anything else returns
+`3001 SKILL_NOT_FOUND`.** The first three are read-only; `invoke` asks the target to run a task
+on one of its desktop agents and is gated by its own policy — see `mesh.md`.
+
+`invoke` takes its arguments inside `input`:
+
+```json
+{
+  "target": "acme/lagos/edge-1",
+  "skill": "invoke",
+  "timeoutMs": 90000,
+  "input": {
+    "target": "agent-1111",
+    "operation": "task",
+    "arguments": {"prompt": "Summarise today's orders."}
+  }
+}
+```
+
+`input.target` may be replaced by `input.capability` ("any online agent that advertises this"),
+but not both. A refusal arrives with a meaningful code — `3002` no such agent or offline, `4003`
+refused by policy — so you can tell "route elsewhere" from "retry".
+
+Check `skills` on the target's `/api/mesh/status` (or its `describe` output) to see what it will
 accept before dispatching. See `mesh.md`.
 
 ### `POST /api/mesh/emit`

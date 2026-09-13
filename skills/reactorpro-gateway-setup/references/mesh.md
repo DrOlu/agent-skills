@@ -9,45 +9,125 @@ is deliberate, so the shipping configuration has no network side effects.
 
 ## Contents
 
-- [What works today, and what does not](#what-works-today-and-what-does-not)
+- [What it can do](#what-it-can-do) — the four served skills
+- [The local agent directory](#the-local-agent-directory)
+- [Remote invocation (`invoke`)](#remote-invocation-invoke) — and its gates
 - [Enabling the bridge](#enabling-the-bridge)
 - [Agent identity](#agent-identity)
 - [Authentication](#authentication)
 - [Wire protocol](#wire-protocol)
-- [Discovery behaviour](#discovery-behaviour)
+- [Discovery behaviour](#discovery-behaviour) — broadcast, registry, and `auto`
 - [Reputation and governance](#reputation-and-governance)
 - [Interoperating with RTerm](#interoperating-with-rterm)
 - [Running a NATS server](#running-a-nats-server)
+
+For deployment playbooks (gateway-only, one site, multi-site, federated, mixed fleet, closed
+fleet), see `scenarios.md`.
 
 ## What it can do
 
 **Works:** registering with a registry, discovering peers, being dispatched to, emitting and
 subscribing to events, the reputation and governance subsystems, the HTTP API for all of it,
-and answering a small read-only skill surface.
+answering a read-only skill surface (`ping`, `describe`, `status`), and — when configured and
+gated — routing a verified remote request to a desktop agent behind the edge (`invoke`).
 
-It serves three built-in skills, so a peer that discovers this gateway gets a real answer
-rather than `3001`:
+It serves four skills, so a peer that discovers this gateway gets a real answer rather than
+`3001`:
 
 | Skill | Returns |
 |---|---|
 | `ping` | `{pong: true, ts}` |
-| `describe` | the agent's manifest — what it is and what it serves |
+| `describe` | the agent's manifest — what it is, and **the directory of desktop agents behind it** |
 | `status` | `agent_id`, `fingerprint`, `connected`, `skills`, `uptime_seconds`, and mesh traffic counters |
+| `invoke` | routes a verified remote request to a desktop agent behind this edge |
 
 Confirm what a running gateway advertises:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/status | grep skills
-# "skills": ["describe","ping","status"]
+# "skills": ["describe","invoke","ping","status"]
 ```
 
-All three are read-only: the gateway cannot be asked to run a command, touch the filesystem,
-or reveal the desktop agents connected to it. Turn them off with `-mesh-skills-enabled=false`,
-or restrict them with `-mesh-skills=ping`.
+The first three are **read-only**, and stay that way: they cannot run a command, touch the
+filesystem, or reveal the desktop agents' tokens. `status` in particular is deliberately narrow.
+Turn the whole surface off with `-mesh-skills-enabled=false`, or restrict it with
+`-mesh-skills=ping,describe`.
 
-**What it still cannot do:** anything stateful. If you need a peer to *do* something rather
-than describe itself, that has to be added as an explicit skill — which is a deliberate
-safety property, not an oversight.
+### The local agent directory
+
+`describe` carries this edge's directory of attached desktop agents — `id`, `name`, `online`,
+`version`, `capabilities` — sorted online-first then by id, so the manifest is stable and a peer
+looking for capacity sees it first. It is truncated at **128** entries with a separate
+`local_agent_total` carrying the true count: an unbounded list would inflate every discovery reply
+and could push an envelope past a peer's size limit, turning a busy edge into one that is silently
+unreachable.
+
+A gateway with **no desktop app attached** publishes an empty directory (`local_agent_total: 0`).
+That is how a peer can tell there is nothing behind an edge to run work on.
+
+### Remote invocation (`invoke`)
+
+This is the deliberate exception to an otherwise read-only surface, and it is why the mesh exists:
+reaching an agent in another organisation. It is separable because `invoke` does not execute
+anything itself — it *routes* to a desktop agent, and every gate on what may be routed sits in
+front of it.
+
+A caller addresses an agent either by name or by capability:
+
+```jsonc
+{"target": "agent-1111", "operation": "task", "arguments": {"prompt": "..."}}
+{"capability": "task",   "operation": "task", "arguments": {"prompt": "..."}}
+```
+
+- One or the other — **both is refused**, and neither is defaulted. An edge should not guess which
+  agent to run work on.
+- `target` accepts the agent id or the friendly name its operator configured.
+- `capability` matches what the **attached desktop agents** advertise (the directory above), not
+  the edge's own `-mesh-capabilities`. A capability resolves to the first online agent advertising
+  it in directory order, so a repeated request lands on the same agent rather than being scattered.
+- `timeout_ms` may only **tighten** the deadline, never extend it.
+- On success: `{"agent": "...", "operation": "task", "result": {"text": "..."}}`.
+
+**How it executes.** The desktop has no separate execution surface — its model, tools and agent
+loop all live in its own runtime. So the edge does not invent a second way in: it submits an
+ordinary **chat command** to the desktop agent over the same WebSocket the browser uses
+(`/ws/v2/agent`), the desktop runs a real tool-using turn, and the result returns through the
+existing reliable chat channel. One path, so it cannot drift from normal chat behaviour.
+
+If the caller's deadline passes, the edge tells the desktop to **cancel**, so an abandoned request
+does not keep running and spending the local user's provider quota. That cancellation is
+best-effort — undeliverable if the desktop is unreachable at that moment.
+
+**The gates**, applied in order, all failing closed:
+
+| Gate | Setting | Default |
+|---|---|---|
+| Is the capability offered at all? | `-mesh-allow-remote-invoke` | on |
+| Was the caller's identity **verified**? | `-mesh-require-verified-invoke` | **on** |
+| Is the operation exposed? | `-mesh-invoke-operations` | `task` |
+| Are skills served at all? | `-mesh-skills-enabled` | on |
+
+The second is the one that matters. The default verify mode is `prefer`, which **accepts unsigned
+envelopes** — so without that floor, invocation would be reachable by anything able to publish to
+the NATS subject, which is anonymous remote code execution on a desktop machine. With it on,
+"allowed to invoke" means "allowed for an authenticated peer".
+
+The operation allowlist is deliberately the **opposite** default to the skills allowlist: empty
+means *none*, never all. Reading a skill is safe to leave open; driving a desktop machine is not.
+
+Startup validation refuses the contradictory combination (invoke enabled + require-verified +
+`verify-mode=off`), because there no caller could ever be verified and every invocation would be
+refused.
+
+**Errors are specific, not generic.** A refusal reaches the peer with a code it can act on:
+`3001` unknown operation, `3002` no such agent or it is offline, `4001` timed out, `4003` refused
+by policy. Without that distinction an orchestrator cannot tell "route elsewhere" from "retry"
+from "this edge is broken".
+
+**What it still cannot do:** execute anything without a desktop agent. A gateway with an empty
+directory serves the read-only skills and refuses `invoke` with `3002`. And no operation beyond
+those in `-mesh-invoke-operations` is reachable — adding one is a deliberate act, not a
+configuration accident.
 
 ## Enabling the bridge
 
@@ -56,7 +136,7 @@ The minimum is three settings:
 ```bash
 LIVEAGENT_GATEWAY_MESH_ENABLED=true
 LIVEAGENT_GATEWAY_MESH_URL=nats://127.0.0.1:4222
-LIVEAGENT_GATEWAY_MESH_AGENT_ID=drolu/reactorpro
+LIVEAGENT_GATEWAY_MESH_AGENT_ID=acme/lagos/edge-1
 ```
 
 Or as flags on the command line:
@@ -66,7 +146,7 @@ reactorpro-gateway \
   --http-addr=127.0.0.1:3000 \
   --mesh-enabled \
   --mesh-url=nats://127.0.0.1:4222 \
-  --mesh-agent-id=drolu/reactorpro
+  --mesh-agent-id=acme/lagos/edge-1
 ```
 
 A tick to watch: **`--mesh-enabled` without `--mesh-url` is refused**, and so is a user
@@ -197,7 +277,7 @@ Envelope version **`0.3.0`**, JSON over NATS.
 | `mesh.event.<type>` | pub/sub | Events. `mesh.event.>` subscribes to all. |
 
 Note the agent id appears **verbatim** in the subject, including its `/`. The default
-`drolu/reactorpro` yields `mesh.agent.drolu/reactorpro.inbox`. A NATS account with
+`acme/lagos/edge-1` yields `mesh.agent.acme/lagos/edge-1.inbox`. A NATS account with
 restrictive subject permissions must allow `/` in that position, or registration will
 appear to succeed while requests never arrive.
 
@@ -230,12 +310,12 @@ What a gateway advertises about itself. The live values for a default deployment
 
 ```json
 {
-  "id": "drolu/reactorpro",
+  "id": "acme/lagos/edge-1",
   "name": "ReactorPro Gateway",
   "description": "ReactorPro desktop agent and gateway",
   "capabilities": ["agent", "reactorpro"],
   "skills": [],
-  "endpoint": "mesh.agent.drolu/reactorpro.inbox",
+  "endpoint": "mesh.agent.acme/lagos/edge-1.inbox",
   "availability": "online",
   "last_heartbeat": "2026-09-12T19:30:57.644471Z"
 }
@@ -246,21 +326,56 @@ configurable through the gateway's flags.
 
 ## Discovery behaviour
 
-Discovery is **a fixed collection window, not a per-reply timeout**. The caller publishes
-to `mesh.registry.discover` and then collects replies for the whole window (default **2
-seconds**), because agents answer individually as well as the registry — stopping at the
-first reply would silently miss peers.
+There are two mechanisms, and `-mesh-registry` chooses between them.
 
-Two practical consequences:
+**Broadcast** (the original) is **a fixed collection window, not a per-reply timeout**. The
+caller publishes to `mesh.registry.discover` and then collects replies for the whole window
+(default **2 seconds**), because agents answer individually as well as the registry — stopping at
+the first reply would silently miss peers. It is simple and needs no JetStream, but it is lossy: a
+slow peer is silently missed, and it does not scale past a handful of edges.
 
-- **`GET /api/mesh/agents` takes about two seconds.** That is correct behaviour. A client
-  with a 1-second timeout will report a failure on a perfectly healthy mesh; allow at
-  least 3 seconds.
-- The window is **not configurable** through the gateway. It is a bridge default
-  (`DiscoveryWindow`), unlike the dispatch timeout, which is also fixed at 120s.
+**Registry.** Each edge publishes its own manifest into a JetStream key-value bucket
+(`-mesh-registry-bucket`, default `mesh_registry`) on registration and on every heartbeat, and
+discovery reads the bucket. Deterministic and complete. Entries carry a TTL
+(`-mesh-registry-ttl`, default three heartbeat intervals ≈ 90s), so an edge that crashes stops
+being advertised rather than lingering forever as a peer that never answers.
 
-A peer is only returned if it has both an `id` and a `name` — the SDK requires both in a
-manifest, so an agent missing either is filtered out rather than shown as a broken entry.
+### The modes, and the trap in them
+
+| `-mesh-registry` | Behaviour |
+|---|---|
+| `auto` (default) | **Merges both.** Registry *and* broadcast. |
+| `jetstream` | Registry only. **Startup fails** without JetStream. |
+| `broadcast` | Never touches JetStream. |
+
+> **`auto` merges, and that is not a nicety — it is a fixed regression.** A peer that publishes
+> nothing to the bucket (an un-upgraded build, or another implementation) appears only in the
+> broadcast. In v1.5.1 `auto` was registry-*only*, which made an upgraded edge go blind to every
+> such peer — **silently**, because the registry read still succeeds (it returns at least your own
+> entry), so the "read failed → fall back to broadcast" path never ran. The mesh presented as
+> healthy and empty at the same time. Fixed in v1.5.2. If any edge in your fleet is not upgraded,
+> use `auto`; as an immediate workaround on v1.5.1, set `broadcast`.
+
+An unrecognised mode value is **rejected at startup** rather than silently downgraded, matching
+how an unrecognised verify mode is handled — a typo must not quietly weaken or break discovery.
+
+**Registry entries are data, not identity.** A manifest read from the bucket can never make a peer
+trusted or stand in for the inbound guard. Peer identity is still established only by a verified
+signature, and a test pins that a registry entry cannot become a trusted peer.
+
+### Practical consequences
+
+- **`GET /api/mesh/agents` can take about two seconds**, and that is correct — with `auto`,
+  discovery still waits out the broadcast window. A client with a 1-second timeout will report a
+  failure on a perfectly healthy mesh; allow at least 3 seconds.
+- The broadcast window itself is **not configurable** through the gateway; it is a bridge default
+  (`DiscoveryWindow`), as is the 120s dispatch timeout. The registry's bucket and TTL *are*
+  configurable.
+- A peer is only returned if it has both an `id` and a `name` — the SDK requires both in a
+  manifest, so an agent missing either is filtered out rather than shown as a broken entry.
+- **A peer count of zero while everything reports healthy is the most misleading fault in the
+  system.** Work down `troubleshooting.md`; the usual causes are a duplicate agent id, peers that
+  are not subscribed, or an unhealthy registry bucket.
 
 ## Reputation and governance
 

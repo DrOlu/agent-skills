@@ -100,16 +100,23 @@ if [ "${LIVEAGENT_GATEWAY_MESH_ENABLED:-false}" = "true" ] &&
 fi
 
 # Export the settings the gateway reads, whether they came from the credentials
-# file or the environment. Assigning with a default keeps this safe under
-# `set -u` and avoids relying on `export` succeeding only when a value is set.
-export LIVEAGENT_GATEWAY_MESH_ENABLED="${LIVEAGENT_GATEWAY_MESH_ENABLED:-}"
-export LIVEAGENT_GATEWAY_MESH_URL="${LIVEAGENT_GATEWAY_MESH_URL:-}"
-export LIVEAGENT_GATEWAY_MESH_AGENT_ID="${LIVEAGENT_GATEWAY_MESH_AGENT_ID:-}"
-export LIVEAGENT_GATEWAY_MESH_IDENTITY_PATH="${LIVEAGENT_GATEWAY_MESH_IDENTITY_PATH:-}"
-export LIVEAGENT_GATEWAY_MESH_TOKEN="${LIVEAGENT_GATEWAY_MESH_TOKEN:-}"
-export LIVEAGENT_GATEWAY_MESH_USER="${LIVEAGENT_GATEWAY_MESH_USER:-}"
-export LIVEAGENT_GATEWAY_MESH_PASSWORD="${LIVEAGENT_GATEWAY_MESH_PASSWORD:-}"
-export LIVEAGENT_GATEWAY_MESH_NAME="${LIVEAGENT_GATEWAY_MESH_NAME:-}"
-export LIVEAGENT_GATEWAY_DATA_DIR="${LIVEAGENT_GATEWAY_DATA_DIR:-}"
+# file or the environment.
+#
+# This is a sweep over everything the file defined, not a hand-maintained list,
+# and that is deliberate. A hand-written list acts as an *allowlist*: sourcing the
+# file sets the variables, but only explicitly exported ones reach the binary. So
+# a setting added later — a mesh trust pin, a registry mode, an invocation gate —
+# would look like it was configured while having no effect at all, which is one of
+# the most confusing ways this can fail.
+#
+# It covers the mesh settings that matter in practice: agent id and identity path,
+# capabilities, verify mode, trusted peers, first-use learning, served skills,
+# the discovery registry (mode, bucket, TTL), and the remote-invocation gates
+# (allow / require-verified / operations / timeout), along with any other
+# LIVEAGENT_* value the operator sets.
+for _name in $(set | sed -n 's/^\(LIVEAGENT_[A-Za-z0-9_]*\)=.*/\1/p'); do
+  export "$_name"
+done
+unset _name
 
 exec "$GATEWAY_BIN" --http-addr="$HTTP_ADDR"

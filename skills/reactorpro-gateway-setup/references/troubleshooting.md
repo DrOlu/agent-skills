@@ -13,6 +13,8 @@ chasing the wrong layer.
 - [Identity problems](#identity-problems)
 - [Performance and limits](#performance-and-limits)
 - [Diagnostic commands](#diagnostic-commands)
+- [Operational hazards](#operational-hazards) — runaway logs, duplicate services, and the fast
+  diagnosis path for "it worked yesterday"
 
 ## Startup failures
 
@@ -210,18 +212,105 @@ variable and check it character by character.
 
 ### `connected: true` but no peers
 
-- **Another agent may just not be there.** `GET /api/mesh/agents` takes ~2s by design and
-  returns what answered in that window; an empty list with `connected: true` can be correct.
-- **Different subject prefix.** Subjects are hardcoded to `mesh.*` here. A NATS account
-  with restrictive subject permissions must allow `mesh.>` — including the `/` in
-  `mesh.agent.<id>.inbox`, which some permission patterns treat as a delimiter.
-- **Different mesh entirely.** Two NATS servers, or two accounts on one server, are
-  separate meshes. Agents only see peers on the same account.
+**This is the most misleading fault in the system** — every check looks healthy while the mesh is
+empty. Work down in this order; the first two explain most cases.
+
+1. **Is your agent id unique?** Two edges sharing an id discard each other as "self", so neither
+   appears and nothing reports an error. Check the gateway log for a collision warning, which
+   names both endpoints and fingerprints:
+   ```bash
+   journalctl -u reactorpro-gateway | grep -i collision
+   ```
+   Remember the id is **permanent** once the identity file exists — see `configuration.md`.
+
+2. **Are the peers subscribed at all?** Ask the NATS server directly, rather than trusting the
+   mesh's own view:
+   ```bash
+   curl -s localhost:8222/subsz?subs=1 | grep -o 'mesh\.agent\.[^"]*\.inbox' | sort -u
+   ```
+   If your peers' inboxes are absent, they are not connected to *this* broker — which is a
+   peer-side or topology problem, not a gateway one. (Monitoring needs `http_port` set in the
+   NATS config.)
+
+3. **Is the registry bucket healthy?** With `-mesh-registry=auto` or `jetstream`:
+   ```bash
+   nats kv ls <bucket>          # default bucket: mesh_registry
+   nats kv info <bucket> 2>/dev/null || true
+   ```
+   An empty bucket while peers claim to be registering points at the NATS server's own log — see
+   the next entry.
+
+4. **Different subject prefix or account.** Subjects are hardcoded to `mesh.*`. A NATS account
+   with restrictive permissions must allow `mesh.>` — including the `/` in `mesh.agent.<id>.inbox`,
+   which some permission patterns treat as a delimiter. Two servers, or two accounts on one
+   server, are separate meshes: agents only see peers on the same account.
+
+5. **Nothing is actually there.** An empty list with `connected: true` can simply be correct.
+   `GET /api/mesh/agents` returns what answered in its window.
+
+### Peers disappeared and the registry bucket is empty
+
+Real case: the NATS server's JetStream **filestore for the registry stream was corrupted**, so
+every write failed while the registry itself looked up and healthy. The directory drained to empty
+as entries expired via TTL, and the peers vanished even though they were running and re-registering
+continuously.
+
+Confirm it in the NATS server's log:
+
+```
+[ERR] Filestore [KV_MESH_REGISTRY] Critical write error: lmb missing
+[ERR] JetStream failed to store a msg on stream 'LOCAL > KV_MESH_REGISTRY': lmb missing
+```
+
+`lmb missing` is a filestore-level failure — not a quota or disk-space problem (check `df -h` and
+`nats account info` first to rule those out, but a healthy sibling stream updating normally while
+this one fails points squarely at corruption).
+
+**Fix:** delete the broken stream and let the registry recreate it.
+
+```bash
+# via the JetStream API (the CLI verb is blocked by some shell guards)
+nats stream info KV_MESH_REGISTRY          # confirm it exists and holds 0 messages
+# then delete it through the JetStream API and restart the registry service:
+systemctl restart <registry-service>
+```
+
+Nothing is lost: the bucket is a live directory with a short TTL, and peers re-register within a
+minute. Confirm recovery with `nats kv ls` and re-check the peer count.
+
+### Peer count dropped after upgrading a gateway
+
+Almost certainly the **v1.5.1 `auto`-mode discovery regression**. `auto` was registry-only, which
+made an upgraded edge blind to every peer publishing nothing to the bucket — and it failed
+silently, because the registry read *succeeds* (it returns at least your own entry), so the
+"read failed → fall back to broadcast" path never ran.
+
+```bash
+# confirm the mode in use
+journalctl -u reactorpro-gateway | grep -i 'discovery registry'
+```
+
+**Fix:** upgrade to v1.5.2 or later. **Immediate workaround without upgrading:**
+`LIVEAGENT_GATEWAY_MESH_REGISTRY=broadcast`, then restart. See `scenarios.md` → S5.
+
+### Invocation is refused with 4003 GOVERNANCE_DENIED
+
+That is the safety floor working, not a bug. The caller either sent an unsigned envelope, or
+presented a fingerprint that is not pinned on your side.
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/trust   # what you pin
+```
+
+Check both ends: `-mesh-verify-mode=require`, `-mesh-trust-on-first-use=false`, and each side's
+fingerprint present in the other's `-mesh-trusted-peers`. Confirm you are comparing the
+`fingerprint` from `/api/mesh/status`, not the agent id.
 
 ### A peer returns 3001 SKILL_NOT_FOUND
 
-The target does not serve that skill. A ReactorPro gateway answers exactly `ping`,
-`describe` and `status` by default, so anything else is expected to fail this way.
+The target does not serve that operation. A ReactorPro gateway answers `ping`, `describe`,
+`status` and `invoke` by default, so anything else — and any `invoke` whose `operation` is not in
+the target's `-mesh-invoke-operations` — is expected to fail this way.
 
 Check what the target advertises before dispatching:
 
@@ -333,3 +422,80 @@ curl -s localhost:8222/varz  # if NATS monitoring is enabled
 The single most useful habit when something looks wrong: read `/api/mesh/status` rather
 than the service status. The gateway is designed so that the API is healthy while the mesh
 is broken, and `lastError` is the only place that distinction is visible.
+
+## Operational hazards
+
+These are not gateway bugs, but they take a working mesh down and they are easy to miss because
+the symptom appears somewhere unrelated.
+
+### A log file growing very fast, then unrelated things breaking
+
+A crash-looping service under `KeepAlive`/`Restart=always` can write **gigabytes** in hours. The
+damage is indirect: the disk fills, and then JetStream writes fail — which presents as a *mesh*
+fault rather than a storage one.
+
+Real case: a service connecting to NATS with **no credentials**, refused with
+`Authorization Violation`, restarting forever. It produced ~2.5 GB of repeated tracebacks, and
+two failed authentication attempts every ~2 seconds flooded the NATS server's own log.
+
+Two lessons:
+
+- **Look for the real error a few lines *above* the traceback**, not at the bottom of the file.
+  The cause is almost always several screens up from the text that fills the disk.
+- **Read the rate, not the size.** A big file may be old; what matters is whether it is still
+  growing.
+
+```bash
+# how fast is it actually growing?
+S1=$(stat -f%z FILE); sleep 5; S2=$(stat -f%z FILE); echo "$((S2-S1)) bytes in 5s"
+
+# free the space immediately
+: > FILE
+```
+
+**Truncate rather than delete.** For a file a running process still holds open, deleting it does
+*not* free space — the process keeps writing to the unlinked inode until it restarts. Truncation
+reclaims it at once.
+
+Then fix the loop: give the service working credentials, and confirm it stays up rather than
+merely starting.
+
+### Two service definitions for the same thing
+
+Duplicate jobs (a leftover unit from an earlier install alongside the current one) fight over the
+same port. One wins; the other crash-loops forever with:
+
+```
+[FTL] Can't start monitoring: can't listen to the monitor port: bind: address already in use
+```
+
+It never succeeds, and it fills a log while doing so.
+
+```bash
+# macOS: list loaded jobs and look for two that configure the same thing
+launchctl list | grep -i <name>
+ls ~/Library/LaunchAgents/ | grep -i <name>
+
+# Linux
+systemctl list-units --all | grep -i <name>
+```
+
+Disable the stale one — unload it *and* rename or remove its unit file, or it returns at the next
+login or boot.
+
+### A fast path for diagnosing any "it worked yesterday" mesh problem
+
+```bash
+# 1. Is the edge up and does it know who it is?
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/status
+
+# 2. Are peers visible? (allow 3s)
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/agents
+
+# 3. Is anything arriving at all? A flat inbound count means nothing is reaching you.
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/status | grep -o 'mesh_inbound_total":[0-9]*'
+```
+
+If the fingerprint is unchanged, the token works, `connected: true`, and `mesh_inbound_total` is
+flat, the problem is **outside this gateway** — nobody is talking to it. Check the peers are
+connected to the broker before changing any gateway setting.

@@ -46,6 +46,28 @@ interchangeable between hosts if you want to keep the same fingerprint — copyi
 carry the identity across, deliberately, which is how you migrate a gateway to new
 hardware without changing who it is.
 
+### The agent id is permanent — choose it deliberately
+
+`-mesh-agent-id` is **an address, not a label**, and it is written into the identity file on
+first start:
+
+- it forms the subject peers send to, `mesh.agent.<id>.inbox`;
+- it is **hashed into the fingerprint**, so the id and the key together are the identity.
+
+Consequences worth knowing before you type it:
+
+- **It cannot be reassigned.** Configuring a different id later is a *hard startup failure*
+  (`identity at <path> belongs to "X", not "Y": the agent id is part of the fingerprint and
+  cannot be reassigned`), not a warning. Changing it means moving the identity file aside to
+  mint a new one, which changes your fingerprint and breaks every peer that pinned the old one.
+- **Every edge needs a different id.** Two edges sharing one discard each other as "self", so
+  the mesh looks empty while every service reports healthy. The gateway detects this and logs a
+  collision warning naming both endpoints and fingerprints.
+- **The legacy shared default (`drolu/reactpro`) cannot federate.** An edge still on it logs a
+  loud startup warning; it is only retained so an identity minted under it keeps loading.
+- Use `<org>/<site>/<edge>`. Left unset the gateway derives `reactorpro/<sanitised-hostname>`,
+  which is unique per host but says nothing about who you are.
+
 ## Network
 
 | Flag | Env var | Default | Notes |
@@ -86,7 +108,7 @@ The bridge is **disabled by default**. With it disabled, nothing connects anywhe
 |---|---|---|---|
 | `-mesh-enabled` | `LIVEAGENT_GATEWAY_MESH_ENABLED` | `false` | Accepts `1/true/yes/on` and `0/false/no/off`, case-insensitive. |
 | `-mesh-url` | `LIVEAGENT_GATEWAY_MESH_URL` | *(empty)* | NATS URL, e.g. `nats://127.0.0.1:4222`, `tls://nats.example.com:4222`. |
-| `-mesh-agent-id` | `LIVEAGENT_GATEWAY_MESH_AGENT_ID` | `drolu/reactorpro` | Overridden by the identity file once it exists. |
+| `-mesh-agent-id` | `LIVEAGENT_GATEWAY_MESH_AGENT_ID` | `reactorpro/<sanitised-hostname>` | **An address, not a label** — and permanent once the identity file exists. Use `<org>/<site>/<edge>`, unique per edge. See the warning below. |
 | `-mesh-identity-path` | `LIVEAGENT_GATEWAY_MESH_IDENTITY_PATH` | `<data dir>/mesh/reactorpro-identity.json` | Minted on first use, mode `0600`. |
 | `-mesh-token` | `LIVEAGENT_GATEWAY_MESH_TOKEN` | *(empty)* | NATS token auth. |
 | `-mesh-user` | `LIVEAGENT_GATEWAY_MESH_USER` | *(empty)* | NATS user auth. Requires a password. |
@@ -113,12 +135,55 @@ could ever authenticate.
 
 | Flag | Env var | Default | Notes |
 |---|---|---|---|
-| `-mesh-skills-enabled` | `LIVEAGENT_GATEWAY_MESH_SKILLS_ENABLED` | `true` | Serve the built-in read-only skills (`ping`, `describe`, `status`). |
-| `-mesh-skills` | `LIVEAGENT_GATEWAY_MESH_SKILLS` | *(empty = all)* | Comma-separated subset to serve. An unknown id is rejected at startup rather than silently unserved. |
+| `-mesh-skills-enabled` | `LIVEAGENT_GATEWAY_MESH_SKILLS_ENABLED` | `true` | Serve mesh skills at all. **`false` serves nothing, `invoke` included.** |
+| `-mesh-skills` | `LIVEAGENT_GATEWAY_MESH_SKILLS` | *(empty = all)* | Comma-separated subset to serve. An unknown id is rejected at startup rather than silently unserved. `invoke` is a valid name here. |
+| `-mesh-capabilities` | `LIVEAGENT_GATEWAY_MESH_CAPABILITIES` | `agent,reactorpro` | What **this edge** advertises, so peers can filter for a site that can do something. Not the same as the capabilities of the desktop agents behind it. |
 
-All three skills are read-only. `status` reports only the gateway's own identity, readiness
-and traffic counters — never the connected desktop agents or their tokens. Disable the
-surface entirely with `-mesh-skills-enabled=false` if a peer has no business probing you.
+Three of the four served skills are read-only: `ping`, `describe`, `status`. `describe` now
+includes this edge's **local agent directory** (the agents behind it). `status` reports only the
+gateway's own identity, readiness and traffic counters — never the connected desktop agents or
+their tokens. Disable the surface entirely with `-mesh-skills-enabled=false` if a peer has no
+business probing you.
+
+The fourth, `invoke`, does work. Its gates are below.
+
+### Remote invocation
+
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `-mesh-allow-remote-invoke` | `LIVEAGENT_GATEWAY_MESH_ALLOW_REMOTE_INVOKE` | `true` | May peers ask agents behind this edge to run tasks at all? |
+| `-mesh-require-verified-invoke` | `LIVEAGENT_GATEWAY_MESH_REQUIRE_VERIFIED_INVOKE` | **`true`** | **The safety floor.** Refuse an invocation whose caller identity was not actually verified. |
+| `-mesh-invoke-operations` | `LIVEAGENT_GATEWAY_MESH_INVOKE_OPERATIONS` | `task` | Exact allowlist of operations. **Empty exposes none — deliberately the opposite of the skills allowlist, where empty means all.** |
+| `-mesh-invoke-timeout` | `LIVEAGENT_GATEWAY_MESH_INVOKE_TIMEOUT` | `1m0s` | How long one remote invocation may run before the edge gives up and tells the desktop to cancel. |
+
+**Why the floor matters.** The default verify mode is `prefer`, which accepts unsigned envelopes.
+Without `-mesh-require-verified-invoke`, an invocation would be reachable by anything able to
+publish to the NATS subject — anonymous remote code execution on a desktop machine. Keep it on
+across organisation boundaries. Turning it off is possible and sometimes deliberate (a trusted
+single-site fleet), but it should be a decision, not an oversight.
+
+Startup validation refuses the contradictory combination: invoke enabled + require-verified +
+`verify-mode=off`. There, no caller could ever be verified and every invocation would be refused.
+
+A gateway with **no desktop agent attached** still serves the read-only skills but can never serve
+`invoke` — there is nothing to route to, and callers get `3002 AGENT_UNAVAILABLE`.
+
+### Discovery registry
+
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `-mesh-registry` | `LIVEAGENT_GATEWAY_MESH_REGISTRY` | `auto` | `auto` (merge registry + broadcast), `jetstream` (registry only, **startup fails** without JetStream), `broadcast` (never uses JetStream). An unrecognised value is rejected rather than silently downgraded. |
+| `-mesh-registry-bucket` | `LIVEAGENT_GATEWAY_MESH_REGISTRY_BUCKET` | `mesh_registry` | JetStream KV bucket holding one manifest per edge. |
+| `-mesh-registry-ttl` | `LIVEAGENT_GATEWAY_MESH_REGISTRY_TTL` | `0` (= three heartbeat intervals, ~`1m30s`) | How long an entry stays valid without a heartbeat. Expired entries are treated as absent, so a crashed edge stops being advertised. |
+
+**`auto` merges both mechanisms, and that is not a nicety.** A peer that publishes nothing to the
+bucket — an older build, or a different implementation — appears only in the broadcast. A
+registry-only setting makes an upgraded edge blind to it *silently*, because the registry read
+still succeeds (it returns at least your own entry), so the "read failed → fall back" path never
+runs. If any edge in your fleet is not upgraded, leave this on `auto`.
+
+**Registry entries are data, not identity.** A manifest read from the bucket can never make a peer
+trusted; trust comes only from a verified signature.
 
 **Authentication precedence is creds-file → token → user/password, and exactly one is
 used.** Setting both a token and a user does not send both; the token wins.

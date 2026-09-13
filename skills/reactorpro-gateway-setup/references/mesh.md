@@ -19,30 +19,35 @@ is deliberate, so the shipping configuration has no network side effects.
 - [Interoperating with RTerm](#interoperating-with-rterm)
 - [Running a NATS server](#running-a-nats-server)
 
-## What works today, and what does not
+## What it can do
 
-Being explicit about this saves hours:
+**Works:** registering with a registry, discovering peers, being dispatched to, emitting and
+subscribing to events, the reputation and governance subsystems, the HTTP API for all of it,
+and answering a small read-only skill surface.
 
-**Works:** registering with a registry, discovering peers, participating in the mesh as a
-discoverable agent with a stable cryptographic identity, emitting and subscribing to
-events, the reputation and governance subsystems, and the HTTP API for all of it.
+It serves three built-in skills, so a peer that discovers this gateway gets a real answer
+rather than `3001`:
 
-**Does not work yet:** the gateway **serves no skills**. Verify this yourself against a
-running instance —
+| Skill | Returns |
+|---|---|
+| `ping` | `{pong: true, ts}` |
+| `describe` | the agent's manifest — what it is and what it serves |
+| `status` | `agent_id`, `fingerprint`, `connected`, `skills`, `uptime_seconds`, and mesh traffic counters |
+
+Confirm what a running gateway advertises:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/status | grep skills
-# "skills": []
+# "skills": ["describe","ping","status"]
 ```
 
-The `RegisterSkill` API exists and is tested, but nothing in production calls it, so the
-manifest advertises an empty skill list. Consequence: **another agent that dispatches a
-skill request to this gateway gets error `3001` (`SKILL_NOT_FOUND`)** — not a crash, not a
-timeout. If you are setting up a gateway expecting it to answer inbound calls, that is the
-limitation to know about first. Making it answer requires adding a skill handler in the
-gateway's startup path.
+All three are read-only: the gateway cannot be asked to run a command, touch the filesystem,
+or reveal the desktop agents connected to it. Turn them off with `-mesh-skills-enabled=false`,
+or restrict them with `-mesh-skills=ping`.
 
-Discovery, registration and events all work regardless.
+**What it still cannot do:** anything stateful. If you need a peer to *do* something rather
+than describe itself, that has to be added as an explicit skill — which is a deliberate
+safety property, not an oversight.
 
 ## Enabling the bridge
 
@@ -103,31 +108,50 @@ Operationally:
 | Created | On first start, automatically |
 | Back it up | **Yes — before your first upgrade** |
 
-### What the identity does and does not enforce
+### What the identity enforces
 
-The immutable-id guarantee is **local**. Editing the id in the file invalidates the
-fingerprint and the file refuses to load; pointing the config at a different id fails with
-*"cannot be reassigned"*. That is real and enforced at load time.
+The immutable-id guarantee is **local**: editing the id in the file invalidates the
+fingerprint and the file refuses to load, and pointing the config at a different id fails
+with *"cannot be reassigned"*.
 
-Two limits are worth knowing before you rely on it for trust:
+Since the trust hardening, that is no longer the whole story — signatures are now checked
+on inbound traffic, subject to the verification mode:
 
-1. **Nothing verifies the signatures.** `Sign` is called on every outbound envelope, but
-   `VerifyEnvelope` is reachable only from tests — the inbound path decodes a request,
-   checks its type, and dispatches it without any signature check. Until that is wired up,
-   `sig`/`pub` are metadata, not a control.
-2. **Peers never see the fingerprint.** It is not a field on the manifest, so it is not
-   discoverable and cannot be pinned by another agent. It appears only on the local
-   `/api/mesh/status`.
+| Mode | Behaviour |
+|---|---|
+| `off` | Signature fields are not consulted at all. |
+| `prefer` **(default)** | A signed envelope must verify or it is refused `3004`; an unsigned envelope is still accepted, so peers that cannot sign keep working. |
+| `require` | Unsigned envelopes are refused `3004`. Correct for a closed fleet. |
 
-Consequence: losing the identity file mints a new keypair under the *same* agent id. The
-agent peers see keeps its name; only the local fingerprint changes; and because no peer
-receives or verifies it, nothing else notices. The gateway looks healthy throughout.
+Two things make a signature meaningful rather than decorative, and both are on by default:
 
-Back the file up regardless. It is the only copy of the private key, and if signature
-verification is ever enforced, an identity mismatch flips from invisible to fatal.
+- **The fingerprint is bound to the sender.** The envelope carries a fingerprint covering
+  the agent id and the public key, and it is covered by the signature. Without this, a
+  signature only proves the sender holds *some* key — anyone can mint a pair and sign a
+  message claiming to be someone else.
+- **Fingerprints are pinned across messages.** The first identity an agent id presents is
+  remembered; a different one later is refused. That is what detects impersonation or a key
+  swap. Configure pins explicitly with `-mesh-trusted-peers`, and turn off first-use
+  learning with `-mesh-trust-on-first-use=false` to accept only those pins.
+
+The manifest now advertises the fingerprint, so a peer can pin this gateway before it ever
+receives a message from it.
+
+Losing the identity file still mints a new keypair under the *same* agent id — the name
+peers see is unchanged, but the fingerprint changes. With `prefer` a peer that already
+pinned the old fingerprint will now refuse this gateway as an identity mismatch, which is
+exactly the intended behaviour: back the file up.
 
 Copying the file to a new host *does* carry the keypair, which is the supported way to
-migrate a gateway to new hardware.
+migrate a gateway to new hardware without changing its identity.
+
+### Other inbound gates
+
+Beyond signatures, every inbound message is subject to a size cap (1 MiB by default), a
+protocol-version check, an addressee check, a clock-skew window (5 minutes) that bounds how
+long a captured message stays replayable, replay detection on envelope ids, and a
+per-sender rate limit that fails closed once its tracked population is full. See the
+ReactorPro repository's `internal/mesh/MESH.md` for the authoritative description.
 
 `LIVEAGENT_GATEWAY_MESH_AGENT_ID` is only a default for the first run. After that the file
 wins.
@@ -183,16 +207,22 @@ appear to succeed while requests never arrive.
 
 ### Error codes
 
-| Code | Name | Meaning |
-|---|---|---|
-| `2002` | Invalid request | Malformed envelope or payload. |
-| `3001` | Skill not found | No handler for the requested skill — **what you get today**. |
-| `4010` | Unauthorized | |
-| `4030` | Governance denied | An approval was denied. |
-| `5001` | Handler failed | The skill handler returned an error. |
-| `5003` | Not configured | The capability is not configured. |
+Aligned with the Synapse protocol table, so a spec-conformant peer reads them correctly.
 
-Codes `2002` and `3001` are not retryable; `5001` is.
+| Code | Name | Retryable | Meaning |
+|---|---|---|---|
+| `2001` | INVALID_ENVELOPE | no | Could not be decoded or failed an inbound check (version, addressee, timestamp, replay, size) |
+| `2002` | INVALID_MANIFEST | no | Manifest missing required fields |
+| `3001` | SKILL_NOT_FOUND | no | No handler for the requested skill |
+| `3002` | AGENT_UNAVAILABLE | yes | Agent offline or unreachable |
+| `3004` | IDENTITY_MISMATCH | no | Signature or pinned identity does not match |
+| `4001` | OVERLOADED | yes | Agent too busy |
+| `4002` | RATE_LIMITED | yes | Too many requests from this sender |
+| `4003` | GOVERNANCE_DENIED | no | Blocked by policy |
+| `4004` | APPROVAL_REQUIRED | yes | Awaiting approver sign-off |
+| `5001` | INTERNAL_ERROR | yes | Handler failure |
+
+The `retryable` flag on a reply is derived from the code, so the two can never disagree.
 
 ### Manifest
 

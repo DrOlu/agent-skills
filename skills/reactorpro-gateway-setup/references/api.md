@@ -207,9 +207,10 @@ applies. Note the default is measured in **minutes**, so an explicit `timeoutMs`
 setting for anything interactive — an HTTP client in front of this will usually give up
 first.
 
-**Expect `3001 SKILL_NOT_FOUND` against a ReactorPro peer.** The gateway registers no
-skill handlers, so it advertises an empty skill list and cannot answer. ReactorPro
-dispatches fine; it does not yet serve. See `mesh.md`.
+**A ReactorPro peer answers `ping`, `describe` and `status`; anything else returns
+`3001 SKILL_NOT_FOUND`**, because those three read-only skills are all it serves. Check
+`skills` on the target's `/api/mesh/status` (or its `describe` output) to see what it will
+accept before dispatching. See `mesh.md`.
 
 ### `POST /api/mesh/emit`
 

@@ -91,11 +91,37 @@ The bridge is **disabled by default**. With it disabled, nothing connects anywhe
 | `-mesh-token` | `LIVEAGENT_GATEWAY_MESH_TOKEN` | *(empty)* | NATS token auth. |
 | `-mesh-user` | `LIVEAGENT_GATEWAY_MESH_USER` | *(empty)* | NATS user auth. Requires a password. |
 | `-mesh-password` | `LIVEAGENT_GATEWAY_MESH_PASSWORD` | *(empty)* | |
+| `-mesh-creds-file` | `LIVEAGENT_GATEWAY_MESH_CREDS_FILE` | *(empty)* | NATS credentials file (NKey/JWT). The only route to the stronger NATS auth modes. |
 | `-mesh-name` | `LIVEAGENT_GATEWAY_MESH_NAME` | `ReactorPro Gateway` | Display name in the mesh manifest. |
 
+### Mesh trust and inbound limits
+
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `-mesh-verify-mode` | `LIVEAGENT_GATEWAY_MESH_VERIFY_MODE` | `prefer` | `off`, `prefer` (verify when signed, accept unsigned), or `require` (refuse unsigned). An unrecognised value is rejected at startup rather than silently downgraded. |
+| `-mesh-trusted-peers` | `LIVEAGENT_GATEWAY_MESH_TRUSTED_PEERS` | *(empty)* | Comma-separated fingerprints (`sha256:<hex16>`) accepted without first-use learning. |
+| `-mesh-trust-on-first-use` | `LIVEAGENT_GATEWAY_MESH_TRUST_ON_FIRST_USE` | `true` | Record a peer's fingerprint on its first verified message. Set false to accept only `-mesh-trusted-peers`. |
+| `-mesh-clock-skew` | `LIVEAGENT_GATEWAY_MESH_CLOCK_SKEW` | `5m` | How far an envelope timestamp may drift before it is refused. |
+| `-mesh-max-envelope-bytes` | `LIVEAGENT_GATEWAY_MESH_MAX_ENVELOPE_BYTES` | `1048576` | Cap on a single inbound envelope. |
+| `-mesh-rate-limit-per-second` | `LIVEAGENT_GATEWAY_MESH_RATE_LIMIT_PER_SECOND` | `50` | Sustained inbound messages per sender. **`0` disables the limit** — unlike the integer settings above, zero is a meaningful value here. |
+| `-mesh-rate-limit-burst` | `LIVEAGENT_GATEWAY_MESH_RATE_LIMIT_BURST` | `100` | Back-to-back allowance per sender. |
+
+Turning off first-use learning with no configured peers is rejected at startup: no peer
+could ever authenticate.
+
+### Mesh served skills
+
+| Flag | Env var | Default | Notes |
+|---|---|---|---|
+| `-mesh-skills-enabled` | `LIVEAGENT_GATEWAY_MESH_SKILLS_ENABLED` | `true` | Serve the built-in read-only skills (`ping`, `describe`, `status`). |
+| `-mesh-skills` | `LIVEAGENT_GATEWAY_MESH_SKILLS` | *(empty = all)* | Comma-separated subset to serve. An unknown id is rejected at startup rather than silently unserved. |
+
+All three skills are read-only. `status` reports only the gateway's own identity, readiness
+and traffic counters — never the connected desktop agents or their tokens. Disable the
+surface entirely with `-mesh-skills-enabled=false` if a peer has no business probing you.
+
 **Authentication precedence is creds-file → token → user/password, and exactly one is
-used.** Setting both a token and a user does not send both; the token wins. The gateway
-exposes no creds-file flag, so from the gateway's side it is token or user/password.
+used.** Setting both a token and a user does not send both; the token wins.
 
 Validation refuses to half-start:
 

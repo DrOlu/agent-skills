@@ -220,9 +220,18 @@ variable and check it character by character.
 
 ### A peer returns 3001 SKILL_NOT_FOUND
 
-Expected today. The gateway registers no skill handlers, so its manifest advertises
-`"skills": []` and it cannot answer inbound requests. Discovery, registration, heartbeat
-and events all still work. See `mesh.md`.
+The target does not serve that skill. A ReactorPro gateway answers exactly `ping`,
+`describe` and `status` by default, so anything else is expected to fail this way.
+
+Check what the target advertises before dispatching:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/status | grep skills
+curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/agents
+```
+
+If `"skills": []` on your *own* gateway, the surface has been turned off
+(`-mesh-skills-enabled=false`) or restricted to an empty selection. See `mesh.md`.
 
 ### Detection is slow or a client times out
 
@@ -246,11 +255,14 @@ Fix the data directory path and restore the identity file from backup — the or
 keypair is the only thing that reproduces the old fingerprint, since it is derived from the
 key and cannot be recomputed from the agent id alone.
 
-In practice this is currently quiet rather than harmful: the agent id is unchanged, peers
-never receive the fingerprint, and no signature verification runs, so nothing on the mesh
-rejects or even notices the new key. Treat it as a warning sign anyway — it means the
-process is reading a different data directory than you think, which will also have reset
-the agent database and any per-agent tokens.
+This is no longer quiet. With verification enabled (`prefer` or `require`), the fingerprint
+is part of every signed envelope and is advertised in the manifest, so a peer that has
+already pinned the old identity refuses this gateway with `3004 IDENTITY_MISMATCH`. Expect
+that refusal, restore the identity file from backup, and restart.
+
+Either way, treat it as a warning sign: a changed fingerprint means the process is reading a
+different data directory than you think, which will also have reset the agent database and
+any per-agent tokens.
 
 ### "the agent id is part of the fingerprint and cannot be reassigned"
 

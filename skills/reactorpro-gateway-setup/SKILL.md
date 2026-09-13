@@ -139,19 +139,20 @@ obvious and service-independent.
 **Back up `mesh/reactorpro-identity.json` before your first upgrade.** The file holds an
 Ed25519 keypair and a fingerprint computed over the agent id *and* the public key. Edit the
 id inside it and the file refuses to load; point the config at a different id and startup
-fails with *"the agent id is part of the fingerprint and cannot be reassigned"*. That is
-what makes the agent id unchangeable — **locally**.
+fails with *"the agent id is part of the fingerprint and cannot be reassigned"*. Every
+outbound envelope is signed and carries that fingerprint, and the manifest advertises it so
+peers can pin this gateway.
 
-Be precise about what that does and does not buy you today. The gateway signs every
-envelope it sends (`sig` + `pub`), but **nothing verifies those signatures**: the
-verification function exists yet is only called from tests, and inbound requests are
-processed without checking them. The fingerprint is local-only too — it is not part of the
-manifest, so peers never receive it and cannot pin it. So a lost identity file mints a new
-keypair under the *same* agent id, and peers notice nothing.
+Inbound signing is enforced according to `-mesh-verify-mode`, which defaults to `prefer`:
+a signed envelope must verify or it is refused `3004`, while unsigned traffic is still
+accepted so peers without an identity (RTerm's bridge among them) keep working. Set
+`require` on a closed fleet to refuse unsigned senders outright. In either enforcing mode
+the first fingerprint an agent id presents is remembered, and a different one later is
+refused — that is what detects impersonation.
 
-Back it up anyway. It is the only copy of the key, and the moment signature verification is
-enforced the identity becomes load-bearing — at which point a host with the wrong key is
-refused rather than silently trusted.
+So losing the identity file is no longer silent: a new keypair is minted under the *same*
+agent id, and any peer that already pinned the old fingerprint will refuse this gateway as
+an identity mismatch. Restore from backup, or accept the new identity.
 
 ### Access control
 

@@ -89,13 +89,13 @@ install -m 0755 reactorpro-gateway-linux-amd64 /usr/local/bin/reactorpro-gateway
 Verify the checksum. These are unsigned binaries; the checksum is the only integrity signal you
 get, and it is worthless if you skip it.
 
-Pin a version by replacing `latest/download` with `download/v1.5.2`.
+Pin a version by replacing `latest/download` with `download/v1.5.8`.
 
 You can also confirm what you are running without downloading anything — GitHub exposes a
 server-computed digest per asset:
 
 ```bash
-gh api repos/DrOlu/ReactorPro/releases/tags/v1.5.2 --jq '.assets[]|{name,digest}'
+gh api repos/DrOlu/ReactorPro/releases/tags/v1.5.8 --jq '.assets[]|{name,digest}'
 ```
 
 ## Configure
@@ -519,3 +519,28 @@ Read these when you need the detail — they are not loaded until you open them.
 
 For questions about the ReactorPro desktop application itself (features, skills, MCP servers), use
 the `reactorpro-doc` skill instead — this one is about the server.
+
+## Recent changes you must know about (v1.5.4 → v1.5.8)
+
+**The durable mailbox (v1.5.4, opt-in).** `-mesh-mailbox` buffers skill
+invocations for an absent agent in JetStream (`mesh.agent.*.mailbox`, stream
+`MESH_AGENT_MAILBOX`) and delivers them when it returns. At-least-once: skills
+reached this way must be idempotent. Send with `POST /api/mesh/mailbox` (202).
+
+**Never stream the inbox subject, and never reuse a name you do not own (v1.5.5).**
+A JetStream stream over `mesh.agent.*.inbox` breaks request/reply outright: the
+server answers the publish, so callers receive a PubAck instead of the
+response, and a push consumer's `msg.reply` is the ack subject, so the peer
+cannot reply at all. Durability belongs on `.mailbox`. If a stream with the
+configured name already exists, the edge adopts it only when it genuinely
+captures this agent's mailbox subject, otherwise it refuses with an actionable
+message — it never rewrites a stream it did not create. A mailbox failure is
+non-fatal and shows as `mailbox.running=false` + `error` on `/api/mesh/status`.
+
+**Dispatch is honest now (v1.5.6–v1.5.8).** It ignores ack-shaped messages,
+refuses to treat a non-envelope as a successful reply, and names the likely
+cause on timeout. Requests also carry a top-level `text` (from
+`input.text/message/prompt`) and a signed `payload.reply_to` with a `_REPLY`
+prefix, which is what the Synapse cli/agentspan bridges require. Cross-fleet
+dispatch with a text prompt is a real agent turn — allow 120s+.
+See `references/mesh.md` § "The durable mailbox and the inbox hazard".

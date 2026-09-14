@@ -455,3 +455,31 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/agents
 
 `enabled: true` with `connected: false` means configuration is right and reachability or
 credentials are wrong — read `lastError`.
+
+## The durable mailbox and the inbox hazard (v1.5.4–v1.5.8)
+
+**Why `.mailbox` is a separate subject.** Putting a JetStream stream over
+`mesh.agent.<id>.inbox` breaks request/reply two ways, both measured against a
+real server:
+
+1. JetStream answers the publish, so the caller receives its PubAck
+   (`{"stream":…,"seq":…}`) on the reply inbox instead of the skill's response.
+2. For a push consumer the delivered `msg.reply` is the JetStream ack subject
+   (`$JS.ACK.…`), so the peer cannot answer the caller at all.
+
+So durability lives on `mesh.agent.<id>.mailbox` (one-way, at-least-once,
+acked only after the handler succeeds; transient failures retry on a 5s delay)
+and request/reply stays untouched on `.inbox`.
+
+**Stream ownership.** If a stream with the configured name already exists, the
+edge adopts it only when it captures this agent's mailbox subject, and otherwise
+refuses naming the stream, its real subjects and the flag to change. It never
+mutates a stream it did not create — a retention change is refused by JetStream
+and once took a whole bridge down. A mailbox failure is non-fatal and visible
+on `/api/mesh/status`.
+
+**Cross-fleet requests (v1.5.7/8).** Requests carry a top-level `text`
+(surfaced from `input.text/message/prompt`) and a signed `payload.reply_to`
+with a `_REPLY` prefix — the Synapse cli/agentspan bridges require exactly that.
+The signature scheme is unchanged, so mixed gateway versions interoperate. A
+text-bearing dispatch is a real agent turn: budget 120s+.

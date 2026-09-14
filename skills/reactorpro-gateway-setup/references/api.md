@@ -326,3 +326,18 @@ directly.
 Errors carry a JSON body. When debugging anything mesh-related, prefer
 `GET /api/mesh/status`'s `lastError` over the HTTP status — a mesh failure is deliberately
 non-fatal, so the process stays healthy and the HTTP layer may report nothing at all.
+
+## Durable mailbox (v1.5.4+)
+
+```bash
+# Leave work for an agent that may not be running (returns as soon as it is STORED)
+curl -X POST http://127.0.0.1:3000/api/mesh/mailbox   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"target":"acme/lagos/edge-1","skill":"ping","input":{"text":"run when you are back"},"taskId":"t-1"}'
+# -> HTTP 202 {"accepted":true,"sequence":1,...}  — it is NOT answered; 202 says so
+
+# Is the mailbox running? (present even when off, so "off" ≠ "on but broken")
+curl -s http://127.0.0.1:3000/api/mesh/status -H "Authorization: Bearer $TOKEN" | jq .mailbox
+# {"enabled":true,"running":true,"stream":"MESH_AGENT_MAILBOX","consumer":"mailbox-…"}
+```
+
+`/api/mesh/dispatch` waits for a result; `/api/mesh/mailbox` does not and
+cannot — a mailbox message has no reply path by construction.

@@ -499,3 +499,13 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/status | grep -o 'm
 If the fingerprint is unchanged, the token works, `connected: true`, and `mesh_inbound_total` is
 flat, the problem is **outside this gateway** — nobody is talking to it. Check the peers are
 connected to the broker before changing any gateway setting.
+
+## New failure modes (v1.5.4 → v1.5.8)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Dispatch: "no reply … (N JetStream publish ack(s) received instead)" | A JetStream stream captures `mesh.agent.<id>.inbox`, so the server answers the publish | Remove the inbox subjects from that stream; durability belongs on `mesh.agent.<id>.mailbox` |
+| Mailbox: "already exists but does not capture …" | The configured stream name is taken by an unrelated stream | Pick a free name with `-mesh-mailbox-stream`; the edge will not rewrite someone else's stream |
+| `/api/mesh/status` shows `mailbox.enabled=true, running=false` with an `error` | The mailbox failed at startup; the mesh kept running | Read the `error` field — it names the stream and the flag to change |
+| Dispatch to a fleet peer returns 4001 "No text/message/prompt" | The peer is text-based; the request carried no top-level text | Put the prompt in `input.text` (the gateway surfaces it) |
+| Dispatch to a peer hangs though the peer logged the task completing | The peer answers `payload.reply_to`, not the NATS reply subject | Requires v1.5.8+, which carries `reply_to` in the signed payload |

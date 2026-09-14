@@ -302,3 +302,16 @@ behaviour they once named:
 
 Genuinely unknown arguments are still rejected. Prefer the current names in new
 deployments.
+
+## Durable mailbox flags (v1.5.4+)
+
+| Flag | Env | Default | Meaning |
+|---|---|---|---|
+| `-mesh-mailbox` | `LIVEAGENT_GATEWAY_MESH_MAILBOX` | off | Buffer skill invocations for an absent agent in JetStream and deliver them when it returns |
+| `-mesh-mailbox-stream` | `LIVEAGENT_GATEWAY_MESH_MAILBOX_STREAM` | `MESH_AGENT_MAILBOX` | Stream name. Do NOT name it `AGENT_INBOXES` — that name is already used by fleets for their own stream |
+| `-mesh-mailbox-max-age` | `LIVEAGENT_GATEWAY_MESH_MAILBOX_MAX_AGE` | 7d | How long undelivered mail is retained |
+| `-mesh-mailbox-max-msgs` | `LIVEAGENT_GATEWAY_MESH_MAILBOX_MAX_MSGS` | 10000 | Bound per stream |
+
+Requires JetStream; enabled without it is a startup error, not a silent
+downgrade. Delivery is at-least-once — skills reached through the mailbox must
+be idempotent.

@@ -36,6 +36,11 @@ Filters: `?capabilities=billing,west-africa` (subset match),
 The manifest is advertisement, not proof — see who the gateway actually
 trusts with `GET /api/mesh/trust`.
 
+Each peer's manifest carries `local_agents` — the desktop apps **and headless workers**
+(`reactorpro-agentd`, since v1.5.24 refreshed on every heartbeat) behind that edge. Target one
+by its id in the invoke input's `target` when you want a specific worker, or by `capability`
+to let the edge pick an online one.
+
 ## Ask a peer to run a prompt (the desktop's own path)
 
 ```bash
@@ -124,11 +129,13 @@ curl -s -X POST http://127.0.0.1:3000/api/mesh/tasks \
 | `GET /api/mesh/tasks` | list, newest first, cursor-paginated (`before` + `beforeId` from the last row, `limit`; `role=caller` for your outgoing tasks, `role=executor&caller=<peer-id>` for tasks peers ran on this gateway — the multi-tenant view) |
 | `GET /api/mesh/tasks/{id}` | one task; `?refresh=true` asks the owning edge via the `task.get` skill for the freshest state **and result** |
 | `POST /api/mesh/tasks/{id}/cancel` | cancels — locally if this gateway executes it, or by dispatching `task.cancel` to the owner. Idempotent: cancelling a finished task reports its real state |
-| `POST /api/mesh/tasks/{id}/input` | answers an `input-required` task with new input |
+| `POST /api/mesh/tasks/{id}/input` | answers an `input-required` task with new input. With `?caller=` (or a `caller` in the body) this gateway is the executor and the run resumes in place; without, the answer is dispatched to the owning edge's `task.input` skill |
 
 **Streaming (v1.5.16+)** — add `"stream": true` to the create and the peer publishes the assistant text's growth as ordered chunks on `mesh.event.task.<id>.chunk`: `{task_id, seq, text, last}` with seq strictly increasing and exactly one terminal chunk. Coalesced to ~48 runes; opt-in because chunks share the plaintext posture of the rest of the mesh. Catch up after a reconnect with the tail reads below; `task.result` remains the canonical answer — the chunk stream is a progress view (a truncation or rewrite closes the stream rather than repeating text). A live watcher is one line: `nats sub mesh.event.task.<id>.chunk`.
 
 **Push (v1.5.18+)** — add `"notifyUrl"` to the create (or set `-mesh-task-webhook` gateway-wide) and the terminal state arrives at your endpoint as **one signed POST**: the stub as JSON with the result fetched first, plus headers `X-ReactorPro-Agent`, `X-ReactorPro-Fingerprint`, `X-ReactorPro-Public-Key` (**base64 of the PEM** — raw PEM cannot travel in a header), `X-ReactorPro-Signature` (hex Ed25519 over the raw body), `X-ReactorPro-Task-State`. Verify with zero prior contact: signature over the body with the advertised key, then check the fingerprint equals `sha256(agent + "\n" + raw public key)[:16]` — the same binding mesh envelopes carry. Three attempts, 5s apart; once per (task, URL); `mesh_task_webhook_*` counters in `/api/status`. The URL is **operator-only** (local REST or config flag) — a peer can never aim the gateway's POSTs anywhere.
+
+**Interactive tasks (v1.5.19+)** — add `"allowInput": true` to the create and the peer's agent may **ask instead of answer**: the task pauses as `input-required`, `pending_input` carries the question (on the task and, after a refresh, on your stub), and your webhook — the same signed POST, `X-ReactorPro-Task-State: input-required` — is pushed so a sleeping backend can wake up and ask its human. Answer with `POST /api/mesh/tasks/{id}/input` (caller role, `{"input": "the answer"}` — the answer is delivered through the peer's `task.input` skill) and **the run resumes in the same conversation on the agent**: the answer builds on the question, nothing restarts. Each entry into `input-required` re-arms the notification, so a task that asks twice pushes twice. An operator whose edge *executes* such tasks can set `-mesh-task-executor-webhook` to be pushed the task and its question — the one state where the fastest answer may be a human on the executor's side.
 
 **Retry (v1.5.18+)** — `POST /api/mesh/tasks/{id}/retry?caller=<tenant>` (executor role) or the `task.retry` skill over the mesh: re-runs a **failed or canceled** task under its original id, gated to the creating caller. Completed/rejected refuse. The requeued run keeps the original idempotency key, runtime budget and streaming opt-in — the one-call recovery for long work that outlived a restart.
 

@@ -192,6 +192,7 @@ what the separate `.mailbox` subject is for.
 | `task.get` | with a task store | the creating caller's task (optionally `{tail}` for the chunk view) |
 | `task.cancel` | with a task store | stops the creating caller's task (idempotent) |
 | `task.retry` | with a task store | re-runs the creating caller's failed/canceled task under its own id |
+| `task.input` | with a task store | answers the creating caller's input-required task; the run resumes in place |
 | `invoke` | gated — see below | `{"agent": "…", "operation": "task", "result": …}`; with `async: true` a task handle instead |
 
 **`invoke` is the cross-organisation capability** — run a task on a desktop
@@ -211,6 +212,35 @@ Giving up on a timeout cancels the task on the desktop.
 
 A custom citizen bridge serves whatever it wants — the protocol carries only
 the name.
+
+### The input-request convention (v1.5.19+)
+
+An async invoke may opt into a two-way exchange with `"allow_input": true`. The
+executing edge then teaches the agent the convention in the prompt, and an
+agent that cannot finish without asking ends its reply with one exact line:
+
+```
+[[INPUT_REQUIRED: your question]]
+```
+
+The edge turns that line into a **state, not an answer**: the task pauses as
+`input-required`, the question rides `pending_input` on the task (read it back
+with `task.get`; the caller's webhook, if set, is also pushed for
+input-required), and the state event tells a watching caller to wake up. The
+creating caller answers through the `task.input` skill
+(`{"task_id": "…", "input": "the answer"}` — a string is the answer itself, any
+other JSON is delivered to the agent as labelled JSON) and **the run resumes in
+the same desktop conversation**: the agent reads its own question and the
+answer together, so no context is lost. A task may ask more than once; each
+entry into `input-required` re-arms both webhooks.
+
+Rules worth knowing: without the opt-in the marker is ordinary output and the
+task completes as before (an agent that has not been taught the convention must
+not have its questions reinterpreted); the marker only counts as its own line,
+case-sensitive, with a non-empty question; and an input-required task survives
+an edge restart — it is waiting, not running, and the resume conversation is
+durable. The events stay state-only — the question travels point-to-point via
+`task.get`, gated to the creating caller.
 
 ## Discovery
 
@@ -257,6 +287,14 @@ The manifest (`describe` and register share it):
 Include `fingerprint` — it lets a discovering peer pin you *before* first
 contact. Discovery results are **data, not identity**: a manifest can claim
 anything, and nothing in it may seed a trust store.
+
+**The directory is live and carries every executor (v1.5.24+).** An edge's manifest
+refreshes from its attached agents on every heartbeat (~30s), so `local_agents` reflects who
+is actually connected — desktops **and** headless workers (`reactorpro-agentd`) alike, each
+with its id, friendly name, online state and capabilities. A peer reading the registry or
+asking `describe` can choose a worker deliberately; a worker that has gone away disappears
+within a heartbeat. Before v1.5.24 the directory was frozen at the edge's boot — if a peer
+reports an empty `local_agents`, its edge needs an upgrade.
 
 ## The durable mailbox
 

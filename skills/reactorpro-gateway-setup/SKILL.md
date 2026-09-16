@@ -1,6 +1,6 @@
 ---
 name: reactorpro-gateway-setup
-description: Install, configure, and operate the ReactorPro gateway binary as a headless service on any server — Linux (systemd), macOS (launchd), Windows, or Docker — and federate it into a NATS/Synapse agent mesh. Use this skill whenever the user wants to deploy ReactorPro's gateway, stand up a ReactorPro server or VPS, run reactorpro-gateway as a background service, enable the mesh bridge, let agents in one organisation reach agents in another, connect ReactorPro desktop apps to a shared gateway, run a gateway with no desktop app attached, or troubleshoot a gateway that will not start, returns 401, reports the mesh as disconnected, or sees zero peers. Also use it for upgrading the gateway, backing up its identity, and choosing mesh settings for intra- or inter-organisation deployments.
+description: Install, configure, and operate the ReactorPro gateway binary as a headless service on any server — Linux (systemd), macOS (launchd), Windows, or Docker — federate it into a NATS/Synapse agent mesh, and deploy reactorpro-agentd, the headless concurrent agent worker that attaches to a gateway as a second executor. Use this skill whenever the user wants to deploy ReactorPro's gateway, stand up a ReactorPro server or VPS, run reactorpro-gateway as a background service, enable the mesh bridge, let agents in one organisation reach agents in another, connect ReactorPro desktop apps to a shared gateway, run a gateway with no desktop app attached, run a server-side headless agent (reactorpro-agentd) with a given provider, API key and model, expose a skills library to a headless worker, or troubleshoot a gateway that will not start, returns 401, reports the mesh as disconnected, or sees zero peers. Also use it for upgrading the gateway or agentd, backing up identities, and choosing mesh settings for intra- or inter-organisation deployments.
 ---
 
 # ReactorPro Gateway — Server Setup
@@ -274,13 +274,126 @@ A gateway with no ReactorPro desktop app attached is a legitimate deployment, no
 half-finished one. It serves the web UI and API, holds a mesh identity, appears in the directory,
 and answers the read-only skills.
 
-**It cannot serve `invoke`**, because there is no local agent to route work to — a peer asking for
-a task gets `3002 AGENT_UNAVAILABLE`. Its published `local_agents` list will be empty, which is
-exactly how a peer can tell there is nothing behind it.
+**It cannot serve `invoke`** with nothing attached, because there is no local agent to route
+work to — a peer asking for a task gets `3002 AGENT_UNAVAILABLE`. Its published `local_agents`
+list will be empty, which is exactly how a peer can tell there is nothing behind it.
+
+Unless you attach **reactorpro-agentd** — the headless worker. It signs into the gateway exactly
+the way a desktop app does, appears in the same directory, and turns the server into an
+execution node with no desktop app anywhere in sight. See the next section.
 
 Typical uses: a VPS or jump host, a central registry/directory node for a group of organisations,
 a visibility node at a partner, or a site that will have its desktop app added later — adding one
 requires **no change** to any peer.
+
+## The headless worker — reactorpro-agentd
+
+A single static binary that signs into a gateway over the same `/ws/v2/agent` WebSocket the
+desktop uses and serves remote chat turns with real tool use, **several at once**. To the
+gateway it is just another attached agent — a row in the local directory, addressed by `target`
+or `capability`, behind the same gates, tasks, streaming and webhooks. **No gateway or mesh
+configuration changes to adopt it.** The companion detail — every flag, service files,
+verification — is in `references/agentd.md`.
+
+### When you want it
+
+- A server/VPS should execute work, not merely relay it — and no human will sit at a desktop.
+- Parallel turns: the desktop runs one turn at a time behind its user; the agentd runs
+  `-concurrency` at once (default 4) with a polite queue.
+- The mesh's task lifecycle (async tasks, streaming, webhooks, retry, input-required) should
+  have an unattended worker to feed.
+
+### Install
+
+```bash
+BASE=https://github.com/DrOlu/ReactorPro/releases/latest/download
+curl -fsSLO "$BASE/reactorpro-agentd-linux-amd64"      # per platform; see below
+curl -fsSLO "$BASE/SHA256SUMS"
+sha256sum -c --ignore-missing SHA256SUMS               # macOS: shasum -a 256 -c
+install -m 0755 reactorpro-agentd-linux-amd64 /usr/local/bin/reactorpro-agentd
+```
+
+Assets: `reactorpro-agentd-{linux-amd64,linux-arm64,darwin-amd64,darwin-arm64,windows-amd64.exe}`.
+Pure-Go, genuinely static — no runtime dependencies. `scripts/install-agentd.sh` does the
+download-verify-install for the current platform.
+
+### Issue its credential
+
+The agentd authenticates like a desktop: the gateway token, or better, its **own per-agent
+token** (revocable independently). The agent id must be the canonical form **`agent-<uuidv4
+lowercase>`** — anything else is refused:
+
+```bash
+AGENT_ID="agent-$(uuidgen | tr 'A-Z' 'a-z')"
+curl -s -X POST -H "Authorization: Bearer $GATEWAY_TOKEN" \
+     http://127.0.0.1:3000/api/agents/$AGENT_ID/token      # -> {"token":"agt_…"}
+curl -s -X PATCH -H "Authorization: Bearer $GATEWAY_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"name":"ReactorPro Agentd (server 1)"}' http://127.0.0.1:3000/api/agents/$AGENT_ID
+```
+
+The friendly name is what peers see in the published directory — set it.
+
+### Configure and run
+
+```bash
+LIVEAGENT_AGENTD_PROVIDER_KEY=sk-… \
+reactorpro-agentd \
+  -gateway ws://127.0.0.1:3000/ws/v2/agent \
+  -agent-id "$AGENT_ID" -token "$AGENT_TOKEN" \
+  -name "ReactorPro Agentd (server 1)" \
+  -provider-url https://api.openai.com/v1 \
+  -provider-model gpt-5 \
+  -workdir /srv/agentd-work \
+  -skills-dir /opt/agent-skills \
+  -concurrency 4
+```
+
+The essential settings:
+
+| Setting | Flag | Env twin | Notes |
+|---|---|---|---|
+| Gateway link | `-gateway` | `LIVEAGENT_AGENTD_GATEWAY` | `ws://` or `wss://` agent endpoint |
+| Identity | `-agent-id` | `LIVEAGENT_AGENTD_ID` | `agent-<uuidv4>` — its directory address |
+| Credential | `-token` | `LIVEAGENT_AGENTD_TOKEN` | gateway or per-agent (`agt_…`) token |
+| Provider | `-provider-url` / `-provider-key` / `-provider-model` | `LIVEAGENT_AGENTD_PROVIDER_*` | any OpenAI-compatible `/v1` endpoint; the **worker holds this key**, not the gateway |
+| Sandbox | `-workdir` | `LIVEAGENT_AGENTD_WORKDIR` | every file tool + shell cwd confined here (symlink-safe) |
+| Skills | `-skills-dir` | `LIVEAGENT_AGENTD_SKILLS_DIR` | library of SKILL.md collections, exposed read-only |
+| Parallelism | `-concurrency` | `LIVEAGENT_AGENTD_CONCURRENCY` | default 4; extra commands queue |
+| Reach | `-shell` / `-fetch` | `LIVEAGENT_AGENTD_SHELL` / `_FETCH` | toggle the two wide-blast tools |
+
+Run it under systemd/launchd like the gateway (a full unit file is in `references/agentd.md`).
+Reconnects with bounded backoff; a dropped link cancels local runs and the gateway fails them at
+their budget.
+
+### What it serves — and what it does not
+
+Served: `invoke` tasks (mesh dispatch and async tasks alike), streaming chunks, webhooks, retry,
+`input-required` — the full task contract; a curated tool set (`read_file`, `write_file`,
+`list_dir`, `run_command`, `fetch_url`) plus read-only skill tools (`read_skill`,
+`read_skill_file`) when `-skills-dir` is set.
+
+Not served: desktop-surface requests it does not implement are answered instantly with a typed
+501 refusal (it is an executor, not a desktop), and `history_list` returns an honest empty list —
+the agentd keeps no conversation history. Chatting with it through the web UI works on the live
+conversation view; persisted history does not exist.
+
+### Verify
+
+```bash
+# 1. It signed in (agentd log): "agentd signed into the gateway"
+# 2. The gateway sees it — the agents list on /api/status includes the id
+curl -s -H "Authorization: Bearer $GATEWAY_TOKEN" http://127.0.0.1:3000/api/status
+# 3. Peers can discover it (within one heartbeat of the gateway): describe shows
+#    local_agents carrying the worker by name
+# 4. A real turn end to end:
+curl -s -X POST -H "Authorization: Bearer $GATEWAY_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"target":"<your-edge-id>","skill":"invoke","timeoutMs":180000,
+          "input":{"target":"'"$AGENT_ID"'","operation":"task",
+                   "arguments":{"prompt":"Say OK and nothing else."}}}' \
+     http://127.0.0.1:3000/api/mesh/dispatch
+```
+
+---
 
 ## The standard site
 
@@ -322,7 +435,7 @@ explicitly before federating.
 
 ## What the mesh can do
 
-Four skills are served. Three are read-only; one does work.
+Eight skills are served (v1.5.19+): read-only (`ping`, `describe`, `status`), the caller-scoped task set (`task.get`, `task.cancel`, `task.retry`, `task.input`), and the gated `invoke`. `describe` returns the full manifest **including this edge's agent directory** — desktops and headless workers, refreshed every heartbeat since v1.5.24.
 
 | Skill | Answers | Risk |
 |---|---|---|
@@ -515,12 +628,14 @@ Read these when you need the detail — they are not loaded until you open them.
   including reverse-proxy configuration.
 - `references/api.md` — HTTP endpoints, authentication, request/response shapes, and agent token
   issuance.
+- `references/agentd.md` — the headless worker: every flag and env twin, per-agent token
+  issuance, service files, the skills library, verification, upgrade and limits.
 - `references/troubleshooting.md` — symptom → diagnosis → fix, with commands.
 
 For questions about the ReactorPro desktop application itself (features, skills, MCP servers), use
 the `reactorpro-doc` skill instead — this one is about the server.
 
-## Recent changes you must know about (v1.5.4 → v1.5.8)
+## Recent changes you must know about (v1.5.4 → v1.5.24)
 
 **The durable mailbox (v1.5.4, opt-in).** `-mesh-mailbox` buffers skill
 invocations for an absent agent in JetStream (`mesh.agent.*.mailbox`, stream
@@ -544,3 +659,25 @@ cause on timeout. Requests also carry a top-level `text` (from
 prefix, which is what the Synapse cli/agentspan bridges require. Cross-fleet
 dispatch with a text prompt is a real agent turn — allow 120s+.
 See `references/mesh.md` § "The durable mailbox and the inbox hazard".
+
+**The async task lifecycle (v1.5.12–v1.5.19).** The mesh send ceiling rose to 30 minutes
+(`timeoutMs` up to 1800000), and `invoke` gained `"async": true` — a task object with states
+(`queued → working → (input-required) → completed | failed | canceled | rejected`), a
+caller-minted id as the idempotency key, state events on `mesh.event.task.<id>`, opt-in chunk
+streaming, signed webhook push on completion, one-call retry, and an interactive
+pause-and-ask protocol (`allowInput` + `[[INPUT_REQUIRED: …]]`) that resumes in the same
+conversation. Tasks are served by any attached agent — desktop or headless worker.
+
+**The headless worker, reactorpro-agentd (v1.5.20–v1.5.22).** A second executor ships in the
+box: a static binary that attaches as an agent and runs turns in parallel. First release, then
+the skills library (`-skills-dir`, read-only `read_skill`/`read_skill_file` tools), then the
+browser-surface fix — desktop-surface requests it does not implement are answered instantly
+with a typed 501 instead of hanging the web UI, and `history_list` returns an honest empty list.
+
+**Discovery publishes the directory now (v1.5.23–v1.5.24).** Two stacked bugs had silently
+kept every edge's published `local_agents` empty since v1.5.5: registration ran once at boot
+(never refreshed), and the async registry probe was discarded whenever it won the start-up
+race. Both fixed — the heartbeat now rebuilds the manifest from the live directory and
+re-registers, so peers see your attached agents (desktop and headless alike) within one
+heartbeat, and the registry KV entry can no longer outlive its TTL. If an upgraded peer still
+reports an empty directory, its edge simply needs one heartbeat (~30s).

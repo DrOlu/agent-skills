@@ -350,6 +350,7 @@ class MeshClient:
     async def invoke_edge(self, edge_id: str, prompt: str, *,
                           agent: str | None = None, capability: str | None = None,
                           operation: str = "task",
+                          conversation_id: str = "",
                           timeout_s: float = DEFAULT_TIMEOUT_S) -> str:
         """Run a task on a desktop agent behind a ReactorPro EDGE.
 
@@ -357,6 +358,12 @@ class MeshClient:
         refuses callers whose identity it has not verified (code 3004), so an
         identity is effectively required. Addressing is explicit — name the
         local agent (id or configured name) or a capability, never both.
+
+        conversation_id continues an existing conversation (session
+        persistence): pass the conversation_id a previous reply printed and
+        the run picks up where the last one ended — the desktop continues its
+        own conversation, and a headless worker is rehydrated with the prior
+        turns by the edge.
         """
         if (agent is None) == (capability is None):
             raise ValueError("invoke-edge needs exactly one of --agent or --capability")
@@ -366,8 +373,14 @@ class MeshClient:
             invoke_input["target"] = agent
         else:
             invoke_input["capability"] = capability
+        if conversation_id:
+            invoke_input["conversation_id"] = conversation_id
         reply = await self.dispatch(edge_id, "invoke", invoke_input,
                                     text=prompt, timeout_s=timeout_s)
+        # Surface the conversation so a script can continue it: the reply's
+        # output carries conversation_id; the text alone does not.
+        output = (reply.get("payload") or {}).get("output") or {}
+        self.last_conversation_id = str(output.get("conversation_id") or "")
         return reply_text(reply)
 
     async def mailbox_send(self, target: str, skill: str, input_data: Any = None,
@@ -528,9 +541,15 @@ async def run_cli(args: argparse.Namespace) -> None:
         elif args.command == "ask":
             print(await client.ask(args.target, args.prompt, args.timeout))
         elif args.command == "invoke-edge":
-            print(await client.invoke_edge(args.target, args.prompt,
-                                           agent=args.agent, capability=args.capability,
-                                           timeout_s=args.timeout))
+            text = await client.invoke_edge(args.target, args.prompt,
+                                            agent=args.agent, capability=args.capability,
+                                            conversation_id=args.conversation,
+                                            timeout_s=args.timeout)
+            print(text)
+            if getattr(client, "last_conversation_id", ""):
+                # The continuation handle: pass it back with --conversation
+                # on the next invoke-edge to resume this conversation.
+                print(f"conversation_id: {client.last_conversation_id}")
         elif args.command == "mailbox":
             input_data = json.loads(args.input) if args.input else None
             await client.mailbox_send(args.target, args.skill, input_data)
@@ -565,6 +584,8 @@ def main() -> None:
             group = peer_cmd.add_mutually_exclusive_group(required=True)
             group.add_argument("--agent", help="local agent id/name behind the edge")
             group.add_argument("--capability", help="capability to resolve on the edge")
+            peer_cmd.add_argument("--conversation",
+                                  help="continue this conversation (the conversation_id a previous reply printed)")
     mailbox_cmd = sub.add_parser("mailbox")
     mailbox_cmd.add_argument("target")
     mailbox_cmd.add_argument("skill")

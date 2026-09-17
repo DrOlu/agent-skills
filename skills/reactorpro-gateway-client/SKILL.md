@@ -75,12 +75,46 @@ scripts/mesh.py invoke-edge acme/berlin/edge-1 --agent agent-1111 "Pull the Q3 f
 scripts/mesh.py mailbox grip-001 report '{}'
 ```
 
+An `invoke-edge` reply ends with `conversation_id: …` — pass it back with
+`--conversation <id>` to **continue the same conversation** (v1.5.27+): the
+desktop agent picks up its own thread, and a headless worker
+(`reactorpro-agentd`) is rehydrated with the prior turns by the edge, so the
+stateless worker remembers between sends.
+
+```bash
+scripts/mesh.py invoke-edge acme/berlin/edge-1 --agent agent-1111 "Summarise it in one line" \
+    --conversation remote-task-conv-…   # the id the previous reply printed
+```
+
 `mesh.py` signs every envelope (`sig`/`pub`/`fp`), uses `_REPLY.` inboxes,
 skips JetStream PubAcks that streams over inbox subjects inject, and unions
 broadcast + KV registry discovery. Use it as a library from any Python
 harness (`MeshClient`).
 
+## Pick the path by how long the turn may take
+
+Sync invoke (`mesh.py invoke-edge`, `POST /api/mesh/dispatch`, Quickstart A/C)
+is the happy path: one hop, one answer. The far edge waits **3 minutes** by
+default (`-mesh-invoke-timeout` / `LIVEAGENT_GATEWAY_MESH_INVOKE_TIMEOUT`; a
+caller may only *narrow* it with `timeout_ms` / `timeoutMs`). Streaming
+(v1.5.35) keeps a slow-but-alive provider inside that window — 120s of
+*silence* fails the round; bytes still arriving do not.
+
+- **Sync** — the turn should finish inside that window: "say exactly X", one
+  tool round, a known-fast lookup.
+- **Async** (`POST /api/mesh/tasks` + poll, Quickstart D) — the turn may
+  exceed it: multi-round work against a large skills library,
+  Paystack/Cloudflare/AWS-style jobs, anything you would walk away from. A
+  Lambda or n8n flow that cannot hold an HTTP call for minutes also belongs
+  here.
+
+Do not skip sync because "a real agent turn needs more time." That papers
+over the 3-minute default and trains callers off the API short work is for.
+
 ## Quickstart D — long work as a task, not a held connection (v1.5.14+)
+
+Use this path when the decision rule above says async — not as a blanket
+replacement for invoke.
 
 ```bash
 scripts/ask_peer.sh ask grip-001 "Summarise Q3" 180000   # holds the line for minutes
@@ -117,7 +151,8 @@ A task is idempotent by its caller-minted id, scoped to the creating caller, can
 
 A ReactorPro edge defaults to: verify `prefer` (accepts unsigned, verifies
 signed) with **`invoke` requiring a verified caller**; rate 50/s burst 100;
-1 MiB envelopes; clock skew 5 min; request timeout 120s; registry `auto`
+1 MiB envelopes; clock skew 5 min; **invoke timeout 3 min** (narrowable per
+call, not extendable); request timeout 120s; registry `auto`
 (JetStream KV `mesh_registry` + broadcast union); mailbox stream
 `MESH_AGENT_MAILBOX`; skills `ping`/`describe`/`status` + gated `invoke`.
 Operators tighten with `-mesh-*` flags — see `references/protocol.md` and
@@ -129,7 +164,7 @@ the gateway-setup skill for the edge's own configuration.
 |---|---|
 | `3004 IDENTITY_MISMATCH` on invoke | unsigned caller, or key/`fp` wrong — sign per protocol.md; a pinned peer whose key changed must re-pin |
 | `3001 SKILL_NOT_FOUND` | peer doesn't serve that skill — `describe` it first; note `invoke` is refused on the *mailbox* by design |
-| No reply within timeout | budget minutes (agent turns are slow); if the error mentions publish acks, a stream captures that inbox subject → protocol.md §inbox-streaming |
+| No reply within timeout | sync invoke's floor is 3 min — if the turn may exceed that, use the task API, do not raise `timeout_ms` (it can only narrow). If the error mentions publish acks, a stream captures that inbox subject → protocol.md §inbox-streaming |
 | Peer absent from `agents` | it registers but doesn't answer broadcasts (old bridges) — check the KV bucket; or its heartbeat/registry entry expired (TTL ≈ 3× heartbeat) |
 | Signature "invalid" from my script | payload bytes hashed ≠ payload bytes published (serialisation must match), or length prefixes are character counts instead of UTF-8 bytes |
 | Identity file "fingerprint mismatch" | id or key edited — the file is permanently bound; mint a new one, don't repair |

@@ -93,7 +93,7 @@ Every flag has an environment-variable twin (`LIVEAGENT_AGENTD_*`); flags win.
 | Shell tool | `-shell` | `LIVEAGENT_AGENTD_SHELL` | true | `run_command`; set `0` for a read-only worker |
 | Fetch tool | `-fetch` | `LIVEAGENT_AGENTD_FETCH` | true | `fetch_url`; GET only, size-capped |
 | Command timeout | `-command-timeout` | `LIVEAGENT_AGENTD_COMMAND_TIMEOUT` | 60s | one shell command |
-| Provider timeout | `-request-timeout` | `LIVEAGENT_AGENTD_REQUEST_TIMEOUT` | 120s | one provider call |
+| Provider idle timeout | `-request-timeout` | `LIVEAGENT_AGENTD_REQUEST_TIMEOUT` | 120s | max provider silence within one streamed round (before or between bytes); rounds are hard-capped at 15m |
 
 Run `reactorpro-agentd -help` for the authoritative list.
 
@@ -195,11 +195,29 @@ reach the gateway — point `-gateway` at the gateway's container name.
 - **Streaming by construction**: each checkpoint the worker emits is a content snapshot, so
   mesh task chunks, state events and webhooks all work against it unchanged.
 - **Browser surface**: switching the web UI to the worker does not hang — desktop-surface
-  requests (`settings_get`, providers, fs, …) answer instantly with a typed 501 ("an executor,
-  not a desktop"), and `history_list` returns an honest empty list. Chat works on the live
-  conversation view; persisted history does not exist.
-- **One run per conversation**, same rule as the desktop; the queue is per-worker and FIFO
-  beyond `-concurrency`.
+  requests (providers, fs, …) answer instantly with a typed 501 ("an executor, not a
+  desktop"). Since **v1.5.27** the gateway itself answers `history_list` / `history_get`
+  for the worker from its conversation store, so the management UI shows the worker's recent
+  conversations (titled by the original prompt, all of a conversation's runs merged). Since
+  **v1.5.29** it also answers `settings_get` (with the webui's plain-text execution mode) and
+  `history_workdirs` (empty) — without those, the webui scopes the worker's sidebar to "none"
+  and the conversations are only reachable via Search. That is a **recent-activity view**,
+  not an archive: the store retains idle conversations for ~30 minutes and a gateway restart
+  clears it.
+- **One run per conversation**, same rule as the desktop, enforced atomically (v1.5.25): a
+  second command for a conversation with a queued or live run is refused, and a cancel that
+  lands while a job is still queued settles it as cancelled **without spending a provider
+  call**. The queue is per-worker and FIFO beyond `-concurrency`.
+- **Conversation memory (v1.5.27)**: a synchronous invoke that passes `conversation_id`
+  continues that conversation. The worker itself stays stateless — the **gateway** rehydrates
+  the conversation's prior user/assistant turns into the prompt (newest 16 turns / 24 KiB), so
+  the far side remembers between sends within the store's retention window. The invoke reply
+  carries `conversation_id` for the caller to hold the session.
+- **Capabilities**: the hello declares `CHAT_INGRESS_V1`, `task` and `agentd`. The `agentd`
+  marker is what the gateway keys its headless conveniences (served history, resume
+  rehydration) on; the desktop never declares it, so the two executor kinds cannot be confused.
+- **Shell tool**: `sh -c` on Unix-likes, `cmd /c` on Windows (v1.5.25) — the windows-amd64
+  asset runs commands natively.
 - **Sandbox honesty**: the shell tool is a real shell with the workdir as cwd — a command can
   still address absolute paths outside the workdir, same as any shell on that host. If that
   matters, run the worker as a dedicated low-privilege user/container; the file tools are
@@ -216,9 +234,13 @@ answer inside `timeoutMs`.
 contract is the gateway's v2 protocol — an agentd of any release works with a gateway of any
 release; upgrade them independently.
 
-**Known limits (state plainly before promising them)**: no persisted conversation history;
-chunks arrive per tool round, not per token; a link drop mid-run kills the run (no resume);
-one OpenAI-compatible provider shape; the shell tool is a real shell.
+**Known limits (state plainly before promising them)**: the UI's history view is the gateway's
+~30-minute recent-activity window, not a durable archive (a gateway restart clears it);
+conversation memory exists only within that same window; chunks arrive per tool round, not
+per token; a link drop mid-run kills the run (no resume); one OpenAI-compatible provider
+shape; the shell tool is a real shell. The worker's user entries carry `"attachments": []`
+(v1.5.30) — the webui's snapshot validation discards any projection whose user entry lacks
+the array, so do not strip it when transforming transcripts.
 
 ## Troubleshooting
 
@@ -229,5 +251,6 @@ one OpenAI-compatible provider shape; the shell tool is a real shell.
 | Token issuance refused: "agent id must be a canonical agent UUID v4" | The id needs the `agent-` prefix and a lowercase v4 UUID |
 | Gateway link drops, reconnect storms | `-gateway` points at the wrong path (it must be `…/ws/v2/agent`) or the gateway is restarting |
 | Turns fail with "provider request: …" | Wrong `-provider-url` (must include `/v1`), bad key, or the model id is rejected — curl the endpoint directly to see which |
+| Turns fail with "provider stream stalled: no data from the provider for …" | The provider went silent mid-round for longer than `-request-timeout` — a genuinely stuck upstream (the v1.5.35 streaming watchdog); slow-but-alive providers that keep sending bytes/keepalives are never cut. Raise the flag if your provider has long silent phases |
 | The web UI hangs on the worker | It should not since v1.5.22 — upgrade the agentd; the typed 501 answers arrive in milliseconds |
 | Peers do not see the worker in `describe` | The **gateway** publishes the directory — upgrade the gateway to ≥ v1.5.24 and allow one heartbeat (~30s) |

@@ -479,7 +479,7 @@ best-effort: if the desktop is unreachable at that moment, it cannot be delivere
 | `-mesh-allow-remote-invoke` | on | Is the capability offered at all? |
 | `-mesh-require-verified-invoke` | **on** | **The floor.** Refuse work from a caller whose identity was not verified |
 | `-mesh-invoke-operations` | `task` | Exact allowlist. **Empty exposes none, never all** |
-| `-mesh-invoke-timeout` | `60s` | How long one remote job may run |
+| `-mesh-invoke-timeout` | `3m` | How long one synchronous remote job may run (a caller may only narrow it; hours-long work is the async task API) |
 | `-mesh-skills-enabled` | on | `false` serves nothing at all, invocation included |
 
 **Read this before you turn the floor off.** The default verify mode is `prefer`, which
@@ -635,7 +635,7 @@ Read these when you need the detail — they are not loaded until you open them.
 For questions about the ReactorPro desktop application itself (features, skills, MCP servers), use
 the `reactorpro-doc` skill instead — this one is about the server.
 
-## Recent changes you must know about (v1.5.4 → v1.5.24)
+## Recent changes you must know about (v1.5.4 → v1.5.35)
 
 **The durable mailbox (v1.5.4, opt-in).** `-mesh-mailbox` buffers skill
 invocations for an absent agent in JetStream (`mesh.agent.*.mailbox`, stream
@@ -681,3 +681,67 @@ race. Both fixed — the heartbeat now rebuilds the manifest from the live direc
 re-registers, so peers see your attached agents (desktop and headless alike) within one
 heartbeat, and the registry KV entry can no longer outlive its TTL. If an upgraded peer still
 reports an empty directory, its edge simply needs one heartbeat (~30s).
+
+**The bug-sweep release (v1.5.25).** Three concurrency/platform/discovery fixes: the agentd
+enforces one run per conversation atomically (a cancel while queued settles the run as
+cancelled without a provider call); `run_command` works on Windows (`cmd /c` there, `sh -c`
+elsewhere); and a cleanly stopped edge can no longer be resurrected in the discovery registry
+by a straggling heartbeat tick — the entry's removal is final.
+
+**The synchronous-invoke deadline is 3 minutes (v1.5.26).** The edge's own patience for one
+remote invoke was 60s, which killed real agent turns that were still working (`4001` + a
+cancel of a healthy run). A caller can still narrow it per invoke with `timeout_ms`; hours-long
+work belongs to the async task API.
+
+**Concurrent inbox and the real invoke deadline (v1.5.32–v1.5.33).** The sweep that
+followed the UI work found two more, both live-verified: the inbox subscription ran its
+handler on nats.go's single delivery goroutine, so one minutes-long invoke queued every
+other mesh message to the edge (pings, cancels, other peers' invokes) behind it — it is
+now a bounded worker pool (16 workers, 256-deep queue), pinned by a regression test that
+fails with the pool forced to 1. And the synchronous-invoke deadline was still 60 seconds
+despite v1.5.26: the gateway-level `-mesh-invoke-timeout` flag carried its own 60s literal
+default that silently overrode the raised mesh-package constant — the flag default is now
+`mesh.DefaultInvokeTimeout` (3 minutes), so the two cannot disagree. Operators tune it
+with the flag or `LIVEAGENT_GATEWAY_MESH_INVOKE_TIMEOUT`.
+
+**Transcript rendering and retention (v1.5.30–v1.5.31).** Two follow-ups found by
+browser-reproducing the transcript view: the worker's user entries now carry the
+`attachments: []` array the webui's snapshot validation requires (without it every
+projection the worker committed was silently discarded — prompts rendered, answers
+never did), and a finished headless conversation retains its final projection on the
+gateway's stream until the stream is reaped, so the history view lives the stream's
+full ~30-minute idle life instead of the event log's 10-minute clock. Verified in the
+real browser: the worker's answers now render in the chat view, including replies to
+messages typed in the management UI.
+
+**The headless sidebar fix (v1.5.29).** The webui scopes an agent's sidebar to "none" — an
+empty list that never asks the gateway — when the settings' execution mode is not "text" and
+no workspace project is active, and a headless worker landed there every time (its
+`settings_get` used to fail against the worker's typed 501). The gateway now serves
+`settings_get` for headless workers with the plain-text execution mode (and `history_workdirs`
+as an honest empty list), so the sidebar lists the worker's conversations like the desktop's.
+Before this, they were reachable only via Search Conversations.
+
+**Headless workers have history and memory (v1.5.27–v1.5.28).** The agentd declares the
+`agentd` capability in its hello, and the gateway keys two conveniences on it: the management
+UI's history arms for a headless worker are answered **by the gateway** from its conversation
+store (recent activity — ~30-min retention, cleared by a gateway restart), and a synchronous
+`invoke` that passes `conversation_id` **continues that conversation** — the desktop continues
+its own thread, while a headless worker is rehydrated with its prior turns (newest 16 / 24 KiB).
+Replies carry `conversation_id` so the caller can hold the session. The served transcript
+merges all of a conversation's runs, titled from the original prompt.
+
+**Streamed provider rounds and bounded proxy silence (v1.5.35).** During a slow-provider
+window (2026-09-17) both LLM clients treated a slow upstream as a dead one: the agentd sent
+non-streaming completions under a 120s total client timeout (a stalled round died with
+"context deadline exceeded … awaiting headers" and lost the turn), and the desktop's proxy
+client had no timeout at all (the same stall hung until the connection dropped and surfaced
+as `502 Failed to forward the proxy request upstream`). The agentd now streams
+(`stream: true`, SSE deltas assembled — including fragmented tool calls), and
+`-request-timeout` is an **idle timeout**: the longest the provider may stay silent between
+bytes, before or after headers, with a 15-minute per-round hard cap; a stalled round fails
+fast with `provider stream stalled: no data from the provider for …`. Slow-but-alive
+providers that keep sending bytes or SSE keepalives are never cut, and a provider answering
+a streamed request with plain JSON is still served. The desktop's proxy and system-proxy
+clients gained `connect_timeout(15s)` + `read_timeout(300s)` (idle-between-bytes) with no
+total timeout by design — streamed answers are only ever cut by upstream silence.

@@ -193,13 +193,14 @@ what the separate `.mailbox` subject is for.
 | `task.cancel` | with a task store | stops the creating caller's task (idempotent) |
 | `task.retry` | with a task store | re-runs the creating caller's failed/canceled task under its own id |
 | `task.input` | with a task store | answers the creating caller's input-required task; the run resumes in place |
-| `invoke` | gated — see below | `{"agent": "…", "operation": "task", "result": …}`; with `async: true` a task handle instead |
+| `invoke` | gated — see below | `{"agent": "…", "operation": "task", "result": …}`; with `async: true` a task handle instead; synchronous replies carry `conversation_id` (v1.5.27+) |
 
 **`invoke` is the cross-organisation capability** — run a task on a desktop
 agent behind a ReactorPro edge. Its input:
 
 ```json
-{"target": "agent-1111", "operation": "task", "arguments": {"prompt": "…"}, "timeout_ms": 60000}
+{"target": "agent-1111", "operation": "task", "arguments": {"prompt": "…"}, "timeout_ms": 60000,
+ "conversation_id": "remote-task-conv-…"}
 ```
 
 `target` (an attached agent's id or configured name) and `capability` are
@@ -212,6 +213,18 @@ Giving up on a timeout cancels the task on the desktop.
 
 A custom citizen bridge serves whatever it wants — the protocol carries only
 the name.
+
+### Session persistence (v1.5.27+)
+
+A synchronous invoke returns `conversation_id` in its output — pass it back on
+the next invoke and the run **continues that conversation**. On a desktop
+agent the continuation is native (its runtime holds the conversation); on a
+**headless worker** (reactorpro-agentd) the edge rehydrates the conversation's
+prior user/assistant turns into the turn's prompt (newest 16 turns / 24 KiB),
+which is what gives a stateless worker memory between sends. Without the
+field every invoke is a fresh conversation, exactly as before. The same
+conversation window (~30 min idle retention, gateway-restart bounded) is what
+the edge's management UI shows for a headless worker's history.
 
 ### The input-request convention (v1.5.19+)
 

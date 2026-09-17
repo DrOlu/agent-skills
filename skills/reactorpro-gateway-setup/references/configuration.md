@@ -154,7 +154,7 @@ The fourth, `invoke`, does work. Its gates are below.
 | `-mesh-allow-remote-invoke` | `LIVEAGENT_GATEWAY_MESH_ALLOW_REMOTE_INVOKE` | `true` | May peers ask agents behind this edge to run tasks at all? |
 | `-mesh-require-verified-invoke` | `LIVEAGENT_GATEWAY_MESH_REQUIRE_VERIFIED_INVOKE` | **`true`** | **The safety floor.** Refuse an invocation whose caller identity was not actually verified. |
 | `-mesh-invoke-operations` | `LIVEAGENT_GATEWAY_MESH_INVOKE_OPERATIONS` | `task` | Exact allowlist of operations. **Empty exposes none — deliberately the opposite of the skills allowlist, where empty means all.** |
-| `-mesh-invoke-timeout` | `LIVEAGENT_GATEWAY_MESH_INVOKE_TIMEOUT` | `1m0s` | How long one remote invocation may run before the edge gives up and tells the desktop to cancel. |
+| `-mesh-invoke-timeout` | `LIVEAGENT_GATEWAY_MESH_INVOKE_TIMEOUT` | `3m0s` | How long one **synchronous** remote invocation may run before the edge gives up and tells the desktop to cancel. A caller may only *narrow* this with `timeout_ms`; work that may exceed it belongs on `POST /api/mesh/tasks`, not a longer sync wait. |
 
 **Why the floor matters.** The default verify mode is `prefer`, which accepts unsigned envelopes.
 Without `-mesh-require-verified-invoke`, an invocation would be reachable by anything able to

@@ -109,9 +109,30 @@ curl -s -X POST http://127.0.0.1:3000/api/mesh/dispatch \
        "timeoutMs":120000}'
 ```
 
+**Session persistence (v1.5.27+)**: a synchronous invoke reply carries
+`conversation_id` in its output — send it back as `conversation_id` in the
+invoke input and the next run **continues that conversation** (a desktop agent
+picks up its own thread; a headless worker is rehydrated with the prior turns
+by the far edge). Without the field every invoke is a fresh conversation. The
+`mesh.py invoke-edge --conversation <id>` path is the native-client
+equivalent.
+
+**Sync vs async.** The edge waits **3 minutes** per synchronous invoke
+(v1.5.33+; the compiled default, also `-mesh-invoke-timeout`). A caller can
+only *narrow* that with `timeout_ms` / `timeoutMs`, never extend it.
+Streaming (v1.5.35) keeps a slow-but-alive provider inside the window. Use
+this dispatch path when the turn should finish in that window. Use the task
+API below when it may not (multi-round / hours-long work), or when the caller
+cannot hold an HTTP connection for minutes. Do not default every agent turn
+to async.
+
 ## Tasks — the async task lifecycle (gateway v1.5.14+)
 
-A dispatch holds a connection for the whole turn — minutes, or the send-timeout budget, whichever comes first. A **task** returns a handle in ~2 seconds and you come back for the rest. This is the serverless/mobile path: a Lambda or n8n flow cannot hold a 10-minute HTTP call, but it can make a 2-second one and poll.
+A dispatch holds a connection for the whole turn — up to the invoke timeout
+(3 minutes unless the operator raised `-mesh-invoke-timeout`). A **task**
+returns a handle in ~2 seconds and you come back for the rest. This is the
+path for work that may outlive that window, and for a Lambda or n8n flow that
+cannot hold a minutes-long HTTP call.
 
 ```bash
 curl -s -X POST http://127.0.0.1:3000/api/mesh/tasks \

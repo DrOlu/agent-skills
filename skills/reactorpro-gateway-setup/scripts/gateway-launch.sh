@@ -119,4 +119,73 @@ for _name in $(set | sed -n 's/^\(LIVEAGENT_[A-Za-z0-9_]*\)=.*/\1/p'); do
 done
 unset _name
 
-exec "$GATEWAY_BIN" --http-addr="$HTTP_ADDR"
+# Gatekeeper can stall an adhoc GitHub-downloaded binary for minutes on the
+# first exec after login. launchd reports the job as "running" while dyld is
+# still in xpcproxy / cond-wait — no listen socket, no logs. Do not exec:
+# start, wait until HTTP answers, kill-and-retry if it does not. KeepAlive
+# then only has to cover a real crash, not a frozen first load.
+READY_TIMEOUT="${REACTORPRO_GATEWAY_READY_TIMEOUT:-45}"
+MAX_ATTEMPTS="${REACTORPRO_GATEWAY_START_ATTEMPTS:-8}"
+
+listen_port="${HTTP_ADDR##*:}"
+[ -n "$listen_port" ] || listen_port=3000
+
+http_ready() {
+  code=$(curl -sS -o /dev/null --max-time 2 -w '%{http_code}' \
+    "http://127.0.0.1:${listen_port}/api/status" 2>/dev/null || true)
+  case "$code" in
+    200|401|403) return 0 ;;
+  esac
+  code=$(curl -sS -o /dev/null --max-time 2 -w '%{http_code}' \
+    "http://[::1]:${listen_port}/api/status" 2>/dev/null || true)
+  case "$code" in
+    200|401|403) return 0 ;;
+  esac
+  return 1
+}
+
+child=""
+term_child() {
+  if [ -n "$child" ]; then
+    kill "$child" 2>/dev/null || true
+    sleep 1
+    kill -9 "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+    child=""
+  fi
+}
+trap 'term_child; exit 143' TERM INT HUP
+
+attempt=1
+while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+  echo "starting reactorpro-gateway (attempt ${attempt}/${MAX_ATTEMPTS})" >&2
+  "$GATEWAY_BIN" --http-addr="$HTTP_ADDR" &
+  child=$!
+
+  t=0
+  while [ "$t" -lt "$READY_TIMEOUT" ]; do
+    if http_ready; then
+      echo "reactorpro-gateway ready on ${HTTP_ADDR} after ${t}s (attempt ${attempt})" >&2
+      wait "$child"
+      exit $?
+    fi
+    if ! kill -0 "$child" 2>/dev/null; then
+      wait "$child" || true
+      echo "reactorpro-gateway exited before listen (attempt ${attempt})" >&2
+      child=""
+      break
+    fi
+    sleep 1
+    t=$((t + 1))
+  done
+
+  if [ -n "$child" ]; then
+    echo "reactorpro-gateway did not serve HTTP within ${READY_TIMEOUT}s; killing stuck process (attempt ${attempt})" >&2
+    term_child
+  fi
+  attempt=$((attempt + 1))
+  sleep 2
+done
+
+echo "reactorpro-gateway failed to become ready after ${MAX_ATTEMPTS} attempts" >&2
+exit 1

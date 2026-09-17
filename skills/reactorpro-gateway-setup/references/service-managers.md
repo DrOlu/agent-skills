@@ -189,8 +189,14 @@ launchctl bootout "gui/$(id -u)/ng.reactorpro.gateway"            # stop and unl
 For a LaunchDaemon use the `system` domain instead of `gui/$(id -u)`.
 
 The launcher pattern exists because plists are world-readable. `gateway-launch.sh` reads
-the token from a `0600` file, exports it, and `exec`s the binary, so the secret never
-appears in the plist or in `ps`.
+the token from a `0600` file and exports it, so the secret never appears in the plist.
+It does **not** `exec` the binary: after login, Gatekeeper can stall an adhoc
+GitHub-downloaded gateway for minutes (`xpcproxy` / dyld cond-wait) while launchd
+still reports the job as running and nothing listens. The launcher starts the
+binary, waits until `/api/status` answers (200/401/403), and kill-and-retries if
+it does not (`REACTORPRO_GATEWAY_READY_TIMEOUT`, default 45s;
+`REACTORPRO_GATEWAY_START_ATTEMPTS`, default 8). `KeepAlive` then covers a real
+crash, not a frozen first load.
 
 ## Windows
 

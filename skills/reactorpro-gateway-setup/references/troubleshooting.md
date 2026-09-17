@@ -264,19 +264,26 @@ Confirm it in the NATS server's log:
 
 `lmb missing` is a filestore-level failure — not a quota or disk-space problem (check `df -h` and
 `nats account info` first to rule those out, but a healthy sibling stream updating normally while
-this one fails points squarely at corruption).
+this one fails points squarely at corruption). The trigger is typically an **unclean shutdown or
+reboot**; the errors start with the first write attempt after the server comes back. Two sighting
+aids: `nats stream ls` **hides KV backing streams** — query `nats stream info KV_<bucket>` directly
+— and the peers stay reachable throughout: dispatch to a known peer id keeps working, so "empty
+discovery" is not "everything is down".
 
-**Fix:** delete the broken stream and let the registry recreate it.
+**Fix:** delete the broken backing stream and recreate the bucket with its previous settings. No
+registry-service restart is needed — the peers' register retries (every few seconds) repopulate it
+by themselves; in the real case 445 entries landed within 15 seconds.
 
 ```bash
-# via the JetStream API (the CLI verb is blocked by some shell guards)
-nats stream info KV_MESH_REGISTRY          # confirm it exists and holds 0 messages
-# then delete it through the JetStream API and restart the registry service:
-systemctl restart <registry-service>
+nats stream info KV_MESH_REGISTRY          # confirm: exists, 0 messages, error rate in the server log
+nats stream delete KV_MESH_REGISTRY -f     # `nats stream rm` is blocked by shell guards; delete -f is not
+nats kv add MESH_REGISTRY --history 1 --ttl 10m --storage file   # match the fleet's prior settings
+nats kv put MESH_REGISTRY repair-check ok  # verify a write lands and reads back
 ```
 
-Nothing is lost: the bucket is a live directory with a short TTL, and peers re-register within a
-minute. Confirm recovery with `nats kv ls` and re-check the peer count.
+Nothing is lost: the bucket is a live directory with a short TTL, and peers re-register within
+seconds. Confirm recovery with `nats kv ls` (values > 0, recent Last Update) and re-check the peer
+count on the gateway.
 
 ### Peer count dropped after upgrading a gateway
 

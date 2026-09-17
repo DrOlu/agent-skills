@@ -165,7 +165,7 @@ the gateway-setup skill for the edge's own configuration.
 | `3004 IDENTITY_MISMATCH` on invoke | unsigned caller, or key/`fp` wrong — sign per protocol.md; a pinned peer whose key changed must re-pin |
 | `3001 SKILL_NOT_FOUND` | peer doesn't serve that skill — `describe` it first; note `invoke` is refused on the *mailbox* by design |
 | No reply within timeout | sync invoke's floor is 3 min — if the turn may exceed that, use the task API, do not raise `timeout_ms` (it can only narrow). If the error mentions publish acks, a stream captures that inbox subject → protocol.md §inbox-streaming |
-| Peer absent from `agents` | it registers but doesn't answer broadcasts (old bridges) — check the KV bucket; or its heartbeat/registry entry expired (TTL ≈ 3× heartbeat) |
+| Peer absent from `agents` | **absent ≠ down** — dispatch by id still works (verified live during a registry outage), so probe before concluding. Then: it registers but doesn't answer broadcasts (old bridges) — check the KV bucket; or its heartbeat/registry entry expired (TTL ≈ 3× heartbeat). Many peers vanishing at once after a reboot = corrupted NATS filestore — gateway-setup skill, "Peers disappeared and the registry bucket is empty" |
 | Signature "invalid" from my script | payload bytes hashed ≠ payload bytes published (serialisation must match), or length prefixes are character counts instead of UTF-8 bytes |
 | Identity file "fingerprint mismatch" | id or key edited — the file is permanently bound; mint a new one, don't repair |
 | Duplicate-looking peers with identical skills | different agents advertising the same catalogue — cosmetic, each row is separately addressable |

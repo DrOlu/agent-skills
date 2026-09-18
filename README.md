@@ -100,6 +100,8 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `theme-factory` | Step-by-step guide to add a new UI theme to AiderDesk (SCSS + CSS variables + ty |
 | `three` | Three.js and WebGL adapter patterns for HyperFrames. Use when creating determini |
 | `typegpu` | TypeGPU and raw WebGPU adapter patterns for HyperFrames. Use when creating GPU-r |
+| `use-jev` | Call Jev — TypeSafe's System One decision model — through OpenRouter for fast, typed, probabilistic decisions: classify, route, triage, score severity, verify a claim, or guardrail a prompt. Answers arrive in ~1s with calibrated probabilities and confidence at ~$0.04/MTok input (output free). Not for text generation or reasoning. |
+| `use-tinyfish` | TinyFish CLI — web search, clean page fetches, browser-automation agent, and raw CDP browser sessions. Use whenever a request depends on live web information: search, read or summarize URLs, source-backed answers, docs/pricing research, scraping, bot-protected pages, or scripted website interaction. |
 | `vapt` | Comprehensive vulnerability assessment and penetration testing skill leveraging  |
 | `video-creator` | Full-stack cinematic video production skill. Creates professional, story-driven  |
 | `waapi` | Web Animations API adapter patterns for HyperFrames. Use when authoring element. |

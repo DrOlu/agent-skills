@@ -1,0 +1,66 @@
+#!/bin/bash
+# jev — call TypeSafe Jev (System One) through OpenRouter's decisions endpoint.
+#
+# Usage:
+#   jev request.json          # body: {"state": ..., "questions": ...} ("model" injected if absent)
+#   cat req.json | jev        # stdin works too
+#
+# Key resolution: $OPENROUTER_API_KEY if set, otherwise the local scrt vault
+# (key: openrouter-api-key, master password in macOS Keychain: scrt-connectors-store).
+#
+# Output: raw JSON response from OpenRouter on success; error body + exit 1 on failure.
+
+set -euo pipefail
+
+ENDPOINT="https://openrouter.ai/api/alpha/decisions"
+DEFAULT_MODEL="~typesafe/jev-latest"
+SCRT_STORE="/Users/olu/.pi/agent/skills/secrets/connectors.scrt"
+
+# --- read request body (file arg or stdin) ---
+if [ $# -ge 1 ] && [ -f "$1" ]; then
+  BODY=$(cat "$1")
+elif [ $# -ge 1 ]; then
+  echo "jev: file not found: $1" >&2
+  exit 2
+else
+  BODY=$(cat)
+fi
+
+# --- resolve API key (never printed) ---
+KEY="${OPENROUTER_API_KEY:-}"
+if [ -z "$KEY" ] && command -v scrt >/dev/null 2>&1; then
+  SCRT_PASS=$(security find-generic-password -s scrt-connectors-store -w 2>/dev/null || true)
+  if [ -n "$SCRT_PASS" ]; then
+    KEY=$(scrt get --password "$SCRT_PASS" --storage local --local-path "$SCRT_STORE" openrouter-api-key 2>/dev/null | tail -1 || true)
+  fi
+fi
+if [ -z "$KEY" ]; then
+  echo "jev: no API key. Set OPENROUTER_API_KEY or populate the scrt vault (openrouter-api-key)." >&2
+  exit 2
+fi
+
+# --- inject default model when absent ---
+if ! printf '%s' "$BODY" | grep -q '"model"'; then
+  BODY=$(printf '%s' "$BODY" | python3 -c "
+import json, sys
+body = json.load(sys.stdin)
+body.setdefault('model', '${DEFAULT_MODEL}')
+print(json.dumps(body))
+")
+fi
+
+# --- call ---
+HTTP_CODE=$(curl -s -o /tmp/jev-response.json -w '%{http_code}' --max-time 60 \
+  "$ENDPOINT" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d "$BODY")
+
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "jev: HTTP $HTTP_CODE" >&2
+  cat /tmp/jev-response.json >&2
+  echo >&2
+  exit 1
+fi
+
+cat /tmp/jev-response.json

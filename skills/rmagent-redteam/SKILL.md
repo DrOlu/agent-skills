@@ -106,6 +106,41 @@ Policy: confidence below 0.5 is flagged ESCALATE. Verdicts are advisory — ever
 drill still needs explicit operator approval, artifacts stay reversible, and
 production boxes remain untouched.
 
+## Needle tier 0 — offline extraction and drift
+
+Alongside the Jev matrices, every skill in this family can call
+**needle** — a 121M on-device model (Cactus Compute Needle, ~35 MB, no
+network, no keys, ~100 MB RAM) installed once on the jump host, never on
+the witnesses. It is the free tier of the judgment stack: needle extracts
+and compares offline, Jev judges, the LLM reasons.
+
+Two scripts ship in `scripts/`:
+
+- `needle_extract.py` — typed field extraction from a witness fragment
+  (`count`, `source_ip`, …). Rigid tokens (numbers, IPs) are reliable;
+  semantic fields are not, so the wrapper validates what it can (`:ip`,
+  `:int`) and blanks anything it cannot trust — never a guess.
+  ```bash
+  echo "<attest answer>" | scripts/needle_extract.py user count:int source_ip:ip --json
+  ```
+- `needle_drift.py` — baseline-drift detection via needle's 3072-dim
+  embeddings: record what an answer normally looks like, score today's
+  answer against it (similar / drifted / changed, thresholds calibrated
+  empirically). Separates shape and topic, not field values — value drift
+  stays the job of the field rules and correlate joins.
+  ```bash
+  echo "<routine answer>" | scripts/needle_drift.py record <host>-<question>
+  echo "<today's answer>" | scripts/needle_drift.py score <host>-<question>
+  ```
+
+The engine runs in-process on the jump host (the wrapper finds a Python
+with `cactus-needle` — set `NEEDLE_PYTHON` if it lives elsewhere). No port
+is opened, nothing is installed on any witness, and the baselines are
+kilobyte holes under `~/.rmagent/needle-drift/`, not a lake. On an
+air-gapped estate this tier keeps working when the Jev tier cannot reach
+OpenRouter — matrix judgments defer to the next connected session rather
+than being guessed.
+
 ## Non-negotiables
 
 - **Authorised estate only.** WS1/WS2, or boxes the operator administers. Never a partner/NIBSS/production-critical box without explicit written consent.

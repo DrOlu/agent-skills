@@ -68,6 +68,7 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `liveagent-gateway` | Drive a LiveAgent instance remotely through its gateway from any agent, shell, or script. HTTP API, v2 WebSocket+Protobuf, chat streaming, per-agent credentials, whitelisted pass-through. |
 | `loop` | Run any task iteratively until completion using Ralph Wiggum methodology. Execut |
 | `lottie` | Lottie and dotLottie adapter patterns for HyperFrames. Use when embedding lottie |
+| `needle` | On-device foundation model (Cactus Compute Needle, 121M/2-bit, ~35 MB) for offline CPU tool calling, function calling, structured extraction and embeddings — no cloud API, no keys. Use for local-first agent tool selection on any OS, for diagnosing misbehaving needle agents, or wiring CLIs as LLM-callable tools. |
 | `netops` | The ultimate network troubleshooting skill — a CCIE/RHCE-level reference and dec |
 | `nylas` | Nylas CLI for unified email, calendar, and contacts via IMAP/SMTP, Google, and M |
 | `opencode-api` | Remote system administration and shell execution through the OpenCode AI Server  |

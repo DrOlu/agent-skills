@@ -1,0 +1,34 @@
+{
+  "name": "hop_localize",
+  "purpose": "Localize which segment failed for one STAN/RRN from its joined hop diaries. Verdicts go to the operator; unclear cases escalate.",
+  "state_template": "TRANSACTION: <STAN/RRN, channel, amount, timestamps, joined hop diary excerpts for each segment>.",
+  "questions": {
+    "genuine_failure": {
+      "type": "noul",
+      "instructions": "Does this reconstructed transaction show a genuine failure or abnormal slow segment, not normal switch behavior?"
+    },
+    "failed_segment": {
+      "type": "choice",
+      "instructions": "Which segment shows the failure for this STAN/RRN?",
+      "criteria": {
+        "channel": "Channel side \u2014 ATM/POS/FEP before the switch",
+        "switch_seg": "Switch segment \u2014 Postilion processing or routing",
+        "core": "Core banking segment \u2014 Finacle host processing",
+        "unclear": "Cannot tell from these diaries \u2014 escalate to the teams"
+      }
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How bad is the impact?",
+      "criteria": [
+        "Glitch \u2014 completed after retry, minimal harm",
+        "Degraded \u2014 customer-visible, recoverable",
+        "Broken \u2014 funds state inconsistent or dispense mismatch"
+      ]
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "failed_segment"
+  }
+}

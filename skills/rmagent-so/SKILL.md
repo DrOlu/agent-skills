@@ -177,6 +177,28 @@ and `recommended_actions` (drawn only from the actuate allowlist):
 | 8 | `sysmon_change` | the tripwire itself moved | *(investigate)* |
 | 9 | `new_persistence` | persistence grew | delete_task, stop_service, disable_wmi_sub |
 
+### Jev-assisted triage and hunt routing
+
+Recurring judgment calls can be made by a fast, typed decision model (Jev, via
+the `use-jev` skill) so they are consistent across sessions and honest about
+uncertainty. Two matrices live in `decisions/` — review and edit them like any
+other allowlist:
+
+- `triage.json` — score a finding fragment (suspicious / severity / next).
+  The Rev-15 kind-rank stays the primary sort; Jev scores the instance.
+- `hunt_route.json` — pick the next witness question from the ten allowlisted
+  questions (or hand the hunt to the LLM when unsure). It can never introduce
+  a question outside the allowlist, and it changes nothing about watch-only.
+
+```bash
+echo "<finding fragment>" | scripts/jev_decide.py triage
+scripts/jev_decide.py hunt_route --state-file hunt.json
+```
+
+Policy (in each matrix): confidence below 0.5 is flagged ESCALATE — route those
+to the LLM or the operator instead of acting on them. Verdicts are advisory;
+the standing rules (blind check, capped pulls, watch-only) are unchanged.
+
 ## The blind check (standing rule)
 
 Found live on WS2: the Logon audit policy was Failure-only, so `edges` returned

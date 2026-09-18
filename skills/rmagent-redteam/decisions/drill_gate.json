@@ -1,0 +1,28 @@
+{
+  "name": "drill_gate",
+  "purpose": "Pre-gate a drill plan before staging: is every artifact reversible, and is staging scoped to the designated drill boxes only? Advisory \u2014 operator approval remains mandatory.",
+  "state_template": "DRILL PLAN: <technique, target boxes, artifacts to stage, undo for each, what census/hunt should detect>. CONTEXT: <production boxes in the estate, anything the undo set cannot restore>.",
+  "questions": {
+    "reversible": {
+      "type": "noul",
+      "instructions": "Is every staged artifact in this drill fully reversible using the drill's undo set?"
+    },
+    "scoped": {
+      "type": "noul",
+      "instructions": "Is the staging scoped to the designated drill boxes only, with no production exposure?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "What should the drill pipeline do?",
+      "criteria": {
+        "stage": "Proceed with staging the drill",
+        "plan_first": "Show the operator the drill plan before staging",
+        "refuse": "Do not stage \u2014 wrong scope or not reversible"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "gate"
+  }
+}

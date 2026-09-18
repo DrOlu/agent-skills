@@ -96,6 +96,24 @@ Only if `pay_attest` says both hops **cannot** join. Then SPAN at Segment C is a
 
 WinRM payloads are compact and must respect the ~8191-char UTF-16LE base64 command budget (same rule as the other rmagent Windows skills; a budget test is part of validation).
 
+## Jev-assisted hop localization
+
+The recurring question — which segment failed for this STAN/RRN — can be
+answered by a fast, typed decision model (Jev, via the `use-jev` skill) over
+the joined hop diaries before a human reads them. One matrix lives in
+`decisions/`:
+
+- `hop_localize.json` — genuine_failure (noul) / failed_segment (choice:
+  channel, switch, core, or unclear — escalate) / severity (score).
+
+```bash
+scripts/jev_decide.py hop_localize --state-file txn.json
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE — unclear or low-confidence
+segment verdicts go to the LLM or the three teams, never auto-assigned. Pulls
+stay read-only and STAN/RRN-grained.
+
 ## Scripts
 
 | File | Role |

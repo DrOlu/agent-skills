@@ -1,0 +1,33 @@
+{
+  "name": "triage",
+  "purpose": "Score one finding or witness-answer fragment. Run after correlation, before presenting to the operator.",
+  "state_template": "FINDING: <kind, evidence summary from the witness answer(s), what the baseline says>.",
+  "questions": {
+    "suspicious": {
+      "type": "noul",
+      "instructions": "Does this evidence indicate potentially malicious or unauthorized activity?"
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How serious is this for the estate?",
+      "criteria": [
+        "Routine admin activity, expected",
+        "Unusual, worth a look",
+        "Likely incident \u2014 respond now"
+      ]
+    },
+    "next": {
+      "type": "choice",
+      "instructions": "What should the observatory do with this finding?",
+      "criteria": {
+        "gather_more": "Ask more witness questions before deciding",
+        "notify_operator": "Flag to the operator now",
+        "record": "Benign \u2014 record and move on"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next"
+  }
+}

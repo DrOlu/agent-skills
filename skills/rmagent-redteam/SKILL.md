@@ -86,6 +86,26 @@ After a run, state plainly:
 4. **The case path** so the walk can be re-read.
 5. **That artifacts were cleaned** (or kept).
 
+## Jev-assisted drill gate and gap routing
+
+Two recurring judgments can be made by a fast, typed decision model (Jev, via
+the `use-jev` skill). Two matrices live in `decisions/`:
+
+- `drill_gate.json` — before staging a drill variant: reversible (noul) /
+  scoped to the drill boxes only (noul) / gate (stage, show the operator the
+  plan first, or refuse). It catches over-broad staging before a human sees it.
+- `gap_route.json` — after a scored drill, over the detection scorecard: which
+  of the LOTL techniques to drill next (or hand the choice to the LLM).
+
+```bash
+scripts/jev_decide.py drill_gate --state-file drill.json
+scripts/jev_decide.py gap_route --state-file scorecard.json
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE. Verdicts are advisory — every
+drill still needs explicit operator approval, artifacts stay reversible, and
+production boxes remain untouched.
+
 ## Non-negotiables
 
 - **Authorised estate only.** WS1/WS2, or boxes the operator administers. Never a partner/NIBSS/production-critical box without explicit written consent.

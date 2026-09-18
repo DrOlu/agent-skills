@@ -106,6 +106,24 @@ python3 packs_cli.py run kerberos_ad --rows rows.json --blind dc.krb   # hole, n
 | `rmagent-core` | the engine + the grain firewall that keeps this a separate grain |
 | `rmagent-actuate` | response, only after a rule fires on a source that can SEE |
 
+## Jev-assisted hit triage
+
+Every capped JSON answer a recipe or rule pack returns can be scored by a fast,
+typed decision model (Jev, via the `use-jev` skill) before a human reads it.
+One matrix lives in `decisions/`:
+
+- `rule_hit.json` — suspicious (noul) / severity (score) / next (choice: run a
+  follow-up rmagent question on the host, report the hit to the operator, or
+  record it as an allowlisted false positive).
+
+```bash
+echo "<capped answer>" | scripts/jev_decide.py rule_hit
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE — route those hits to the LLM
+or the operator. Verdicts are advisory; recipes stay one-shot, read-only, and
+capped. The matrix is an allowlist — edit it deliberately.
+
 ## Scripts
 
 | File | Role |

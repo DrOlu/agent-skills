@@ -98,6 +98,24 @@ witnesses:
     track: [Administrator, SYSTEM]
 ```
 
+## Jev-assisted agent triage
+
+Every discovered agent (or shadow agent) the census surfaces can be scored by a
+fast, typed decision model (Jev, via the `use-jev` skill) before it reaches the
+operator. One matrix lives in `decisions/`:
+
+- `agent_triage.json` — per census row: is this a shadow or unmanaged agent?
+  How risky is its configuration? Pull its per-agent questions, flag it, or
+  record it?
+
+```bash
+scripts/jev_decide.py agent_triage --state-file agent.json
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE — those rows go to the LLM or
+the operator. Verdicts are advisory; the census itself and its capped pulls are
+unchanged. The matrix is an allowlist — edit it deliberately, in the light.
+
 ## Non-negotiables
 
 - **Watch only.** No actuation. Never kill an agent process from here.

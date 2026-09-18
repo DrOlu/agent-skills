@@ -157,6 +157,25 @@ lib.ask(row, "appslow", since_hours=24, limit=20)
 lib.ask(row, "apperrors", since_hours=1, limit=30)
 ```
 
+## Jev-assisted signal triage
+
+Trace excerpts pulled from the rings can be scored by a fast, typed decision
+model (Jev, via the `use-jev` skill): is this a real performance or failure
+pattern rather than noise, and which subsystem should the next pull focus on?
+One matrix lives in `decisions/`:
+
+- `signal_triage.json` — real_pattern (noul) / subsystem (choice) / next
+  (choice: hand to the Flight Recorder with a work id, refine the capture, or
+  record as noise).
+
+```bash
+scripts/jev_decide.py signal_triage --state-file excerpt.json
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE — route those excerpts to the
+LLM or the operator. Verdicts are advisory; pulling stays read-only and capped,
+and the ring configuration is untouched.
+
 ## Non-negotiables
 
 - **The setup is MOP; the questions are Phase 0.** Creating the sessions

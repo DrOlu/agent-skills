@@ -1,0 +1,33 @@
+{
+  "name": "rule_hit",
+  "purpose": "Triage one capped JSON answer from a collection recipe or rule pack.",
+  "state_template": "RULE HIT: <recipe or rule name, host, the capped JSON answer, allowlist context>.",
+  "questions": {
+    "suspicious": {
+      "type": "noul",
+      "instructions": "Does this capped answer indicate a genuine detection worth acting on?"
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How strong is the hit?",
+      "criteria": [
+        "Allowlisted or known-benign pattern",
+        "Unusual \u2014 worth a follow-up question",
+        "High-fidelity hit \u2014 likely real"
+      ]
+    },
+    "next": {
+      "type": "choice",
+      "instructions": "What should the operator pipeline do?",
+      "criteria": {
+        "investigate": "Run a follow-up rmagent question on this host",
+        "report": "Report the hit to the operator now",
+        "record": "Known false positive \u2014 record and move on"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next"
+  }
+}

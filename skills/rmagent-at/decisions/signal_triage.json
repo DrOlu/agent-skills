@@ -1,0 +1,35 @@
+{
+  "name": "signal_triage",
+  "purpose": "Score a trace excerpt: real pattern or noise, which subsystem to focus next.",
+  "state_template": "TRACE EXCERPT: <source session, time window, the events or aggregates observed, what normal looks like for this app>.",
+  "questions": {
+    "real_pattern": {
+      "type": "noul",
+      "instructions": "Does this excerpt show a genuine performance or failure pattern, rather than normal noise?"
+    },
+    "subsystem": {
+      "type": "choice",
+      "instructions": "Which subsystem should the next pull focus on?",
+      "criteria": {
+        "http_sys": "HTTP.sys / IIS request handling",
+        "dotnet": ".NET EventSource / application code",
+        "kernel_net": "Kernel network \u2014 TCP connections per PID",
+        "other": "Some other subsystem described in the state",
+        "escalate_to_llm": "Ambiguous \u2014 let the LLM reason"
+      }
+    },
+    "next": {
+      "type": "choice",
+      "instructions": "What should the tracer do?",
+      "criteria": {
+        "hand_to_fr": "Hand to rmagent-fr with a work id for a hop-to-hop walk",
+        "capture_more": "Widen or refine the ring capture and pull again",
+        "record": "No pattern \u2014 record and move on"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next"
+  }
+}

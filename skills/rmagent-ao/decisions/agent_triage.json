@@ -1,0 +1,33 @@
+{
+  "name": "agent_triage",
+  "purpose": "Score one discovered agent, harness, or model server from the census. Run on census rows before presenting to the operator.",
+  "state_template": "CENSUS ROW: <process, listening ports, path, package, owner, config path>. Optional: what the per-agent probes returned so far.",
+  "questions": {
+    "shadow": {
+      "type": "noul",
+      "instructions": "Is this a shadow or unmanaged agent \u2014 outside the estate's approved inventory?"
+    },
+    "config_risk": {
+      "type": "score",
+      "instructions": "How risky is this agent's configuration or exposure?",
+      "criteria": [
+        "Standard, approved setup",
+        "Unusual configuration worth review",
+        "Dangerous exposure \u2014 open admin endpoint, unsecured key, or over-permissive model server"
+      ]
+    },
+    "next": {
+      "type": "choice",
+      "instructions": "What should the observatory do with this agent?",
+      "criteria": {
+        "investigate": "Pull this agent's per-agent questions (config, models, recent activity)",
+        "flag": "Report to the operator now",
+        "record": "Benign \u2014 record in the inventory"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next"
+  }
+}

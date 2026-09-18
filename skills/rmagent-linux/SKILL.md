@@ -69,6 +69,28 @@ python3 scripts/census.py --inventory estate-linux.yaml
 in the payloads (`journalctl`, `grep`, `stat`). If sudo needs a password, the
 payload returns a hole saying so — it never prompts.
 
+## Jev-assisted triage and hunt routing
+
+Recurring judgment calls can be made by a fast, typed decision model (Jev, via
+the `use-jev` skill) so they are consistent across sessions and honest about
+uncertainty. Two matrices live in `decisions/` — review and edit them like any
+other allowlist:
+
+- `triage.json` — score a witnessed finding (suspicious / severity / next).
+- `hunt_route.json` — pick the next witness question from this skill's
+  allowlisted set (or hand the hunt to the LLM when unsure). It can never
+  introduce a question outside the allowlist, and it changes nothing about
+  watch-only.
+
+```bash
+echo "<finding fragment>" | scripts/jev_decide.py triage
+scripts/jev_decide.py hunt_route --state-file hunt.json
+```
+
+Policy (in each matrix): confidence below 0.5 is flagged ESCALATE — route those
+to the LLM or the operator instead of acting on them. Verdicts are advisory;
+the standing rules (blind check, capped answers, watch-only) are unchanged.
+
 ## Scripts
 
 | Job | Script | Notes |

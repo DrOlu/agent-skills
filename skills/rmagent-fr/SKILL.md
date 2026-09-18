@@ -95,6 +95,27 @@ done — a ticket given at case-open flows through everything. The reliability
 half needs the payment system to stamp `PAY-4419` into its own events, which is
 an integration with whatever runs the payments, not a feature of this skill.
 
+## Jev-assisted intake and hop routing
+
+Two recurring judgments of a walk can be made by a fast, typed decision model
+(Jev, via the `use-jev` skill): is a symptom worth a walk at all, and which hop
+should the walker visit next? Two matrices live in `decisions/`:
+
+- `intake_triage.json` — at intake: worth_walking / urgency / next (start the
+  walk, gather more context, or record and decline).
+- `hop_route.json` — mid-walk, over the trajectory so far: which plane to walk
+  next (user, edge, service, data, queue, platform, network, business), close
+  the walk and synthesize, or hand the choice to the LLM.
+
+```bash
+echo "<symptom report>" | scripts/jev_decide.py intake_triage
+scripts/jev_decide.py hop_route --state-file trajectory.json
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE — the LLM (not Jev) reasons
+about ambiguous walks. Verdicts are advisory; the trajectory DAG, the STC, and
+the pull-only rules are unchanged.
+
 ## Relationship to the other skills
 
 | Skill | Half |

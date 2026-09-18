@@ -1,0 +1,34 @@
+{
+  "name": "gate",
+  "purpose": "Pre-gate every proposed action BEFORE it is shown to the operator: the first checker in the maker/checker pipeline. Advisory only \u2014 explicit operator approval remains mandatory for every apply, and Jev never executes anything.",
+  "state_template": "FINDING: <kind, rank, evidence summary>. PROPOSED ACTION: <name from the ACTIONS allowlist, target, witness>. DRY-RUN PREVIEW: <exactly what it will do>. UNDO: <verified undo>. CONTEXT: <anything that affects blast radius>.",
+  "questions": {
+    "matches_finding": {
+      "type": "noul",
+      "instructions": "Does the proposed action directly and narrowly address the finding?"
+    },
+    "scope_risk": {
+      "type": "score",
+      "instructions": "How risky is the blast radius of this action?",
+      "criteria": [
+        "Surgical and reversible in seconds",
+        "Broader than needed but still reversible",
+        "Disruptive or hard to reverse"
+      ]
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "What should the actuation pipeline do?",
+      "criteria": {
+        "refuse": "Do not proceed \u2014 wrong action or too broad",
+        "dry_run_only": "Show the operator a dry-run, do not queue for approval",
+        "ready": "Queue for operator approval"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "gate",
+    "note": "gate=ready still requires explicit operator approval with the dry-run shown first. Record the gate verdict and confidence in the journal reason."
+  }
+}

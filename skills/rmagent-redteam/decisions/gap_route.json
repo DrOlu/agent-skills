@@ -1,0 +1,26 @@
+{
+  "name": "gap_route",
+  "purpose": "After a scored drill: which LOTL technique should the next drill stage, based on the detection gaps?",
+  "state_template": "DETECTION SCORECARD: <last drill's techniques, what census and hunt caught, what was missed, current detection coverage>.",
+  "questions": {
+    "next_drill": {
+      "type": "choice",
+      "instructions": "Given the detection scorecard from the last drill, which technique should the next drill stage?",
+      "criteria": {
+        "failed_admin_logons": "Failed Administrator logons \u2014 credential access",
+        "new_local_admin": "A new local admin \u2014 privilege escalation",
+        "system_scheduled_task": "A SYSTEM scheduled task \u2014 persistence",
+        "new_localsystem_service": "A new LocalSystem service \u2014 persistence",
+        "powershell_spawns": "PowerShell spawns with encoded commands \u2014 execution",
+        "system_outbound_conn": "A SYSTEM outbound connection \u2014 exfiltration",
+        "run_key": "A registry Run key, T1547.001 \u2014 persistence",
+        "ifeo_debugger": "An IFEO debugger hijack, T1546.010 \u2014 persistence",
+        "escalate_to_llm": "Let the LLM pick based on the gaps"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next_drill"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "message_triage",
+  "purpose": "Triage a decoded ISO 8583 message flow for one STAN/RRN pulled from the SPAN rings.",
+  "state_template": "SPAN EXCERPTS: <decoded JSONL messages for this STAN/RRN \u2014 MTI, timestamps, response codes, PAN masked>.",
+  "questions": {
+    "genuine_failure": {
+      "type": "noul",
+      "instructions": "Does this decoded message flow show a genuine failure for this STAN/RRN?"
+    },
+    "failure_kind": {
+      "type": "choice",
+      "instructions": "What kind of failure does the flow show?",
+      "criteria": {
+        "issuer_decline": "Issuer declined \u2014 response code in the 0210",
+        "switch_timeout": "Switch timeout \u2014 no 0210 within budget",
+        "channel_error": "Channel-side error before the switch",
+        "missing_reversal": "Reversal expected but missing",
+        "clean_flow": "The flow completed normally",
+        "escalate_to_llm": "Ambiguous \u2014 let the LLM reason"
+      }
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How bad is the impact?",
+      "criteria": [
+        "Benign \u2014 completed normally or self-corrected",
+        "Degraded \u2014 late but recovered",
+        "Broken \u2014 funds state at risk"
+      ]
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "failure_kind"
+  }
+}

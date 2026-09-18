@@ -1,0 +1,27 @@
+{
+  "name": "hop_route",
+  "purpose": "Mid-walk: which hop should the walker visit next? Choice over the planes; the LLM takes over when unsure.",
+  "state_template": "TRAJECTORY: <case, work id, symptom, hops visited so far and what each showed, remaining hypotheses>.",
+  "questions": {
+    "next_hop": {
+      "type": "choice",
+      "instructions": "Given the trajectory so far, which hop should the walker visit next?",
+      "criteria": {
+        "user_plane": "Ask the user-plane hop \u2014 what the person or client did",
+        "edge_plane": "Walk the edge hop \u2014 gateway, proxy, entry service",
+        "service_plane": "Walk the service hop \u2014 the application logic",
+        "data_plane": "Walk the data hop \u2014 database, cache, storage",
+        "queue_plane": "Walk the queue hop \u2014 broker, async work",
+        "platform_plane": "Walk the platform hop \u2014 runtime, host, scheduler",
+        "network_plane": "Walk the network hop \u2014 link, DNS, routing",
+        "business_plane": "Check the business plane \u2014 money moved, state changed",
+        "close_walk": "Enough evidence \u2014 synthesize the root cause",
+        "escalate_to_llm": "The trajectory is ambiguous \u2014 let the LLM reason"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next_hop"
+  }
+}

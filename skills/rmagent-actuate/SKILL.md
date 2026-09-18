@@ -58,6 +58,31 @@ If an action cannot be undone, it is not in this skill.
 - **Credentials never in the journal.** Same scrt-store resolution as Phase 0.
   The journal records what was done, never how it was authenticated.
 
+## The Jev pre-gate (first checker)
+
+Before a proposed action is shown to the operator, run the gate matrix
+(`decisions/gate.json`) over the finding, the action, and the dry-run preview:
+
+```bash
+scripts/jev_decide.py gate --state-file case.json
+```
+
+It returns `matches_finding`, `scope_risk`, and a gate verdict
+(`refuse` / `dry_run_only` / `ready`) with calibrated confidence. This is the
+machine checker in the maker/checker pipeline — it catches the "block the
+subnet instead of the IP" class of error before it reaches a human.
+
+Rules:
+
+- **Advisory only.** `gate=ready` queues the case; explicit operator approval
+  with the dry-run shown first remains mandatory. Jev never executes anything.
+- **Record the verdict.** Put the gate verdict and confidence in the journal
+  reason text, next to your own.
+- **Escalate on uncertainty.** Confidence below the matrix threshold is
+  flagged ESCALATE — show the operator why, or let the LLM reason first.
+- **The matrix is an allowlist.** Questions, criteria and thresholds are
+  edited deliberately by the operator, in the light — same as `ACTIONS`.
+
 ## The action allowlist
 
 | Action | What it does | Undo | Use when Phase 0 finds |

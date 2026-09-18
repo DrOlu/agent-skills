@@ -1,0 +1,33 @@
+{
+  "name": "intake_triage",
+  "purpose": "At walk intake: is this symptom worth a Flight Recorder walk?",
+  "state_template": "SYMPTOM REPORT: <what was observed, by whom, which work id, when, how often, business impact>.",
+  "questions": {
+    "worth_walking": {
+      "type": "noul",
+      "instructions": "Is this symptom concrete and impactful enough to warrant a Flight Recorder walk?"
+    },
+    "urgency": {
+      "type": "score",
+      "instructions": "How urgent is this?",
+      "criteria": [
+        "Cosmetic or one-off \u2014 not worth a walk",
+        "Worth a walk when convenient",
+        "Customer-impacting \u2014 walk now"
+      ]
+    },
+    "next": {
+      "type": "choice",
+      "instructions": "What should the recorder do?",
+      "criteria": {
+        "start_walk": "Open a case and start the walk",
+        "need_context": "Gather more context before walking",
+        "decline": "Record and decline the walk"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "hunt_route",
+  "purpose": "Pick the next allowlisted witness question during a hunt. Can only choose from the allowlisted questions, or hand the hunt to the LLM when unsure.",
+  "state_template": "HUNT LOG SO FAR: <investigation goal, questions already asked, condensed answers, open hypothesis>.",
+  "questions": {
+    "next_question": {
+      "type": "choice",
+      "instructions": "Given the evidence gathered so far, which witness question should the observatory ask next?",
+      "criteria": {
+        "attest": "Confirm the witness is alive and can actually see (blind check first)",
+        "sketch": "Admin failures, new local admins, privileged services, new services or tasks",
+        "edges": "Tracked logons, explicit-credential uses, outbound connections",
+        "explain": "Identity/service/task changes, LOLBin spawns, audit-log clearing",
+        "netedges": "Sysmon conns, DNS, LSASS access, thread injection, file/registry writes",
+        "pslogs": "The actual PowerShell code being executed (4104 script blocks)",
+        "kernring": "10-second kernel burst of process events",
+        "attackmap": "Persistence locations, ATT&CK-tagged, FP-allowlisted",
+        "escalate_to_llm": "Evidence is ambiguous, novel, or the path is unclear \u2014 let the LLM reason about the hunt",
+        "flowstats": "Volume baseline / exfil (T1041) check",
+        "deepwindow": "Short-lived ETW kernel trace at full fidelity"
+      }
+    }
+  },
+  "policy": {
+    "escalate_below": 0.5,
+    "gate_field": "next_question"
+  }
+}

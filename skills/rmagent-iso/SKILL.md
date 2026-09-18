@@ -104,6 +104,24 @@ tshark -i eth1 -l -T fields -e frame.time_epoch -e ip.src -e tcp.srcport \
 
 SPAN design is `netops`. Worked CLI output: `EXAMPLES.md`.
 
+## Jev-assisted message triage
+
+Decoded SPAN-ring excerpts for a STAN/RRN can be scored by a fast, typed
+decision model (Jev, via the `use-jev` skill). One matrix lives in
+`decisions/`:
+
+- `message_triage.json` — genuine_failure (noul) / failure_kind (choice:
+  issuer decline, switch timeout, channel error, missing reversal, clean flow,
+  or escalate to the LLM) / severity (score).
+
+```bash
+scripts/jev_decide.py message_triage --state-file span.json
+```
+
+Policy: confidence below 0.5 is flagged ESCALATE. Verdicts are advisory; the
+rings stay passive, decoded JSONL, PAN-masked, and this stays the last-resort
+adapter after rmagent-pay.
+
 ## Scripts
 
 | Script | Job |

@@ -9,16 +9,71 @@ Usage:
 
 The matrix file in decisions/ is the reviewable source of truth: the questions,
 criteria and policy live there — edit it deliberately, in the light. This
-wrapper merges {state, questions} and calls the use-jev helper, then prints the
-answers plus the policy verdict (confidence below the matrix threshold is
-flagged ESCALATE).
+wrapper merges {state, questions} and calls Jev, then prints the answers plus
+the policy verdict (confidence below the matrix threshold is flagged ESCALATE).
+
+No hardcoded helper path: the use-jev helper is located, in order, via
+  1. $JEV_HELPER (if set to an executable)
+  2. a sibling use-jev skill in the same skills store as this skill
+  3. common well-known skills directories on this machine
+  4. a 'jev' executable on PATH
+and if none of those exist it calls OpenRouter's decisions endpoint directly
+using $OPENROUTER_API_KEY. Installing use-jev alongside this skill is enough;
+nothing else is required.
 
 This is a judgment, not an actuator: it never executes anything, and any
 gate/queue verdict remains advisory — operator approval rules are unchanged.
 """
-import json, os, subprocess, sys
+import json, os, shutil, subprocess, sys, urllib.request, urllib.error
 
 REQ_PATH = os.path.join(os.environ.get("TMPDIR", "/tmp"), "jev-decide-request.json")
+WELL_KNOWN = [
+    "~/.agents/skills/use-jev/jev",
+    "~/Library/Application Support/SuperAgent/Data/Skills/use-jev/jev",
+    "~/.claude/skills/use-jev/jev",
+    "~/.pi/agent/skills/use-jev/jev",
+]
+
+def resolve_helper():
+    """Find the jev helper without hardcoding a single path."""
+    env = os.environ.get("JEV_HELPER")
+    if env and os.access(os.path.expanduser(env), os.X_OK):
+        return os.path.expanduser(env)
+    # 2. sibling use-jev in the same skills store as this skill
+    skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    store = os.path.dirname(skill_dir)
+    candidates = [os.path.join(store, "use-jev", "jev")]
+    # 3. common well-known locations
+    candidates += [os.path.expanduser(p) for p in WELL_KNOWN]
+    for c in candidates:
+        if os.path.isfile(c) and os.access(c, os.X_OK):
+            return c
+    # 4. anything on PATH
+    return shutil.which("jev")
+
+def call_direct(request):
+    """Last-resort: call the decisions endpoint without the use-jev helper."""
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        print("jev_decide: no use-jev helper found and OPENROUTER_API_KEY is not set.\n"
+              "Fix one of:\n"
+              "  - install use-jev next to this skill (npx skills add DrOlu/agent-skills --skill use-jev -g)\n"
+              "  - set JEV_HELPER to an executable jev helper\n"
+              "  - set OPENROUTER_API_KEY to call the decisions endpoint directly",
+              file=sys.stderr)
+        sys.exit(2)
+    req = urllib.request.Request(
+        "https://openrouter.ai/api/alpha/decisions",
+        data=json.dumps(request).encode(),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+        method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        print(f"jev_decide: HTTP {e.code} from the decisions endpoint", file=sys.stderr)
+        print(e.read().decode(), file=sys.stderr)
+        sys.exit(1)
 
 def main():
     args = sys.argv[1:]
@@ -59,19 +114,19 @@ def main():
         "questions": matrix["questions"],
     }
 
-    helper = os.environ.get("JEV_HELPER") or os.path.expanduser(
-        "~/Library/Application Support/SuperAgent/Data/Skills/use-jev/jev")
-    if not os.path.exists(helper):
-        print(f"jev helper not found: {helper} (set JEV_HELPER)")
-        sys.exit(2)
-
-    with open(REQ_PATH, "w") as f:
-        json.dump(request, f)
-    out = subprocess.run([helper, REQ_PATH], capture_output=True, text=True)
-    if out.returncode != 0:
-        print(out.stderr, file=sys.stderr)
-        sys.exit(1)
-    resp = json.loads(out.stdout)
+    helper = resolve_helper()
+    if os.environ.get("JEV_DECIDE_DEBUG"):
+        print(f"jev_decide: helper = {helper or '(none — calling the decisions endpoint directly)'}", file=sys.stderr)
+    if helper:
+        with open(REQ_PATH, "w") as f:
+            json.dump(request, f)
+        out = subprocess.run([helper, REQ_PATH], capture_output=True, text=True)
+        if out.returncode != 0:
+            print(out.stderr, file=sys.stderr)
+            sys.exit(1)
+        resp = json.loads(out.stdout)
+    else:
+        resp = call_direct(request)
 
     if raw:
         print(json.dumps(resp, indent=2))

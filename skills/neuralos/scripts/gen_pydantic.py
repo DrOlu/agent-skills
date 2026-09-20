@@ -59,6 +59,8 @@ def _parse_dt(value: Any) -> Any:
 
 
 def _snake(name: str) -> str:
+    if name.startswith("@"):
+        name = "at_" + name[1:]
     name = re.sub(r"[^0-9a-zA-Z_]+", "_", name).strip("_")
     if not name:
         name = "field"
@@ -74,6 +76,8 @@ def pascal(name):
 
 
 def _snake(name):
+    if name.startswith("@"):
+        name = "at_" + name[1:]
     name = re.sub(r"[^0-9a-zA-Z_]+", "_", name).strip("_")
     if not name:
         name = "field"
@@ -112,7 +116,9 @@ def field_line(fname, f, indent="    "):
             py = f"Literal[{vals}]"
             descs.append(f"all {f['distinct']} distinct values captured")
         else:
-            descs.append(f"{f['distinct']} distinct values — consider an Enum")
+            descs.append(f"{f['distinct']} distinct values — too varied for Literal, "
+                         f"e.g. {json.dumps(str(f['sample_values'][0])[:80]) if f.get('sample_values') else '?'}")
+            py = "str"
     elif f.get("sample_values") and py == "str":
         ex = ", ".join(json.dumps(v) for v in f["sample_values"][:3])
         descs.append(f"e.g. {ex}")
@@ -121,8 +127,10 @@ def field_line(fname, f, indent="    "):
     desc = "; ".join(descs).replace('"', "'")
     if len(desc) > 300:
         desc = desc[:297] + "..."
-    if desc:
-        kwargs.append(f'description="{desc}"')
+    if f.get("nullable") and not py.startswith("Optional["):
+        # Nulls observed in data — the annotation itself must accept None,
+        # not just the default (Pydantic v2 validates explicit null inputs).
+        py = f"Optional[{py}]"
     if py.startswith("Optional[") and "default=None" not in kwargs:
         kwargs.append("default=None")
     base = py

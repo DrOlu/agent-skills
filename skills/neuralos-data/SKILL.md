@@ -1,0 +1,168 @@
+---
+name: neuralos-data
+description: Turn ANY data source into a working neuralOS/needle instance plus a strict Python Pydantic model — by profiling the data first and generating everything from what the data actually contains. Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever they say "build a needle instance for this data", "parse this in real time", "give me a Pydantic model for this", "profile this data source", "make this queryable in plain English", or "hook this data into neuralOS/needle"; whenever a new data source appears in a project and needs schema discovery, type inference, regex/log-template synthesis, or a query bridge; and whenever an existing needle menu must be extended to cover a new table, feed, or file format. Also use it to extend existing instances when the underlying data changes shape.
+---
+
+# neuralOS Data — profile any source, generate its needle instance
+
+This skill converts **any data source** into two deliverables, generated from
+what the data actually contains:
+
+1. a **strict Pydantic model** (`models.py`) that captures every attribute the
+   data exposes — typed, constrained, nullable where the data is nullable;
+2. a **needle instance** (`needle_menu.json` + bridge + agent) that parses and
+   queries that data in real time through on-device tool calling.
+
+Nothing is assumed from file names or guesses: every field, type, range,
+pattern and enum value comes from **profiling the data first**.
+
+## The four-phase workflow
+
+```
+PROFILE ──► MODEL ──► GENERATE ──► VERIFY
+(profile_data.py)  (gen_pydantic.py)  (gen_needle_instance.py)  (run against real data)
+```
+
+Run all four, in order, every time. Skipping VERIFY is the most common failure.
+
+### Phase 1 — PROFILE
+
+```bash
+python scripts/profile_data.py --source <SOURCE> [--table NAME] [--sample 50] --out profile.json
+```
+
+`<SOURCE>` is anything: a file path (`data.csv`, `app.log`, `events.jsonl`,
+`dump.json`, `table.xlsx`, `db.sqlite`), a database DSN (`mysql://user:pw@host/db`,
+`postgres://…`, `sqlite:///path.db` — database profiling runs through the
+`usql` CLI when present), or an `https://` URL (fetched, then sniffed).
+
+The profiler detects the source kind automatically, samples real records, and
+emits `profile.json`: per-field names, inferred Python types, nullability,
+min/max, length bounds, distinct counts, enum candidates, sample values, and —
+for log sources — synthesized line templates with capture regexes. See
+`references/profiler.md` for exactly what it measures and its limits.
+
+**Read the profile before modeling it.** Look for: surprising nullability,
+fields whose "type" is really an enum, dates stored as strings, columns whose
+sample values contain units or prefixes (e.g. `NGN46494.89`), and nested
+structures in JSON sources. Flag anything suspicious to the user before
+proceeding.
+
+### Phase 2 — MODEL
+
+```bash
+python scripts/gen_pydantic.py --profile profile.json --out models.py [--table NAME] [--model-name Transaction]
+```
+
+Emits strict Pydantic v2 models: inferred types with `Field` constraints
+(`ge/le` from observed min/max, `pattern` from log templates, `Literal`/`Enum`
+from low-cardinality strings), `Optional` where nulls occur, datetime fields
+with multi-format parsing validators, `extra="forbid"`, and a description per
+field carrying its observed statistics. Standards and the type-mapping table:
+`references/pydantic-standards.md`.
+
+**Edit the generated model if the data's meaning demands it** — the generator
+knows types and ranges, but only you and the user know that `status_code = 2`
+means "In Progress". Add enum labels, rename cryptic columns, then move on.
+
+### Phase 3 — GENERATE
+
+```bash
+python scripts/gen_needle_instance.py --profile profile.json --models models.py --out instance_dir \
+    [--db-dsn mysql://user:pw@host/db] [--runtime python|engine] [--agent-name myfeed]
+```
+
+Emits a ready-to-run instance directory:
+
+| File | Purpose |
+|---|---|
+| `needle_menu.json` | the probe menu: profile / peek / count / query / aggregate entries, arguments constrained from the profile |
+| `bridge.py` | retrieval + parsing: reads the real source (file, DSN, API) and validates every record through the Pydantic models |
+| `instance.py` | the needle agent: menu loaded, triggers set, agentic loop wired, example asks included |
+| `README.md` | how to run it, what to ask it, how to extend it |
+
+Generation follows the hard rules in `references/instance-standards.md`
+(triggers mandatory, arguments constrained in the grammar, results kept small
+via digest+stash, secrets baked into the executor only, read-only probes
+first). For unstructured text sources the generated bridge uses the model's
+structured-extraction capability with the Pydantic schema — see
+`references/sources-unstructured.md`.
+
+### Phase 4 — VERIFY
+
+Never deliver unverified:
+
+1. **Model coverage** — run the generated `bridge` over a real sample: report
+   the % of records that parse through the Pydantic model without error.
+   Below ~95% means the model is too strict or the data is dirtier than the
+   sample showed — widen constraints or add validators, then re-check.
+2. **Selection test** — ask the generated instance the same question three
+   ways (e.g. "how many…", "count…", "show me the number of…"). All three
+   must select the intended probe.
+3. **Truth check** — compare one relayed number against a direct query of the
+   source. The data layer is the only oracle.
+
+## Source routing
+
+| Source | Retrieval method | Profiler path | Probe set generated |
+|---|---|---|---|
+| SQL database | `usql` CLI (any DSN) or `sqlite3` | DSN → information_schema + samples | count / query / aggregate per table |
+| CSV / TSV / delimited | direct read, dialect sniffed | path → column inference | peek / filter / count / aggregate |
+| JSON / JSONL / NDJSON | direct read, flatten nested | path → schema induction | peek / filter / count |
+| Log files (any line format) | direct read, template synthesis | path → templates + capture regexes | parse_tail / count_by_level / search |
+| REST API | HTTP + baked auth | URL fetch → sniff (JSON/CSV/text) | endpoint probes per resource |
+| Spreadsheets | openpyxl if available | path → sheet/columns | peek / filter per sheet |
+| Unstructured text | read + extraction schema | path → templates | extract(record_text) via model |
+| Directories of files | iterate + per-file sniff | glob → combined profile | per-file-pattern probes |
+
+Details, edge cases and failure modes per source: `references/sources-files.md`,
+`references/sources-databases.md`, `references/sources-apis.md`,
+`references/sources-unstructured.md`.
+
+## Instance runtime choice
+
+- **Python runtime** (`--runtime python`, default): the generated
+  `instance.py` runs the agentic loop in-process — best when the asking
+  happens inside a Python app, script, or an interactive session, and when the
+  tools should execute themselves.
+- **Engine runtime** (`--runtime engine`): generates a `tools.json` +
+  selection-only bridge for the standalone ~1 MB binary — best for servers,
+  edge boxes, and non-Python consumers; execution always stays with the
+  caller. Platform bundle bootstrap: the `needle` skill's
+  `scripts/bootstrap_engine.py`.
+
+Both share the same menu and the same Pydantic-validated bridge.
+
+## Operating rules (inherited from the needle skill)
+
+These are non-negotiable — violating them is what makes small-model agents
+unreliable:
+
+1. **Triggers on every menu entry.**
+2. **Arguments constrained in the grammar** (patterns, ranges, enums) —
+   generated automatically from the profile; do not loosen them without cause.
+3. **Tool results small** — counts and digests go to the model; full rows go
+   to the caller or a stash file. The generated probes enforce a row cap.
+4. **Secrets baked in executors only** — DSN passwords and API keys are written
+   into the bridge as constants/env lookups, never as model-facing arguments.
+5. **Read-only probes first** — write/update entries are added only behind an
+   explicit user-approved flag.
+6. **Verify against the source** — model relays are checked, never trusted.
+
+Full rationale: `references/instance-standards.md`.
+
+## Deliverables contract
+
+Every completed run leaves behind, in the chosen `--out` directory:
+`profile.json`, `models.py`, `needle_menu.json`, `bridge.py`, `instance.py`,
+`README.md`, and a `verification.txt` recording the Phase-4 results (model
+coverage %, selection test, truth check). If any piece is missing, the job is
+not done.
+
+## Script requirements
+
+`profile_data.py` uses only the Python standard library plus `usql`/`sqlite3`
+when a database is profiled (openpyxl/pandas are used opportunistically for
+XLSX/parquet if installed, with graceful fallbacks). Generated instances
+require `pydantic` (v2) and — for the Python runtime — the on-device needle
+library installed in the interpreter that runs them.

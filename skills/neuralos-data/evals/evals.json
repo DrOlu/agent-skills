@@ -1,0 +1,23 @@
+{
+  "skill_name": "neuralos-data",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Here's transactions.csv from our payment gateway (300 rows). I want it queryable in plain English on this Mac, through our neuralOS/needle stack — and I want a strict Pydantic model of what's in it.",
+      "expected_output": "Runs the 4-phase workflow: profile_data.py on the CSV, reads the profile, gen_pydantic.py -> models.py (verified by instantiating), gen_needle_instance.py -> instance dir, then actually asks the generated instance a question and runs verify.py coverage.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "We have an app.log with thousands of lines in mixed formats (timestamps, levels, services, IPs). Build a needle instance that can parse and count them — errors per level, tail parsing, substring search. Offline only.",
+      "expected_output": "Profiler synthesizes line templates with capture regexes; generated models include per-template classes + parse_line; generated menu has parse_tail/count_by_level/search_log; verification shows high parse coverage and a correct level count.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Profile the efraud MySQL database (localhost:3306, admin/admin) and give me a needle instance plus Pydantic models for its transactions table. No cloud anything.",
+      "expected_output": "Profiles via usql DSN (information_schema + samples), generates one model per table with db types and constraints, generates a table-scoped instance (4-6 probes), count probe returns the true row count, coverage 100%.",
+      "files": []
+    }
+  ]
+}

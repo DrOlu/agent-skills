@@ -1,0 +1,44 @@
+{
+  "skill_name": "needle",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want a small script where a local model turns requests like 'book a table for 4 under Okafor at 7pm' into a call to my reserve_table(people, name, time) function. It has to work with no internet and no API key — I heard needle can do this kind of on-device function calling?",
+      "expected_output": "A working Python script using @needle.tool with triggers, a constrained signature, needle.Needle(tools=[...]) and agent.run() reading response['results']; actually executed on this machine.",
+      "files": [],
+      "expectations": [
+        "The script defines its tool with the @needle.tool decorator including a triggers list",
+        "The script builds a needle.Needle(tools=[...]) agent, calls .run(...) and reads response['results']",
+        "The solution runs fully offline: no cloud LLM API calls, no API keys, no network requests",
+        "The reserve_table tool keeps parameters mapping the request: people (int), name (str), time (str)",
+        "The script was actually executed successfully on this machine"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Set up needle on our Ubuntu server so I can POST a request to localhost:8080 and get function calls back completely offline — I don't want to install jax or any training stuff on that box.",
+      "expected_output": "Standalone engine binary path: jax-free platform bundle, needle3.cact beside the binary, --serve on 8080, POST /complete with JSON, execution stays with the caller.",
+      "files": [],
+      "expectations": [
+        "The solution uses the standalone engine binary, not needle run and not jax",
+        "The server is started with --serve on port 8080, and the example client POSTs JSON to /complete",
+        "The setup places needle3.cact weights beside the engine binary",
+        "The setup avoids installing jax or downloading the 242MB training checkpoint",
+        "Commands target Ubuntu (bash, linux-x86_64), not macOS"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "my needle agent keeps calling the same tool over and over until it hits max steps. the tool returns a big JSON schema dump. also it sometimes refuses to call anything and says something about connectivity with 0.98 confidence. what's going on?",
+      "expected_output": "Diagnosis: oversized result fed back verbatim overloads the 121M model (digest+stash fix); refusal is missing triggers / date-fact drift, not connectivity.",
+      "files": [],
+      "expectations": [
+        "Explains that the tool's return value is fed back verbatim and a multi-kilobyte result overloads the 121M model causing repeated calls",
+        "Recommends returning a compact digest and stashing the full payload outside the model-facing result",
+        "Attributes the connectivity refusal to missing triggers and/or the drifting date fact, not a real network problem",
+        "Recommends adding triggers to the @needle.tool decorator",
+        "Mentions judging success by response['results'] rather than the final turn's empty function_calls"
+      ]
+    }
+  ]
+}

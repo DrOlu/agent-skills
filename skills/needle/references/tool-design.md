@@ -1,4 +1,4 @@
-# Tool design for neuralOS
+# Tool design for Needle
 
 The model is 121M parameters. It beats models 10× its size on mobile tool
 calls **when the tools are designed for it** — the grammar does the heavy
@@ -111,7 +111,7 @@ nested detail go to the stash; counts, names and summaries go to the model.
 correct, in order. Adding "and then top 10 customers" to the same sentence →
 the third call is silently dropped. Ask for two things per turn at most;
 drive the third with a follow-up turn (`agent.run(...)` again — create a
-fresh `neuralOS` or `reset()` between unrelated questions). In `--prompt` /
+fresh `Needle` or `reset()` between unrelated questions). In `--prompt` /
 CLI mode, one query is one selection pass — issue separate calls per intent.
 
 ## 7. Wrapping OS CLIs as tools (subprocess pattern)
@@ -170,53 +170,10 @@ Why each piece is there:
   rather than a guess — surface that as "no tool covers this", and either
   add a tool or change the request.
 
-## 9. Argument NAMES steer grounding
-
-Two live failure modes from the same root cause — the model grounds arguments
-against the *words nearby in the request*, and argument names are part of that
-vocabulary:
-
-- A parameter literally named `people` attracted the *person's name*
-  (`people='Okafor'`). Renaming the model-facing argument to `party_size` fixed
-  it. Name arguments for the VALUE they hold, not the role they play.
-- The model normalizes conversational times (`"6:30pm"` → `"18:30"`), which
-  grounding then refuses as ungrounded. A tight `pattern` limited to the
-  am/pm spelling made the normalized form unrepresentable and every phrasing
-  worked first-try after that.
-
-General rule: when a probe keeps filling an argument with a *related but
-wrong* value, rename the argument or constrain it — do not just rephrase the
-request.
-
-## 10. Many tools?
+## 9. Many tools?
 
 Up to roughly a handful of tools, pass them all. Beyond that, build a tool
 index — the engine binary's `--tool-index` and the Python API's
 `tool_index_path` embed the tool set once and retrieve the relevant subset
 per request. Selection accuracy on 6 tools with disjoint triggers was
 flawless in testing; do not assume the same at 60 without an index.
-
-
-## 11. Chaining neuralOS behind another model
-
-NeuralOS sits naturally as the *expert layer* under a larger orchestrator
-(granite/smollm2-class models served locally, or any agent): the orchestrator
-gets ONE tool — "ask the neuralOS runtime" — whose single argument is a
-plain-English request. The orchestrator expresses intent; neuralOS picks and
-validates the real command; the backend answers.
-
-Verified rules for that pattern:
-
-- The orchestrator's tool argument must be a **plain-English sentence**.
-  Small orchestrators emit CamelCase word-salad (`GetFullSchemaDatabase`)
-  unless told otherwise — say "a plain-English sentence with spaces" in the
-  system prompt.
-- **Do not let the orchestrator replace this layer.** Control test: the same
-  model given direct database access wrote `SELECT * FROM <database>`,
-  misread the error as a server outage, and quit. NeuralOS's menu encodes the
-  expertise; the orchestrator only needs intent.
-- Feeding failures back works: return the bridge's error object as the tool
-  result and let the orchestrator retry with corrected arguments.
-- Sibling probes sharing a table name compete: give each probe count-prefixed
-  "where/by" triggers, and scope instances to one table (see
-  neuralos-data's instance standards).

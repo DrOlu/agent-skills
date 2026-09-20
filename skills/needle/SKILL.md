@@ -1,18 +1,11 @@
 ---
-name: neuralos
-description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive.
+name: needle
+description: Run Cactus Compute Needle — the on-device foundation model (121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Use this skill whenever the user mentions needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when a needle agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive.
 ---
 
-# neuralOS — on-device tool calling
+# Needle — on-device tool calling
 
-> **Branding scope.** neuralOS is the product name (Neural AI). The runtime
-> binaries and the Python package keep their upstream names — `needle`,
-> `cactus-needle`, `needle3.cact` — and every command in this manual uses those
-> real names so nothing here is aspirational. Visible name: neuralOS.
-> Functional name: needle.
-
-
-neuralOS is a foundation model built for tiny devices: a single 121M-parameter
+Needle is a foundation model built for tiny devices: a single 121M-parameter
 "Simple Attention Network" quantised to 2-bit, shipped as one ~35 MB weights
 file (`needle3.cact`) plus an engine library under 1 MB. It runs offline on a
 CPU — roughly 100 MB of RAM, hundreds of tokens per second on a laptop — with
@@ -24,11 +17,7 @@ no API key, no GPU and no network. It does three things:
    covers and you get an empty list, not a guess.
 2. **Structured extraction** — declare a shape, hand over messy text, get
    typed fields back; the decode grammar guarantees the output parses.
-3. **Text embeddings** — a vector for a sentence (neuralOS 3 only).
-
-For the companion skill that turns raw data sources into neuralOS
-instances (profile any source → Pydantic models → generated menu, bridge and
-agent), see `neuralos-data`.
+3. **Text embeddings** — a vector for a sentence (Needle 3 only).
 
 Everything below was verified live against **cactus-needle 3.0.2** (Python
 API, CLI, and the standalone engine on macOS arm64, with source-level checks
@@ -66,9 +55,9 @@ pip install cactus-needle          # Python 3.9+; macOS, Linux, Windows
 - Telemetry is on by default. Disable before importing:
   `NEEDLE_TELEMETRY=0` and `DO_NOT_TRACK=1`.
 - **Multi-Python gotcha:** on machines with several Pythons (Homebrew vs
-  python.org vs system), the `neuralOS` CLI lives in the interpreter's bin dir
+  python.org vs system), the `needle` CLI lives in the interpreter's bin dir
   that `pip install`ed it. If `import needle` fails under `python3`, find the
-  right interpreter (`ls */bin/neuralOS`, `pip show cactus-needle`) — or see
+  right interpreter (`ls */bin/needle`, `pip show cactus-needle`) — or see
   the re-exec pattern in `references/troubleshooting.md`.
 
 ## Quick start (Python API)
@@ -101,7 +90,7 @@ patterns in `references/tool-design.md`.
    ...])`. Without them, tool selection is flaky — the model intermittently
    refuses a perfectly matching tool ("no connectivity or network tools
    available", often with high confidence).
-2. **Never make secrets tool arguments.** neuralOS's strict grounding blocks
+2. **Never make secrets tool arguments.** Needle's strict grounding blocks
    arguments it cannot verify against the input (`ungrounded password`), and
    secrets should not travel through an LLM anyway. Bake credentials into
    constants; let the model pick *what* to do, not recite keys.
@@ -162,7 +151,7 @@ Full details in `references/engine-binary.md`.
 
 | Symptom | Cause → fix |
 |---|---|
-| `ModuleNotFoundError: neuralOS` | Wrong interpreter → `references/troubleshooting.md` §1 |
+| `ModuleNotFoundError: needle` | Wrong interpreter → `references/troubleshooting.md` §1 |
 | Result says `ungrounded password`/`ungrounded <arg>` | Grounding blocked a secret/fabricated value → §2 |
 | Model fills nonsense (`host='mysql'`) | Unconstrained string arg → triggers + constraints → §3 |
 | Same tool called repeatedly until max_steps | Tool result too large fed back → digest+stash → §4 |

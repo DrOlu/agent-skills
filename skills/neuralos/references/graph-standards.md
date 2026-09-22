@@ -19,28 +19,41 @@ serve — out of scope for generated instances.
 ## Phase 1 — relationship discovery (PROFILE extension)
 
 Run `scripts/discover_relationships.py --profile profile.json --out
-graph_edges.json` after profiling. It emits edge declarations, each with a
-**provenance rule and confidence tier** — the single most important field:
+graph_edges.json` after profiling. **Discovery proposes; the runtime
+verifies.** The proposer only emits NAME-based candidates (same normalized
+keyish column across two tables, camelCase normalized); it never awards
+tiers — samples (5 values/column) are far too small to prove or disprove a
+join.
 
-| Tier | Rule | Meaning | Default handling |
+Tiers are awarded by `graph_bridge.py` over FULL record populations:
+
+| Tier | Rule (runtime-awarded) | Meaning | Handling |
 |---|---|---|---|
-| `exact_fk` | Value-verified overlap: column values in table A appear (within sample) in table B's key column | Proven relationship | Trust; surface in graph probes |
-| `candidate` | Shared column NAME only, value overlap unproven | Guessed link | Surface with `confidence: low`; flagged in digests |
-| `disjoint` | Columns share a name but values do not overlap at all | No join possible | **Must be reported, never silently dropped** |
+| `exact_fk` | >=5 shared values, and not a bare id<->id collision | Proven relationship | Trust; surface in graph probes |
+| `candidate` | 1-4 shared values, OR bare `id`<->`id` surrogate collision (never promotes) | Guessed/coincidental link | Labelled low-confidence in every digest |
+| `disjoint` | Shared name, ZERO overlap over FULL records | No join possible | **Must be reported, never silently dropped** |
 
 Rules:
 
-1. **Never fabricate an edge from a shared column name alone.** The
-   zinc-fraud corpus shipped an explicit "joins by account are impossible
-   (0 key overlap)" note — that honesty is the standard. Disjoint findings
-   are data-quality facts, quoted to the user.
-2. **Edge properties** (the provenance record): source/target table+column,
-   rule, confidence, sample-match count, cardinality estimate
-   (1:1 / 1:N / N:M), and a capped sample of matched key values.
-3. **Labels** derive from the table's enum-ish identity fields when present
+1. **Never fabricate an edge from a shared column name alone, and never from
+   overlapping small-integer ranges.** The zinc-fraud corpus shipped an
+   explicit "joins by account are impossible (0 key overlap)" note — that
+   honesty is the standard. Disjoint findings are data-quality facts, quoted
+   to the user.
+2. **Cross-column joins are DISCOVERED at runtime** over full populations
+   with two guardrails: tight containment (a child column's values >=80%
+   contained in the parent's) and tight domain fit (parent domain <=3x the
+   child's), plus a semantic guard (the child column's base name must relate
+   to the parent TABLE, e.g. `scenario_id -> scenarios.id`). This is what
+   kills small-integer numeric collisions (`albumid -> invoiceid` never
+   passes). Schema-only FKs with unrelated names (SupportRepId ->
+   EmployeeId) remain a known, documented gap.
+3. **Edge properties** (the provenance record): source/target table+column,
+   matching rule, tier, containment, matched-pair count, capped sample keys.
+4. **Labels** derive from the table's enum-ish identity fields when present
    (`:Instance`, `:Zone`, `:Artist`, `:Scenario`), else the table name.
-4. **Dangling-reference detection**: rows in A referencing keys absent from
-   B are counted as `dangling` — a data-quality signal surfaced in
+5. **Dangling-reference detection**: values in A with no match in B are
+   counted as `dangling` — a data-quality signal surfaced in
    `graph_overview`, not an error.
 
 ## Phase 3 — the ≤3 graph probes (GENERATE contract)

@@ -13,6 +13,9 @@ Confidence tiers:
   candidate  shared column name only — a guess, always labelled low
   disjoint   shared name, zero value overlap — a data-quality fact
 
+Column names are normalized (camelCase -> snake) so FK names match across
+naming conventions (ArtistId == artist_id).
+
 Usage:
   python3 discover_relationships.py --profile profile.json --out graph_edges.json
 """
@@ -25,15 +28,30 @@ def snake(name):
     return re.sub(r"[^0-9a-zA-Z_]+", "_", name).strip("_").lower()
 
 
-def column_names(table):
-    cols = table.get("columns") or []
-    return [c["name"] for c in cols]
-
-
 def value_overlap(a_vals, b_vals):
-    """Return count of a-values found in b-values (capped lists)."""
+    """Return count of a-values found in b-values."""
     bset = {v for v in b_vals if v not in ("None", "none", "")}
     return sum(1 for v in a_vals if v in bset)
+
+
+def _keyish(n):
+    return (n.endswith("_id") or n.endswith("_key") or n.endswith("id") or
+            n.startswith("id") or
+            n in ("txn_id", "account_id", "name", "email", "hostname",
+                  "zone", "id"))
+
+
+def col_a_of(cols, n):
+    return cols.get(n, n)
+
+
+def sample_vals(table, col):
+    """Prefer column sample_values; fall back to scanning sample_records."""
+    for c in (table.get("columns") or []):
+        if c["name"] == col and c.get("sample_values"):
+            return [str(v) for v in c["sample_values"]]
+    return [str(r.get(col)) for r in (table.get("sample_records") or [])
+            if r.get(col) is not None]
 
 
 def main():
@@ -46,73 +64,46 @@ def main():
 
     profile = json.load(open(args.profile))
     tables = profile["source"]["tables"]
-    nodes, edges, disjoint = [], [], []
-
-    def col_map(t):
-        return {c["name"]: c for c in (t.get("columns") or [])}
+    nodes, edges = [], []
 
     for t in tables:
         nodes.append({"table": t["name"], "rows": t.get("db_row_count", 0),
                       "label_hint": t["name"].upper()})
 
+    def norm_cols(t):
+        """{normalized_name: original_name}."""
+        return {snake(c["name"]): c["name"] for c in (t.get("columns") or [])}
+
     for i, a in enumerate(tables):
-        ca = col_map(a)
         for b in tables[i + 1:]:
-            cb = col_map(b)
-            # only consider "key-like" shared names: ids, foreign keys, codes
-            for col in ca:
-                if col not in cb:
+            a_cols, b_cols = norm_cols(a), norm_cols(b)
+            for n in sorted(set(a_cols) & set(b_cols)):
+                if not _keyish(n):
                     continue
-                keyish = (col.endswith("_id") or col.endswith("_key") or
-                          col in ("txn_id", "account_id", "name", "email",
-                                  "hostname", "zone", "id") or
-                          col.startswith("id"))
-                if not keyish:
-                    continue
-                av = [str(v) for v in sample_vals(a, col)][:args.sample_cap]
-                bv = [str(v) for v in sample_vals(b, col)][:args.sample_cap]
-                if not av or not bv:
-                    continue
-                ov = value_overlap(av, bv)
-                ov_rev = value_overlap(bv, av)
-                if ov == 0 and ov_rev == 0:
-                    disjoint.append({
-                        "a": a["name"], "b": b["name"], "column": col,
-                        "note": "shared column name, zero sample value overlap — "
-                                "join NOT valid; surface as data-quality finding"})
-                    continue
-                best = max(ov, ov_rev)
-                denom = max(len(av), len(bv), 1)
-                # sample overlap is suggestive only; runtime confirms over full records
-                tier = "exact_fk" if best / denom >= 0.5 else "candidate"
+                col_a, col_b = a_cols[n], b_cols[n]
                 edges.append({
-                    "a": a["name"], "a_col": col, "b": b["name"], "b_col": col,
-                    "rule": "value_overlap_in_sample",
-                    "tier": tier,
-                    "sample_matches": best,
-                    "cardinality_hint": "N:M" if best > 1 else "1:N",
-                    "sample_keys": sorted(set(
-                        [v for v in av if v in set(bv)] +
-                        [v for v in bv if v in set(av)]))[:5]})
+                    "a": a["name"], "a_col": col_a, "b": b["name"], "b_col": col_b,
+                    "rule": ("surrogate_key_collision" if n == "id"
+                             else "same_name"),
+                    "tier": "proposed",
+                    "evidence": "same-name keyish column; runtime verifies over "
+                                "FULL records (exact_fk >=5 shared values, "
+                                "surrogate bare-id pairs never promote)",
+                    "cardinality_hint": "unknown",
+                    "surrogate_warning": ("both sides are bare 'id' keys — numeric "
+                                          "collision, NOT a foreign key") if n == "id"
+                                         else None})
 
     out = {"profiled_at": profile.get("profiled_at"),
-           "nodes": nodes, "edges": edges, "disjoint": disjoint,
+           "nodes": nodes, "edges": edges, "disjoint": [],
+           "note": "disjoint findings are runtime-computed over FULL records "
+                   "(samples are too small to prove disjointness); this file "
+                   "only PROPOSES edges — graph_bridge verifies",
            "standards": "references/graph-standards.md"}
     with open(args.out, "w") as fh:
         json.dump(out, fh, indent=1, default=str)
-    print(f"nodes={len(nodes)} edges={len(edges)} "
-          f"(exact_fk={sum(1 for e in edges if e.get('tier') == 'exact_fk')}, "
-          f"candidate={sum(1 for e in edges if e.get('tier') == 'candidate')}) "
-          f"disjoint={len(disjoint)}")
-
-
-def sample_vals(table, col):
-    """Prefer column sample_values; fall back to scanning sample_records."""
-    for c in (table.get("columns") or []):
-        if c["name"] == col and c.get("sample_values"):
-            return [str(v) for v in c["sample_values"]]
-    return [str(r.get(col)) for r in (table.get("sample_records") or [])
-            if r.get(col) is not None]
+    print("nodes=%d edges=%d (all proposed; runtime verifies) disjoint=runtime" % (
+        len(nodes), len(edges)))
 
 
 if __name__ == "__main__":

@@ -1,3 +1,7 @@
 # runtime drill/hunt case artifacts (path.json, trajectory.jsonl, …) —
 # evidence output, not skill code
 skills/*/scripts/cases/
+
+# compiled bytecode caches
+__pycache__/
+*.pyc

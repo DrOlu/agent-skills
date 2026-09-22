@@ -37,6 +37,21 @@ extension.
 - Python runtime: `instance.py` defines the same menu as `@needle.tool`
   functions (triggers included) so the agentic loop can execute probes itself;
   `response["results"]` is the success signal.
+- **The decorator does not self-register.** Every probe must be passed to the
+  agent — keep a `TOOLS` list and `TOOLS.append(<name>)` immediately after
+  each `def`. A probe missing from the list is invisible to the agent: the
+  script runs, the probe unit-tests fine, and selection silently fails. This
+  wiring trap has fired three times in live builds — check the append before
+  debugging anything else.
+- **Deterministic agent posture** (verified on the chinook/soc instances):
+  fixed `system=` facts + `auto_date=False` (the drifting date fact flips
+  121M selection between runs), and `max_steps=1` for self-contained probes
+  (default 8 invites a correct call plus a bonus unrelated call).
+- **More than ~12 probes → use the tool index**
+  (`tool_index_path=".tool_index.json"` / engine `--tool-index`). In-context
+  tool sets misroute past that size (observed 0/14 at 25 tools in context;
+  14/14 behind an index). After editing triggers or descriptions, discard the
+  stale `.tool_index.json` so it rebuilds.
 - Engine runtime: `needle_menu.json` feeds the standalone binary; the engine
   selects, the bridge executes. Selection is deterministic across runs.
 

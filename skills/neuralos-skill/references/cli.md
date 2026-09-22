@@ -85,7 +85,7 @@ needle build [--lora adapter.safetensors] [--layers N] [--out tuned.cact]
 
 ```
 pip install "cactus-needle[train]"          # pulls the training stack
-neuralOS generate-data --out data.jsonl ...   # synthesise training data via OpenRouter
+needle generate-data --out data.jsonl ...     # synthesise training data via OpenRouter
 needle finetune data.jsonl --epochs 10 --out adapter.safetensors [--layers N]
 needle build --lora adapter.safetensors --layers 8 --out tuned.cact
 ```

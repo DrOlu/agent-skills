@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Universal data profiler for the neuralos-data skill.
+"""Universal data profiler for the neuralos skill.
 
 Profiles ANY data source and emits a machine-readable profile.json that the
 generator scripts (gen_pydantic.py, gen_needle_instance.py) turn into strict
@@ -108,7 +108,10 @@ def profile_field(name, values):
     elif detected == "string":
         lens = [len(s) for s in strs]
         field["min_len"], field["max_len"] = min(lens), max(lens)
-    if (detected in ("string", "datetime") and field["distinct"] <= ENUM_THRESHOLD
+    # Only STRINGS become enum candidates. Datetime columns with few distinct
+    # values must stay datetime (a Literal of observed dates breaks on the
+    # next day's data — hit live on chinook).
+    if (detected == "string" and field["distinct"] <= ENUM_THRESHOLD
             and field["distinct"] < len(nonnull)):
         field["enum_values"] = sorted(set(strs))
         field["python_type"] = "Literal"
@@ -337,7 +340,7 @@ def _usql(dsn, sql):
     return list(csv.DictReader(io.StringIO("\n".join(lines))))
 
 
-def profile_database(dsn, table, sample, profile):
+def profile_database(dsn, table, sample, profile, max_tables=32):
     if dsn.startswith("sqlite"):
         return profile_sqlite(dsn, table, sample, profile)
     if table:
@@ -348,8 +351,14 @@ def profile_database(dsn, table, sample, profile):
                  "WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME;")]
     if not tables:
         raise SystemExit("no tables found")
+    if len(tables) > max_tables:
+        dropped = tables[max_tables:]
+        note(profile, f"{len(tables)} tables found; profiling only the first "
+             f"{max_tables}. Not profiled: {', '.join(dropped[:10])}"
+             + (" ..." if len(dropped) > 10 else ""))
+        tables = tables[:max_tables]
     profile["source"].update({"kind": "database", "tables": []})
-    for t in tables[:8]:
+    for t in tables:
         cols = _usql(dsn,
                      "SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE "
                      "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
@@ -369,6 +378,18 @@ def profile_database(dsn, table, sample, profile):
             f = profile_field(n, values[n])
             f["db_type"] = meta.get("COLUMN_TYPE") or meta.get("DATA_TYPE")
             f["db_nullable"] = meta.get("IS_NULLABLE") == "YES"
+            # A DB-declared ENUM is the authoritative, complete vocabulary —
+            # replace any sample-derived candidates with it (sample enums
+            # silently reject legal values that never appeared in the sample).
+            m = re.match(r"^enum\((.*)\)$", f["db_type"] or "", re.S)
+            if m:
+                vals = [v.replace("\\'", "'").replace('""', '"')
+                        for v in re.findall(r"'((?:[^'\\]|\\.)*)'", m.group(1))]
+                if vals:
+                    f["enum_values"] = vals
+                    f["enum_source"] = "database ENUM declaration"
+                    f["distinct"] = len(vals)
+                    f["python_type"] = "Literal"
             if f["db_nullable"] and not f["nullable"]:
                 f["python_type"] = "Optional[" + f["python_type"].replace("Optional[", "").replace("]", "") + "]"
             tprofile["columns"].append(f)
@@ -410,6 +431,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--source", required=True, help="file path, DSN, or https URL")
     ap.add_argument("--table", help="database table to profile (default: all/first)")
+    ap.add_argument("--max-tables", type=int, default=32,
+                    help="max tables profiled per database (default 32; dropped "
+                         "tables are listed in profile notes)")
     ap.add_argument("--sample", type=int, default=50, help="rows/values sampled (default 50)")
     ap.add_argument("--max-lines", type=int, default=5000, help="log lines scanned (default 5000)")
     ap.add_argument("--out", default="profile.json", help="output profile path")
@@ -420,25 +444,76 @@ def main():
     src = args.source
 
     if "://" in src and not src.startswith(("http://", "https://")):
-        profile_database(src, args.table, args.sample, profile)
+        profile_database(src, args.table, args.sample, profile,
+                         max_tables=args.max_tables)
         finalize(profile, args.out)
     elif src.startswith("http"):
         import urllib.request
-        raw = urllib.request.urlopen(src, timeout=60).read(4 * 1024 * 1024)
-        tmp = "/tmp/neuralos_data_fetch"
+        req = urllib.request.Request(src, headers={"User-Agent": "neuralos-profiler/1.0"})
+        raw = urllib.request.urlopen(req, timeout=60).read(4 * 1024 * 1024)
+        tmp = f"/tmp/neuralos_data_fetch_{os.getpid()}"
         open(tmp, "wb").write(raw)
         return main_for_path(tmp, sample=args.sample, profile=profile, out=args.out,
-                             fetch_note=f"fetched from {src}")
+                             fetch_note=f"fetched from {src}", sniff=True)
     else:
         if not os.path.exists(src):
             raise SystemExit(f"no such file: {src}")
-        main_for_path(src, sample=args.sample, profile=profile, out=args.out)
+        main_for_path(src, sample=args.sample, profile=profile, out=args.out,
+                      sniff=not os.path.splitext(src)[1])
 
 
-def main_for_path(src, sample, profile, out, fetch_note=None):
+def sniff_content(src):
+    """Classify a file by its content: 'json' | 'jsonl' | 'delimited' | 'log' | None."""
+    try:
+        text = open(src, "r", encoding="utf-8", errors="replace").read(256 * 1024)
+    except OSError:
+        return None
+    stripped = text.lstrip()
+    if stripped.startswith(("{", "[")):
+        try:
+            json.loads(text)
+            return "json"
+        except json.JSONDecodeError:
+            first = stripped.splitlines()[0] if stripped else ""
+            try:
+                json.loads(first)
+                return "jsonl"
+            except json.JSONDecodeError:
+                return None
+    lines = [l for l in text.splitlines() if l.strip()]
+    if not lines:
+        return None
+    if looks_like_log(src):
+        return "log"
+    try:
+        csv.Sniffer().sniff("\n".join(lines[:20]), delimiters=",;\t|")
+        return "delimited"
+    except csv.Error:
+        return None
+
+
+def main_for_path(src, sample, profile, out, fetch_note=None, sniff=False):
     ext = os.path.splitext(src)[1].lower()
     if fetch_note:
         note(profile, fetch_note)
+    if sniff:
+        kind = sniff_content(src)
+        if kind == "json":
+            note(profile, "content-sniffed as JSON")
+            ext = ".json"
+        elif kind == "jsonl":
+            note(profile, "content-sniffed as JSON lines")
+            ext = ".jsonl"
+        elif kind == "delimited":
+            note(profile, "content-sniffed as delimited text")
+            ext = ".csv"
+        elif kind == "log":
+            note(profile, "content-sniffed as log lines")
+            ext = ".log"
+        elif ext not in (".csv", ".tsv", ".txt", ".json", ".jsonl", ".ndjson",
+                         ".db", ".sqlite", ".sqlite3", ".xlsx", ".log", ".out"):
+            raise SystemExit(f"unrecognized source type for {src}; "
+                             "rename with a known extension or convert first")
     if ext in (".csv", ".tsv") or (ext == ".txt" and not looks_like_log(src)):
         profile_delimited(src, sample, profile)
     elif ext in (".jsonl", ".ndjson"):

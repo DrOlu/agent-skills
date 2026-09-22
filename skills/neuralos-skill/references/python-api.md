@@ -1,8 +1,9 @@
 # neuralOS Python API
 
-Verified against cactus-needle 3.0.2. Import surface: `neuralOS` exports
-`neuralOS`, `tool`, `Field`, `extract`, `ExtractionValidationError`,
-`__version__`.
+Verified against cactus-needle 3.0.2. Import surface: the `needle` package
+exports `Needle`, `tool`, `Field`, `extract`, `ExtractionValidationError`,
+`__version__`. (There is no `neuralOS` module — that is the product name only;
+`import neuralOS` is always a `ModuleNotFoundError`.)
 
 ## Table of contents
 
@@ -25,6 +26,14 @@ def list_databases() -> dict:
     """One-line description of the action, phrased as a user would say it."""
     return {"databases": [...]}
 ```
+
+**The decorator does NOT self-register.** A decorated function is inert until
+you pass it to the agent — `needle.Needle(tools=[list_databases])` (or append
+it to a `TOOLS` list you hand over). This is the single most common wiring
+mistake: the script imports cleanly, the probe works when called directly, and
+the agent simply never sees it. In generated or hand-written instance files,
+append each tool to `TOOLS` immediately after its `def` —
+`TOOLS.append(list_databases)`.
 
 - The decorator inspects the signature for types and the docstring for the
   description. An `Args:` section documents parameters (Google-style):
@@ -51,7 +60,7 @@ def top_customers(limit: int = 10) -> dict:
 ## 2. The neuralOS agent
 
 ```python
-agent = needle.Needle(tools=[tool_a, tool_b])   # or with . tools="..." raw JSON
+agent = needle.Needle(tools=[tool_a, tool_b])   # or tools="… raw JSON string"
 response = agent.run("what's it like in Lagos right now?")
 ```
 

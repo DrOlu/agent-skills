@@ -24,9 +24,13 @@
   enum argument covering only values observed in the data.
 
 ## Limits and gotchas
-- Only the first 8 tables are generated; pass --table / re-run for the rest.
+- Databases are profiled up to `--max-tables` tables (default 32); dropped
+  tables are named in the profile notes — pass --table / re-run for any of
+  them before claiming full coverage.
 - Column stats come from the sample (say it); full-table aggregates come from
   the summary probe (exact).
+- DB-declared ENUM columns are modeled from the DDL's complete value list,
+  not the sample.
 - Backtick-quoted identifiers everywhere; identifiers are whitelisted, values
   are enum-constrained — the two injection surfaces are closed.
 - Views appear in information_schema like tables; profiling them is fine, but

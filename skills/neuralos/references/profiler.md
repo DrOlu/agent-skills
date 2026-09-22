@@ -23,17 +23,27 @@ regex (log captures), db_type/db_nullable (databases)`.
 
 ## Type inference order (delimited/JSON values)
 
-int → number → boolean → datetime → string; strings with ≤12 distinct values
-are additionally flagged `enum_values`. Datetime detection tries the formats
-listed in `DT_FORMATS` (ISO with/without tz, slash-dates, `%d-%b-%Y`, syslog
-`%b %d %H:%M:%S`).
+int → number → boolean → datetime → string; **strings** with ≤12 distinct
+values are additionally flagged `enum_values` (datetimes never are — a
+Literal of observed timestamps breaks on the next day's data). Datetime
+detection tries the formats listed in `DT_FORMATS` (ISO with/without tz,
+slash-dates, `%d-%b-%Y`, syslog `%b %d %H:%M:%S`). For database sources, a
+DB-declared `ENUM(...)` in `COLUMN_TYPE` replaces any sample-derived
+candidates with the full declared value list (marked
+`enum_source: "database ENUM declaration"`).
 
 ## Honest limits (say these out loud when reporting)
 
 - Database stats come from the **sampled rows**, not a full scan; only the row
   count is exact. Aggregates generated later (min/max/avg probes) query the
   full table, so verification can catch sample/full-table drift.
+- Databases with more than `--max-tables` tables (default 32) are truncated:
+  the dropped table names are listed in the profile `notes` — read them
+  before claiming full coverage.
 - The 4 MB read window on delimited/JSON files caps very large flat files.
+- Fetched URLs (`--source https://…`) are content-sniffed (JSON → JSONL →
+  delimited → log); a body that matches none of those fails loudly instead of
+  being mis-profiled.
 - Log template synthesis is a simplified Drain-style approach: lines are
   grouped by token count, constant positions become literals, variable
   positions get shape-based named captures. Templates matching < 70% of their

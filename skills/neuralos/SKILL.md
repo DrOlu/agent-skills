@@ -48,8 +48,12 @@ python scripts/profile_data.py --source <SOURCE> [--table NAME] [--sample 50] --
 The profiler detects the source kind automatically, samples real records, and
 emits `profile.json`: per-field names, inferred Python types, nullability,
 min/max, length bounds, distinct counts, enum candidates, sample values, and —
-for log sources — synthesized line templates with capture regexes. See
-`references/profiler.md` for exactly what it measures and its limits.
+for log sources — synthesized line templates with capture regexes. Database
+declarations win over samples: a DB-declared `ENUM(...)` is captured
+complete, and only strings become enum candidates (datetimes never do).
+Databases wider than `--max-tables` (default 32) note their dropped tables
+in the profile. See `references/profiler.md` for exactly what it measures
+and its limits.
 
 **Then run relationship discovery** (see `references/graph-standards.md`):
 
@@ -78,8 +82,11 @@ Emits strict Pydantic v2 models: inferred types with `Field` constraints
 (`ge/le` from observed min/max, `pattern` from log templates, `Literal`/`Enum`
 from low-cardinality strings), `Optional` where nulls occur, datetime fields
 with multi-format parsing validators, `extra="forbid"`, and a description per
-field carrying its observed statistics. Standards and the type-mapping table:
-`references/pydantic-standards.md`.
+field carrying its observed statistics. Every field whose source key differs
+from its Python name gets `Field(alias="<source key>")` plus
+`populate_by_name=True` — rows arrive keyed by the source's own names, and
+without the alias the model rejects them all. Standards and the type-mapping
+table: `references/pydantic-standards.md`.
 
 **Edit the generated model if the data's meaning demands it** — the generator
 knows types and ranges, but only you and the user know that `status_code = 2`

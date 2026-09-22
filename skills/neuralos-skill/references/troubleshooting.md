@@ -21,16 +21,17 @@ unless marked otherwise. Symptoms link back to the rules in
 
 ## §1 ModuleNotFoundError: neuralOS
 
-Multi-Python machines (Homebrew + python.org + system) install `neuralOS` into
-one interpreter only. Symptoms: `import needle` fails under `python3`; the
-`neuralOS` CLI exists but plain `python3 script.py` cannot import it.
+Multi-Python machines (Homebrew + python.org + system) install the `needle`
+package into one interpreter only. Symptoms: `import needle` fails under
+`python3` (`ModuleNotFoundError: No module named 'needle'`); the `needle` CLI
+exists in one bin dir but plain `python3 script.py` cannot import it.
 
 Fix — find the owning interpreter and use it:
 
 ```bash
 # which interpreter has it?
 pip show cactus-needle            # Location: .../site-packages
-ls /Library/Frameworks/Python.framework/Versions/*/bin/neuralOS 2>/dev/null
+ls /Library/Frameworks/Python.framework/Versions/*/bin/needle 2>/dev/null
 ```
 
 Or make the script self-healing — re-exec into the right interpreter before

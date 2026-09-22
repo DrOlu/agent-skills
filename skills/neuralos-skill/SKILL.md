@@ -70,9 +70,9 @@ pip install cactus-needle          # Python 3.9+; macOS, Linux, Windows
 - Telemetry is on by default. Disable before importing:
   `NEEDLE_TELEMETRY=0` and `DO_NOT_TRACK=1`.
 - **Multi-Python gotcha:** on machines with several Pythons (Homebrew vs
-  python.org vs system), the `neuralOS` CLI lives in the interpreter's bin dir
+  python.org vs system), the `needle` CLI lives in the interpreter's bin dir
   that `pip install`ed it. If `import needle` fails under `python3`, find the
-  right interpreter (`ls */bin/neuralOS`, `pip show cactus-needle`) — or see
+  right interpreter (`ls */bin/needle`, `pip show cactus-needle`) — or see
   the re-exec pattern in `references/troubleshooting.md`.
 
 ## Quick start (Python API)

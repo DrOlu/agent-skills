@@ -15,6 +15,9 @@ failure mode.
 6. Compound asks: two max
 7. Wrapping OS CLIs as tools (subprocess pattern)
 8. Grounding — what the model may put in an argument
+9. Argument NAMES steer grounding
+10. Many tools? (the index threshold)
+11. Chaining neuralOS behind another model
 
 ## 1. One tool per action, named as users say it
 
@@ -188,13 +191,23 @@ General rule: when a probe keeps filling an argument with a *related but
 wrong* value, rename the argument or constrain it — do not just rephrase the
 request.
 
-## 10. Many tools?
+## 10. Many tools? (the index threshold)
 
-Up to roughly a handful of tools, pass them all. Beyond that, build a tool
-index — the engine binary's `--tool-index` and the Python API's
+Up to ~12 tools with disjoint triggers, pass them all in context. Past that,
+selection degrades non-linearly (observed live: 25 tools in-context scored
+0/14 on selection; the same menu behind an embedding index scored 14/14).
+Build a tool index — the engine binary's `--tool-index` and the Python API's
 `tool_index_path` embed the tool set once and retrieve the relevant subset
-per request. Selection accuracy on 6 tools with disjoint triggers was
-flawless in testing; do not assume the same at 60 without an index.
+per request. Two index traps, both observed live:
+
+- **Stale index:** the index is reused when the schemas match — but trigger
+  and description edits do not always change what it hashes. After editing
+  triggers or descriptions, move the old `.tool_index.json` aside so it is
+  rebuilt on the next run.
+- **Sibling vocabulary still competes under the index:** embedding retrieval
+  ranks by similarity, so five probes all described with "scenario / host /
+  account" steal each other's questions even with an index. De-sibling is the
+  fix — see §11.
 
 
 ## 11. Chaining neuralOS behind another model

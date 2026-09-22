@@ -155,3 +155,39 @@ than being guessed.
 - `proc_spawns` (4688) needs Process Creation auditing on the target. If it shows 0, check `auditpol /get /subcategory:"Process Creation"`.
 - `system_outbound_conn` needs the Sysmon NetworkConnect ring enabled (`<NetworkConnect onmatch="exclude">`). The point-in-time `edges` snapshot misses a sub-second connection that already closed; the Sysmon ring persists it. If it shows 0, confirm Sysmon's NetworkConnect config is on.
 - The drill runs as Administrator over WinRM, so the staged "failed Administrator logon" events are real 4625s for the local Administrator account.
+
+## The two sides, separately
+
+The drill is a **purple-team** loop by default, but the red side and the blue
+side can now be run independently:
+
+```bash
+# RED SIDE ONLY — stage the attack, leave it live, test ANYTHING against it
+# (rmagent, CrowdStrike, Defender, a SIEM query you are writing — the drill
+#  does not care who does the detecting)
+python3 redteam.py stage --inventory estate.yaml --confirm
+
+# ...hours or days later...
+
+# BLUE SIDE ONLY — score rmagent against whatever is STILL on the boxes.
+# Read-only: stages nothing, cleans nothing, needs no --confirm.
+python3 redteam.py detect --inventory estate.yaml
+
+# Clean up whenever you are done
+python3 redteam.py clean --inventory estate.yaml
+```
+
+`detect` is honest about what it scores: before running the hunt it verifies
+(read-only, via `verify.ps1`) which `RMAgentDrill_*` artifacts are actually
+present, and only counts those. A half-cleaned or never-staged artifact can
+never be reported as a detection miss. If nothing is present it says so and
+refuses to run a meaningless test.
+
+This closes the gap the welded `run` loop had: you could always test another
+detection system against staged artifacts, but you could not measure
+rmagent's detection against a scenario that was staged earlier, or that you
+arranged yourself. `detect` also enables **delayed detection testing** —
+stage today, detect tomorrow, to answer "would we have caught this attack
+while it sat on the box overnight?"
+
+`--keep` leaves artifacts staged after a `run` (clean later with `clean`).

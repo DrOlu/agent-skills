@@ -1,0 +1,52 @@
+{
+  "skill": "pslogs",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-09-01T00:26:01.5805125Z",
+  "since": "2026-08-31T23:26:01.4380335+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "blocks": [
+    {
+      "t": "2026-09-01T00:25:57.3703549+00:00",
+      "path": null,
+      "msg": "{ $cl=(F $_ 'CommandLine'); if($cl -and $cl.Length -gt 200){$cl=$cl.Substring(0,200)}; [pscustomobject]@{t=$_.TimeCreated.ToString('o');u=$_.Properties[1].Value;p=$_.Properties[5].Value;c=$cl} }"
+    },
+    {
+      "t": "2026-09-01T00:25:57.3686635+00:00",
+      "path": null,
+      "msg": "{MT $_ -and $_.Properties[5].Value -match $LOL}"
+    },
+    {
+      "t": "2026-09-01T00:25:57.2223670+00:00",
+      "path": null,
+      "msg": "{ [pscustomobject]@{t=$_.TimeCreated.ToString('o');u=$_.Properties[1].Value;p=$_.Properties[5].Value} }"
+    },
+    {
+      "t": "2026-09-01T00:25:56.8479591+00:00",
+      "path": null,
+      "msg": "$ErrorActionPreference='SilentlyContinue'\n$Track = @('Administrator','SYSTEM')\n$SinceHours = 1.0\n$Limit = 3\nfunction MT($e){ foreach($v in $e.Properties.Value){ if($Track -contains $v){return $true} }; return $false }\nfunction F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode(\"//e:Data[@Name='$n']\",$m);if($o){$o.'#text'}}\nfunction E($ids,$log){\n  try{ @(Get-Win"
+    },
+    {
+      "t": "2026-09-01T00:25:15.6307083+00:00",
+      "path": "C:\\Monitoring\\Scripts\\MonitoringFramework.psm1",
+      "msg": "{\n            [PSCustomObject]@{\n                TimeCreated = $_.TimeCreated\n                UserName = $_.Properties[5].Value\n                Domain = $_.Properties[6].Value\n                WorkstationName = $_.Properties[13].Value\n                SourceIP = $_.Properties[19].Value\n                FailureReason = $_.Properties[8].Value\n            }\n        }"
+    },
+    {
+      "t": "2026-09-01T00:25:15.1151630+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'ROOT/StandardCimv2/MSFT_NetUDPSetting'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Func"
+    },
+    {
+      "t": "2026-09-01T00:25:15.1042356+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'ROOT/StandardCimv2/MSFT_NetUDPEndpoint'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Fun"
+    },
+    {
+      "t": "2026-09-01T00:25:15.0940667+00:00",
+      "path": null,
+      "msg": "mdletization_exceptionHasBeenThrown = $true\n            throw\n        }\n    }\n        \n\n    Process {\n        try \n        {\n            if (-not $__cmdletization_exceptionHasBeenThrown)\n            {\n    $__cmdletization_queryBuilder = $__cmdletization_objectModelWrapper.GetQueryBuilder()\n    if ($PSBoundParameters.ContainsKey('SettingName') -and (@('ByName') -contains $PSCmdlet.ParameterSetName )) {\n        $__cmdletization_values = @(${SettingName})\n        $__cmdletization_queryBuilder.Filte"
+    }
+  ]
+}

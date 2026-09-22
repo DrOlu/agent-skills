@@ -1,0 +1,79 @@
+{
+  "skill": "edges",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-09-01T16:22:47.2647600Z",
+  "since": "2026-09-01T15:22:46.2602318+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "logons": [
+    {
+      "t": "2026-09-01T16:22:42.4687954+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x2a47041",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:22:34.1029908+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x2a41bec",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:22:27.7809058+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x2a3c78c",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:22:10.2379033+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x2a1bcd9",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:21:32.1523202+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x2a12ed5",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:20:27.7017098+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x2a067dc",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:19:29.4615431+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x29fa77f",
+      "auth": "NTLM"
+    },
+    {
+      "t": "2026-09-01T16:18:31.4514067+00:00",
+      "user": "Administrator",
+      "type": "3",
+      "src": "102.88.110.23",
+      "lid": "0x29ee3c5",
+      "auth": "NTLM"
+    }
+  ],
+  "explicit_creds": [],
+  "special_privs": [],
+  "conns": []
+}

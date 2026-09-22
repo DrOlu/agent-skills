@@ -1,0 +1,12 @@
+{
+  "skill": "netedges",
+  "host": "EC2AMAZ-C69VULQ",
+  "utc": "2026-09-01T16:17:04.7890799Z",
+  "since": "2026-09-01T15:17:04.2578131+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "conns": [],
+  "dns_queries": []
+}

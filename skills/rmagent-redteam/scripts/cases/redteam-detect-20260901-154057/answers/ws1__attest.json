@@ -1,0 +1,26 @@
+{
+  "skill": "attest",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-09-01T14:41:24.5464442Z",
+  "alive": true,
+  "last_boot": "2026-09-01T00:12:04.5000000+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "admin_failed_60s": 2,
+  "admin_ok_5min": 12,
+  "local_admin_count": 4,
+  "system_remote_conns": 0,
+  "sysmon_status": "Sysmon64=Running",
+  "raw_4624_24h": 329,
+  "blind_check": {
+    "Logoff": "ok",
+    "Other Logon/Logoff Events": "ok",
+    "Special Logon": "ok",
+    "Logon": "ok",
+    "Group Membership": "ok",
+    "Account Lockout": "ok"
+  },
+  "blind_count": 0
+}

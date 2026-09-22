@@ -1,0 +1,288 @@
+{
+  "skill": "explain",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-09-01T16:16:03.9259719Z",
+  "since": "2026-09-01T15:16:03.0776434+00:00",
+  "window_hours": 1,
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "identity_changes": [
+    {
+      "t": "2026-09-01T16:16:02.1666261+00:00",
+      "id": 4672,
+      "m": "Special privileges assigned to new logon.\r"
+    },
+    {
+      "t": "2026-09-01T16:15:58.4510956+00:00",
+      "id": 4672,
+      "m": "Special privileges assigned to new logon.\r"
+    },
+    {
+      "t": "2026-09-01T16:15:47.7711707+00:00",
+      "id": 4672,
+      "m": "Special privileges assigned to new logon.\r"
+    }
+  ],
+  "service_events": [
+    {
+      "t": "2026-09-01T16:15:25.6782596+00:00",
+      "id": 7045,
+      "m": "A service was installed in the system.\r"
+    },
+    {
+      "t": "2026-09-01T16:15:11.7490878+00:00",
+      "id": 7036,
+      "m": "The Microsoft Account Sign-in Assistant service entered the stopped state."
+    },
+    {
+      "t": "2026-09-01T16:14:13.0582345+00:00",
+      "id": 7036,
+      "m": "The Windows Modules Installer service entered the stopped state."
+    }
+  ],
+  "task_events": [
+    {
+      "t": "2026-09-01T16:15:25.6612924+00:00",
+      "id": 4698,
+      "m": "A scheduled task was created.\r"
+    },
+    {
+      "t": "2026-09-01T16:12:12.3449781+00:00",
+      "id": 4702,
+      "m": "A scheduled task was updated.\r"
+    },
+    {
+      "t": "2026-09-01T16:12:12.3400780+00:00",
+      "id": 4702,
+      "m": "A scheduled task was updated.\r"
+    }
+  ],
+  "wmi_subscriptions": [],
+  "audit_cleared": [],
+  "proc_spawns": [
+    {
+      "t": "2026-09-01T16:16:02.4996844+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe"
+    },
+    {
+      "t": "2026-09-01T16:16:02.4940739+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:59.0884904+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:59.0780607+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\cmd.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:58.8021427+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:58.7966496+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:51.4029296+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\auditpol.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:48.4360673+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:48.4262238+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\cmd.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:48.1273395+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:48.1217386+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:45.2344610+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\auditpol.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:42.2927243+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:42.2829971+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\cmd.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:42.0063622+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:42.0006743+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:27.1454960+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\schtasks.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:27.1196871+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\net1.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:27.1097685+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\net.exe"
+    },
+    {
+      "t": "2026-09-01T16:15:26.1962664+00:00",
+      "u": "Administrator",
+      "p": "C:\\Python314\\python.exe"
+    }
+  ],
+  "lolbin_spawns": [
+    {
+      "t": "2026-09-01T16:16:02.4996844+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe",
+      "c": "\\??\\C:\\Windows\\system32\\conhost.exe 0xffffffff -ForceV1"
+    },
+    {
+      "t": "2026-09-01T16:16:02.4940739+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe",
+      "c": "C:\\Windows\\system32\\WinrsHost.exe -Embedding"
+    },
+    {
+      "t": "2026-09-01T16:15:59.0884904+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "c": "powershell  -encodedcommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAnAAoAJABUAHIAYQBjAGsAIAA9ACAAQAAoACcAQQBkAG0AaQBuAGkAcwB0AHIAYQB0"
+    },
+    {
+      "t": "2026-09-01T16:15:59.0780607+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\cmd.exe",
+      "c": "C:\\Windows\\system32\\cmd.exe /C powershell -encodedcommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAnAAoAJABUAHIAYQBjAGsAIAA9ACAAQAAoAC"
+    },
+    {
+      "t": "2026-09-01T16:15:58.8021427+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe",
+      "c": "\\??\\C:\\Windows\\system32\\conhost.exe 0xffffffff -ForceV1"
+    },
+    {
+      "t": "2026-09-01T16:15:58.7966496+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe",
+      "c": "C:\\Windows\\system32\\WinrsHost.exe -Embedding"
+    },
+    {
+      "t": "2026-09-01T16:15:51.4029296+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\auditpol.exe",
+      "c": "\"C:\\Windows\\system32\\auditpol.exe\" /get /category:* /r"
+    },
+    {
+      "t": "2026-09-01T16:15:48.4360673+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "c": "powershell  -encodedcommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAnAAoAJABUAHIAYQBjAGsAIAA9ACAAQAAoACcAQQBkAG0AaQBuAGkAcwB0AHIAYQB0"
+    },
+    {
+      "t": "2026-09-01T16:15:48.4262238+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\cmd.exe",
+      "c": "C:\\Windows\\system32\\cmd.exe /C powershell -encodedcommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAnAAoAJABUAHIAYQBjAGsAIAA9ACAAQAAoAC"
+    },
+    {
+      "t": "2026-09-01T16:15:48.1273395+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe",
+      "c": "\\??\\C:\\Windows\\system32\\conhost.exe 0xffffffff -ForceV1"
+    },
+    {
+      "t": "2026-09-01T16:15:48.1217386+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe",
+      "c": "C:\\Windows\\system32\\WinrsHost.exe -Embedding"
+    },
+    {
+      "t": "2026-09-01T16:15:45.2344610+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\auditpol.exe",
+      "c": "\"C:\\Windows\\system32\\auditpol.exe\" /get /category:* /r"
+    },
+    {
+      "t": "2026-09-01T16:15:42.2927243+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "c": "powershell  -encodedcommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAnAAoAJABUAHIAYQBjAGsAIAA9ACAAQAAoACcAQQBkAG0AaQBuAGkAcwB0AHIAYQB0"
+    },
+    {
+      "t": "2026-09-01T16:15:42.2829971+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\cmd.exe",
+      "c": "C:\\Windows\\system32\\cmd.exe /C powershell -encodedcommand JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAnAAoAJABUAHIAYQBjAGsAIAA9ACAAQAAoAC"
+    },
+    {
+      "t": "2026-09-01T16:15:42.0063622+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\conhost.exe",
+      "c": "\\??\\C:\\Windows\\system32\\conhost.exe 0xffffffff -ForceV1"
+    },
+    {
+      "t": "2026-09-01T16:15:42.0006743+00:00",
+      "u": "EC2AMAZ-8NK9FUP$",
+      "p": "C:\\Windows\\System32\\winrshost.exe",
+      "c": "C:\\Windows\\system32\\WinrsHost.exe -Embedding"
+    },
+    {
+      "t": "2026-09-01T16:15:27.1454960+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\schtasks.exe",
+      "c": "\"C:\\Windows\\system32\\schtasks.exe\" /query /tn RMAgentDrill_Task"
+    },
+    {
+      "t": "2026-09-01T16:15:27.1196871+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\net1.exe",
+      "c": "C:\\Windows\\system32\\net1 user RMAgentDrill_Test"
+    },
+    {
+      "t": "2026-09-01T16:15:27.1097685+00:00",
+      "u": "Administrator",
+      "p": "C:\\Windows\\System32\\net.exe",
+      "c": "\"C:\\Windows\\System32\\net.exe\" user RMAgentDrill_Test"
+    },
+    {
+      "t": "2026-09-01T16:15:26.1962664+00:00",
+      "u": "Administrator",
+      "p": "C:\\Python314\\python.exe",
+      "c": "C:\\Python314\\python.exe \"C:\\Python314\\Scripts\\net.py\" localgroup administrators"
+    }
+  ]
+}

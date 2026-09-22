@@ -328,3 +328,22 @@ Skill directory: ~/.agents/skills/rmagent-actuate
 - scripts/actions/windows/*.ps1 — one payload per action (block_ip, disable_user, ...)
 - examples/live-bruteforce-response.md — the WS1 IP block, end to end
 - SAFETY.md — the full safety case for this skill
+
+### The two enterprise additions (Rev 15)
+
+**`rotate_credential` — containment was not remediation.** `disable_user`
+breaks the account *and the human*. Rotation breaks the **attacker's copy**
+of the credential while keeping the account usable. A random password is
+generated on the host, set, and returned **once** in the answer so the
+operator can hand it to the account owner. It is never written to the
+journal. The journal records only the previous/new `PasswordLastSet` times
+so the change is verifiable without ever storing the secret.
+
+**`isolate_host` — stop lateral movement without powering off.**
+`quarantine_file` stops one binary; a live implant keeps running. Isolation
+blocks inbound on all three firewall profiles while **keeping WinRM
+5985/5986 open** — so the operator can still reach the box to collect
+evidence and to run the undo. Evidence is preserved; the box stops
+participating in the kill chain. The undo removes the rules but deliberately
+does **not** re-disable previously-off profiles (blindly turning a firewall
+back off would be worse than leaving it on).

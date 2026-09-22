@@ -1,0 +1,106 @@
+[
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "edges",
+    "logons": 8,
+    "explicit_creds": 0,
+    "special_privs": 0,
+    "conns": 0,
+    "t": "2026-09-01T14:41:41.9164920Z"
+  },
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "explain",
+    "group_changes": 3,
+    "service_events": 3,
+    "task_events": 3,
+    "wmi_subscriptions": 0,
+    "audit_cleared": 0,
+    "proc_spawns": 20,
+    "lolbin_spawns": 20,
+    "t": "2026-09-01T14:41:45.7633160Z"
+  },
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "pslogs",
+    "blocks": 8,
+    "t": "2026-09-01T14:41:49.0128343Z"
+  },
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "kernring",
+    "procs": 0,
+    "burst_seconds": 10,
+    "sysmon_status": "Sysmon64=Running",
+    "t": "2026-09-01T14:42:02.4797121Z"
+  },
+  {
+    "seq": 1,
+    "plane": "endpoint",
+    "witness": "ws1",
+    "skill": "attackmap",
+    "checked": 13,
+    "found": 2,
+    "t": "2026-09-01T14:42:06.2346231Z"
+  },
+  {
+    "seq": 2,
+    "plane": "data",
+    "witness": "ws2",
+    "skill": "edges",
+    "logons": 8,
+    "explicit_creds": 0,
+    "special_privs": 0,
+    "conns": 0,
+    "t": "2026-09-01T14:42:18.3827770Z"
+  },
+  {
+    "seq": 2,
+    "plane": "data",
+    "witness": "ws2",
+    "skill": "explain",
+    "group_changes": 3,
+    "service_events": 3,
+    "task_events": 3,
+    "wmi_subscriptions": 0,
+    "audit_cleared": 0,
+    "proc_spawns": 20,
+    "lolbin_spawns": 20,
+    "t": "2026-09-01T14:42:22.3514728Z"
+  },
+  {
+    "seq": 2,
+    "plane": "data",
+    "witness": "ws2",
+    "skill": "pslogs",
+    "blocks": 8,
+    "t": "2026-09-01T14:42:25.5837669Z"
+  },
+  {
+    "seq": 2,
+    "plane": "data",
+    "witness": "ws2",
+    "skill": "kernring",
+    "procs": 0,
+    "burst_seconds": 10,
+    "sysmon_status": "Sysmon=Running",
+    "t": "2026-09-01T14:42:38.9261696Z"
+  },
+  {
+    "seq": 2,
+    "plane": "data",
+    "witness": "ws2",
+    "skill": "attackmap",
+    "checked": 13,
+    "found": 2,
+    "t": "2026-09-01T14:42:42.7543615Z"
+  }
+]

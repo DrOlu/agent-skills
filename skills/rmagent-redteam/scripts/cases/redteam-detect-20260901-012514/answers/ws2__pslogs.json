@@ -1,0 +1,52 @@
+{
+  "skill": "pslogs",
+  "host": "EC2AMAZ-C69VULQ",
+  "utc": "2026-09-01T00:26:42.5600373Z",
+  "since": "2026-08-31T23:26:42.4038143+00:00",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "blocks": [
+    {
+      "t": "2026-09-01T00:26:38.2229594+00:00",
+      "path": null,
+      "msg": "{ $cl=(F $_ 'CommandLine'); if($cl -and $cl.Length -gt 200){$cl=$cl.Substring(0,200)}; [pscustomobject]@{t=$_.TimeCreated.ToString('o');u=$_.Properties[1].Value;p=$_.Properties[5].Value;c=$cl} }"
+    },
+    {
+      "t": "2026-09-01T00:26:38.2217793+00:00",
+      "path": null,
+      "msg": "{MT $_ -and $_.Properties[5].Value -match $LOL}"
+    },
+    {
+      "t": "2026-09-01T00:26:37.9281540+00:00",
+      "path": null,
+      "msg": "{ [pscustomobject]@{t=$_.TimeCreated.ToString('o');u=$_.Properties[1].Value;p=$_.Properties[5].Value} }"
+    },
+    {
+      "t": "2026-09-01T00:26:37.5496719+00:00",
+      "path": null,
+      "msg": "$ErrorActionPreference='SilentlyContinue'\n$Track = @('Administrator','SYSTEM')\n$SinceHours = 1.0\n$Limit = 3\nfunction MT($e){ foreach($v in $e.Properties.Value){ if($Track -contains $v){return $true} }; return $false }\nfunction F($e,$n){$x=[xml]$e.ToXml();$m=New-Object System.Xml.XmlNamespaceManager($x.NameTable);$m.AddNamespace('e','http://schemas.microsoft.com/win/2004/08/events/event');$o=$x.SelectSingleNode(\"//e:Data[@Name='$n']\",$m);if($o){$o.'#text'}}\nfunction E($ids,$log){\n  try{ @(Get-Win"
+    },
+    {
+      "t": "2026-09-01T00:20:28.8045596+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetGPO'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Export-ModuleMember -Function "
+    },
+    {
+      "t": "2026-09-01T00:20:28.7967114+00:00",
+      "path": null,
+      "msg": "pe([Microsoft.Management.Infrastructure.CimInstance])]\n[OutputType('Microsoft.Management.Infrastructure.CimInstance#root/standardcimv2/MSFT_NetFirewallDynamicKeywordAddress')]\n\n    param(\n    \n    [Parameter(ParameterSetName='ById', Mandatory=$true, Position=0)]\n    [ValidateNotNull()]\n    [string[]]\n    ${Id},\n\n    [Parameter(ParameterSetName='GetAll')]\n    [switch]\n    ${All},\n\n    [Parameter(ParameterSetName='ById')]\n    [Parameter(ParameterSetName='GetAll')]\n    [string]\n    ${PolicyStore},\n"
+    },
+    {
+      "t": "2026-09-01T00:20:28.7966816+00:00",
+      "path": null,
+      "msg": "\n#requires -version 3.0\n\ntry { Microsoft.PowerShell.Core\\Set-StrictMode -Off } catch { }\n\n$script:MyModule = $MyInvocation.MyCommand.ScriptBlock.Module\n\n$script:ClassName = 'root/standardcimv2/MSFT_NetFirewallDynamicKeywordAddress'\n$script:ClassVersion = '1.0.0'\n$script:ModuleVersion = '1.0.0.0'\n$script:ObjectModelWrapper = [Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter]\n\n$script:PrivateData = [System.Collections.Generic.Dictionary[string,string]]::new()\n\nMicrosoft.PowerShell.Core\\Expo"
+    },
+    {
+      "t": "2026-09-01T00:20:28.7866803+00:00",
+      "path": null,
+      "msg": "     [object]$__cmdletization_defaultValue = $null\n          [object]$__cmdletization_defaultValueIsPresent = $false\n          if ($PSBoundParameters.ContainsKey('RemoteMachineTunnelAuthorizationList')) {\n            [object]$__cmdletization_value = ${RemoteMachineTunnelAuthorizationList}\n            $__cmdletization_methodParameter = [Microsoft.PowerShell.Cmdletization.MethodParameter]@{Name = 'RemoteMachineTunnelAuthorizationList'; ParameterType = 'System.String'; Bindings = 'In'; Value = $__c"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "skill": "flowstats",
+  "host": "EC2AMAZ-8NK9FUP",
+  "utc": "2026-09-01T16:23:20.8839650Z",
+  "track": [
+    "Administrator",
+    "SYSTEM"
+  ],
+  "adapters": [
+    {
+      "name": "Ethernet 3",
+      "sent": 17611737,
+      "recv": 33315287
+    }
+  ],
+  "top_destinations": [],
+  "udp_endpoints": []
+}

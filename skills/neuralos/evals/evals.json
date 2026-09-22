@@ -18,6 +18,30 @@
       "prompt": "Profile the efraud MySQL database (localhost:3306, admin/admin) and give me a needle instance plus Pydantic models for its transactions table. No cloud anything.",
       "expected_output": "Profiles via usql DSN (information_schema + samples), generates one model per table with db types and constraints, generates a table-scoped instance (4-6 probes), count probe returns the true row count, coverage 100%.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Our platform exports events as events.jsonl — one JSON object per line (timestamp, user_id, event_type, details with nested fields). Make this queryable in plain English through neuralOS with a strict model of the shape.",
+      "expected_output": "Profiler content-routes .jsonl to JSON-lines profiling with flattened dot-paths (incl. nested 'details.*'); gen_pydantic emits one model with aliases for any source keys that differ from Python identifiers; generated menu has peek/count_records/summary (+ by-column for low-cardinality fields); Phase 4 shows high parse coverage over the real records and one truth check against a direct file count.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Fetch https://jsonplaceholder.typicode.com/users, profile it, and build me a neuralOS instance over that data with a strict model.",
+      "expected_output": "The URL is fetched (4 MB cap, User-Agent set), content-sniffed as JSON (the extensionless body must route via sniffing, not fail as unrecognized), the nested user shape flattened (address.*, company.*) into a strict model with aliases, an instance generated with peek/count/summary probes, and verification run. If the fetch is unreachable, say so honestly instead of profiling garbage.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Here's q3_ledger.xlsx with one sheet of transactions. Turn it into a neuralOS instance I can ask questions about in plain English.",
+      "expected_output": "XLSX profiling via openpyxl (values-only, first sheet, empty cells to null), dumped to a sniffed CSV bridge path; model generated from the header row; instance with peek/count_records/summary; Phase-4 coverage measured on real rows. If openpyxl is missing the profiler must say so in one clear line (pip install openpyxl), not crash.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "Build a neuralOS instance over data.db (a SQLite file on this machine) — I want plain-English queries and a strict model, no cloud anything.",
+      "expected_output": "SQLite profiling goes through the stdlib sqlite3 module (no usql needed): PRAGMA table_info for columns, sample rows, exact COUNT(*); a table-scoped instance generated with count/recent/summary probes; the count probe returns the true row count and Phase-4 coverage is measured live (target 100% on a clean table).",
+      "files": []
     }
   ]
 }

@@ -185,7 +185,12 @@ def flatten(obj, prefix="", depth=0, out=None):
 
 
 def profile_json_records(records, sample, profile, kind):
-    flattened = [flatten(jsonsafe_row(r)) for r in records[:sample]]
+    # Flatten BEFORE making values json-safe: jsonsafe_row stringifies nested
+    # dicts/objects, which stops flatten() from ever recursing into them —
+    # every nested field then profiles as one stringified blob (caught live by
+    # eval #4: 'details' as a str instead of details.channel/…). JSON sources
+    # are pure json.loads output, so raw leaves are already JSON scalars.
+    flattened = [flatten(r) for r in records[:sample]]
     keys = []
     for rec in flattened:
         for k in rec:

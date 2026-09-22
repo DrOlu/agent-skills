@@ -270,7 +270,9 @@ def _q(sql):
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=120)
     if proc.returncode != 0:
-        return {{"error": (proc.stderr or proc.stdout).strip()[:300]}}
+        # a LIST so the call-site guards (rows[0]) work — a bare dict raised
+        # KeyError: 0 on every connection failure (caught live by eval #7)
+        return [{{"error": (proc.stderr or proc.stdout).strip()[:300]}}]
     lines = [l for l in proc.stdout.splitlines() if l and not l.startswith("Output format")]
     rows = list(csv.DictReader(io.StringIO("\\n".join(lines))))
     # usql CSV prints NULL as an empty cell; the profiler models "" as null,
@@ -372,18 +374,82 @@ def bridge_files(profile, log, model_class="Record"):
                  '    with open(SOURCE, "r", encoding="utf-8", errors="replace") as fh:\n'
                  '        return [l.rstrip("\\n") for l in fh if l.strip()][-limit:]\n')
         return head + mid + BRIDGE_TAIL_LOG
-    reader = ('json.load' if profile["source"]["kind"].startswith("json")
-              else 'csv.DictReader')
-    read = ('''\ndef _rows():
+    kind = profile["source"]["kind"]
+    if kind == "json_lines":
+        # JSONL/NDJSON: one object per line — json.load() on the whole file
+        # dies with "Extra data" on line 2 (caught live by eval #4). Records
+        # are FLATTENED exactly as the profiler did — the models are built
+        # from flattened dot-paths, so raw nested rows fail extra="forbid"
+        # (coverage 0%, caught live by eval #4 as well).
+        read = ('''\ndef _flatten(obj, prefix="", depth=0, out=None):
+    out = out if out is not None else {}
+    if depth > 4:
+        out[prefix] = json.dumps(obj)[:400]
+        return out
+    if isinstance(obj, dict):
+        if not obj:
+            out[prefix] = {}
+            return out
+        for k, v in obj.items():
+            _flatten(v, f"{prefix}.{k}" if prefix else k, depth + 1, out)
+    elif isinstance(obj, list):
+        if not obj:
+            out[prefix] = []
+            return out
+        _flatten(obj[0], f"{prefix}[]", depth + 1, out)
+    else:
+        out[prefix] = obj
+    return out
+
+
+def _rows():
+    with open(SOURCE, "r", encoding="utf-8", errors="replace") as fh:
+        out = []
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(_flatten(json.loads(line)))
+            except json.JSONDecodeError:
+                continue
+        return out
+
+
+''')
+    elif kind.startswith("json"):
+        read = ('''\ndef _flatten(obj, prefix="", depth=0, out=None):
+    out = out if out is not None else {}
+    if depth > 4:
+        out[prefix] = json.dumps(obj)[:400]
+        return out
+    if isinstance(obj, dict):
+        if not obj:
+            out[prefix] = {}
+            return out
+        for k, v in obj.items():
+            _flatten(v, f"{prefix}.{k}" if prefix else k, depth + 1, out)
+    elif isinstance(obj, list):
+        if not obj:
+            out[prefix] = []
+            return out
+        _flatten(obj[0], f"{prefix}[]", depth + 1, out)
+    else:
+        out[prefix] = obj
+    return out
+
+
+def _rows():
     with open(SOURCE, "r", encoding="utf-8", errors="replace") as fh:
         data = json.load(fh)
-        if isinstance(data, dict):
-            data = next((v for v in data.values() if isinstance(v, list)), [])
-        return data
+    if isinstance(data, dict):
+        data = next((v for v in data.values() if isinstance(v, list)), [])
+    return [_flatten(r) for r in data]
 
 
-''') if profile["source"]["kind"].startswith("json") else (
-      '''\ndef _rows():
+''')
+    else:
+        read = ('''\ndef _rows():
     with open(SOURCE, "r", encoding="utf-8", errors="replace") as fh:
         for row in csv.DictReader(fh):
             # k is None when a row has more cells than the header (restkey) —
@@ -658,9 +724,49 @@ def main():
         json.dump(menu, fh, indent=2, ensure_ascii=False)
 
     loc = profile["source"]["location"]
-    if kind != "database" and not loc.startswith("/") and os.path.exists(loc):
+    if kind != "database" and loc.lower().endswith((".xlsx", ".xls")):
+        # The bridge reads delimited text — a binary xlsx read as CSV yields
+        # garbage (0% coverage, caught live by eval #6). Convert values-only
+        # to a CSV snapshot beside the instance, exactly as the profiler did.
+        try:
+            import openpyxl
+        except ImportError:
+            raise SystemExit("xlsx instances need openpyxl: pip install openpyxl")
+        wb = openpyxl.load_workbook(loc, read_only=True, data_only=True)
+        ws = wb[wb.sheetnames[0]]
+        os.makedirs(args.out, exist_ok=True)
+        snap = os.path.abspath(os.path.join(args.out, "source_snapshot.csv"))
+        import csv as _csv
+        with open(snap, "w", newline="", encoding="utf-8") as fh:
+            cw = _csv.writer(fh)
+            for row in ws.iter_rows(values_only=True):
+                cw.writerow(["" if c is None else str(c) for c in row])
+        profile["source"]["location"] = snap
+        profile["source"]["origin_workbook"] = loc
+    elif kind != "database" and loc.startswith("http"):
+        # URL-sourced profile: the bridge cannot open() an https:// path
+        # (caught live by eval #5 — FileNotFoundError on the URL). Snapshot
+        # the fetched body beside the instance so it stays offline-runnable,
+        # and record the origin in the profile.
+        import urllib.request
+        req = urllib.request.Request(loc, headers={"User-Agent": "neuralos-generator/1.0"})
+        body = urllib.request.urlopen(req, timeout=60).read(4 * 1024 * 1024)
+        os.makedirs(args.out, exist_ok=True)
+        snap = os.path.abspath(os.path.join(args.out, "source_snapshot"))
+        open(snap, "wb").write(body)
+        profile["source"]["location"] = snap
+        profile["source"]["origin_url"] = loc
+    elif kind != "database" and not loc.startswith("/") and os.path.exists(loc):
         profile["source"]["location"] = os.path.abspath(loc)
     dsn = args.db_dsn or (profile["source"]["location"] if kind == "database" else "")
+    if kind == "database" and dsn.startswith("sqlite:///"):
+        _sp = dsn[len("sqlite:///"):]
+        if not os.path.isabs(_sp):
+            # relative sqlite path breaks when the instance runs from its own
+            # directory (caught live by eval #7) — bake the absolute path
+            # "sqlite://" + abspath == exactly 3 slashes before the path;
+            # a 4th slash makes usql fail to open the file (caught by eval #7)
+            dsn = "sqlite://" + os.path.abspath(_sp)
     bridge_code = (bridge_database(profile, dsn, args.dsn_env)
                    if kind == "database" else bridge_files(profile, log=(kind == "log_lines"), model_class=model_class))
     open(os.path.join(args.out, "bridge.py"), "w", encoding="utf-8").write(bridge_code)

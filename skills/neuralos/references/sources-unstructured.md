@@ -1,7 +1,7 @@
 # Unstructured text — playbook
 
 Unstructured sources (emails, invoices, incident narratives, free-text fields)
-have no columns to profile — but needle's structured-extraction capability
+have no columns to profile — but the runtime's structured-extraction capability
 pairs them with the Pydantic model you generate anyway.
 
 ## Approach

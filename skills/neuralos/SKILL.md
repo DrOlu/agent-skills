@@ -1,26 +1,35 @@
 ---
 name: neuralos
-description: Turn ANY data source into a working neuralOS/needle instance plus a strict Python Pydantic model — by profiling the data first and generating everything from what the data actually contains. Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever they say "build a needle instance for this data", "parse this in real time", "give me a Pydantic model for this", "profile this data source", "make this queryable in plain English", or "hook this data into neuralOS/needle"; whenever a new data source appears in a project and needs schema discovery, type inference, regex/log-template synthesis, or a query bridge; and whenever an existing needle menu must be extended to cover a new table, feed, or file format. Also use it to extend existing instances when the underlying data changes shape.
+description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever they say "build a neuralOS instance for this data", "build a needle instance" (the historical CLI name), "parse this in real time", "give me a Pydantic model for this", "profile this data source", "make this queryable in plain English", "hook this data into neuralOS/needle", or "add relationships/graph probes"; whenever a new data source appears in a project and needs schema discovery, type inference, relationship/edge discovery, regex/log-template synthesis, or a query bridge; and whenever an existing neuralOS instance or menu must be extended to cover a new table, feed, or file format.
 ---
 
-# neuralOS Data — profile any source, generate its needle instance
+# neuralOS Data — profile any source, generate its neuralOS instance
 
-This skill converts **any data source** into two deliverables, generated from
-what the data actually contains:
+This skill converts **any data source** into three deliverables, generated
+from what the data actually contains:
 
 1. a **strict Pydantic model** (`models.py`) that captures every attribute the
    data exposes — typed, constrained, nullable where the data is nullable;
-2. a **needle instance** (`needle_menu.json` + bridge + agent) that parses and
-   queries that data in real time through on-device tool calling.
+2. a **neuralOS instance** (`needle_menu.json` + bridge + agent) that parses and
+   queries that data in real time through on-device tool calling;
+3. a **relationship layer** (`graph_edges.json` + ≤3 graph probes) that makes
+   cross-entity joins first-class, with provenance on every edge and honest
+   reporting when joins are impossible.
 
 Nothing is assumed from file names or guesses: every field, type, range,
 pattern and enum value comes from **profiling the data first**.
+
+(The on-device CLI/runtime keeps the historical `needle` name — the `needle`
+binary, the `needle` python package, `needle_menu.json` and `@needle.tool`
+are code-level identifiers and stay as they are. All prose and docs say
+**neuralOS**.)
 
 ## The four-phase workflow
 
 ```
 PROFILE ──► MODEL ──► GENERATE ──► VERIFY
 (profile_data.py)  (gen_pydantic.py)  (gen_needle_instance.py)  (run against real data)
+            + discover_relationships.py          + graph gate
 ```
 
 Run all four, in order, every time. Skipping VERIFY is the most common failure.
@@ -41,6 +50,17 @@ emits `profile.json`: per-field names, inferred Python types, nullability,
 min/max, length bounds, distinct counts, enum candidates, sample values, and —
 for log sources — synthesized line templates with capture regexes. See
 `references/profiler.md` for exactly what it measures and its limits.
+
+**Then run relationship discovery** (see `references/graph-standards.md`):
+
+```bash
+python scripts/discover_relationships.py --profile profile.json --out graph_edges.json
+```
+
+This emits the property-graph declaration: nodes, candidate edges with
+provenance + confidence tiers (`exact_fk` / `candidate`), and — critically —
+`disjoint` findings: column pairs that share a NAME but no values, which must
+be reported to the user as data-quality facts, never used as joins.
 
 **Read the profile before modeling it.** Look for: surprising nullability,
 fields whose "type" is really an enum, dates stored as strings, columns whose
@@ -77,14 +97,18 @@ Emits a ready-to-run instance directory:
 | File | Purpose |
 |---|---|
 | `needle_menu.json` | the probe menu: profile / peek / count / query / aggregate entries, arguments constrained from the profile |
+| `graph_edges.json` | the relationship layer declaration from Phase 1 (nodes, typed edges, disjoint findings) |
+| `graph_bridge.py` | runtime graph layer (copy from `scripts/graph_bridge.py`): overview / neighbors / connect over parsed records, built at fetch time |
 | `bridge.py` | retrieval + parsing: reads the real source (file, DSN, API) and validates every record through the Pydantic models |
-| `instance.py` | the needle agent: menu loaded, triggers set, agentic loop wired, example asks included |
+| `instance.py` | the neuralOS agent: menu loaded, triggers set, agentic loop wired, example asks included |
 | `README.md` | how to run it, what to ask it, how to extend it |
 
 Generation follows the hard rules in `references/instance-standards.md`
 (triggers mandatory, arguments constrained in the grammar, results kept small
 via digest+stash, secrets baked into the executor only, read-only probes
-first). For unstructured text sources the generated bridge uses the model's
+first) and `references/graph-standards.md` (≤3 graph probes, provenance on
+every edge, disjoint honesty, per-fetch construction). For unstructured text
+sources the generated bridge uses the model's
 structured-extraction capability with the Pydantic schema — see
 `references/sources-unstructured.md`.
 
@@ -98,9 +122,15 @@ Never deliver unverified:
    sample showed — widen constraints or add validators, then re-check.
 2. **Selection test** — ask the generated instance the same question three
    ways (e.g. "how many…", "count…", "show me the number of…"). All three
-   must select the intended probe.
+   must select the intended probe. **After adding graph probes, re-run the
+   FULL selection suite** — new menu entries can degrade existing picks.
 3. **Truth check** — compare one relayed number against a direct query of the
    source. The data layer is the only oracle.
+4. **Graph gate** (see `references/graph-standards.md`): every `exact_fk`
+   edge's matched-pair count equals a direct source join count; every
+   `disjoint` finding appears in a `graph_overview` digest (a graph that
+   hides isolation is a bug); one dangling reference verified against the
+   raw source; selection of the three graph probes included in the suite.
 
 ## Source routing
 
@@ -133,7 +163,7 @@ Details, edge cases and failure modes per source: `references/sources-files.md`,
 
 Both share the same menu and the same Pydantic-validated bridge.
 
-## Operating rules (inherited from the needle skill)
+## Operating rules (inherited from the neuralOS runtime skill)
 
 These are non-negotiable — violating them is what makes small-model agents
 unreliable:
@@ -145,24 +175,31 @@ unreliable:
    to the caller or a stash file. The generated probes enforce a row cap.
 4. **Secrets baked in executors only** — DSN passwords and API keys are written
    into the bridge as constants/env lookups, never as model-facing arguments.
-5. **Read-only probes first** — write/update entries are added only behind an
-   explicit user-approved flag.
+5. **Read-only probes first** — write/update probes are added only after the
+   user approves, behind an explicit flag, and always with identity checks.
 6. **Verify against the source** — model relays are checked, never trusted.
+7. **The graph layer is honest or absent** — edges carry provenance
+   (rule + confidence); declared joins that verify with zero value overlap
+   become disjoint findings, quoted to the user; the model picks, the bridge
+   traverses; graph costs at most 3 menu entries and earns them (a source
+   with no real edges gets `graph_overview` alone, or nothing — recorded in
+   verification.txt).
 
 Full rationale: `references/instance-standards.md`.
 
 ## Deliverables contract
 
 Every completed run leaves behind, in the chosen `--out` directory:
-`profile.json`, `models.py`, `needle_menu.json`, `bridge.py`, `instance.py`,
-`README.md`, and a `verification.txt` recording the Phase-4 results (model
-coverage %, selection test, truth check). If any piece is missing, the job is
-not done.
+`profile.json`, `graph_edges.json`, `models.py`, `needle_menu.json`,
+`bridge.py`, `instance.py`, `README.md`, and a `verification.txt` recording
+the Phase-4 results (model coverage %, selection test, truth check, and the
+graph gate: edge truth / disjoint honesty / dangling spot-check). If any
+piece is missing, the job is not done.
 
 ## Script requirements
 
 `profile_data.py` uses only the Python standard library plus `usql`/`sqlite3`
 when a database is profiled (openpyxl/pandas are used opportunistically for
 XLSX/parquet if installed, with graceful fallbacks). Generated instances
-require `pydantic` (v2) and — for the Python runtime — the on-device needle
-library installed in the interpreter that runs them.
+require `pydantic` (v2) and — for the Python runtime — the on-device
+`needle` python package installed in the interpreter that runs them.

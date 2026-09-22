@@ -1,7 +1,7 @@
-# Needle instance standards
+# neuralOS instance standards
 
 The generated instance is only as reliable as its menu. These rules come from
-the needle skill and are enforced by the generator; carry them into any manual
+the neuralOS skill and are enforced by the generator; carry them into any manual
 extension.
 
 ## Menu rules

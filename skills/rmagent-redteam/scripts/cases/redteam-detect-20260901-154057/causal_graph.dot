@@ -1,4 +1,0 @@
-digraph causal {
-  "ws1/Administrator" [label="ws1/Administrator"];
-  "ws2/Administrator" [label="ws2/Administrator"];
-}

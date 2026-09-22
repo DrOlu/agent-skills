@@ -1,16 +1,3 @@
-.DS_Store
-*.scrt
-*.pem
-*.key
-*.p12
-*.pfx
-.env
-node_modules/
-__pycache__/
-*.pyc
-
-# rmagent runtime case files (per-run hunt data — never commit)
-skills/rmagent-windows/scripts/cases/
-skills/rmagent-redteam/cases/
-skills/rmagent-so/scripts/cases/
-**/__pycache__/
+# runtime drill/hunt case artifacts (path.json, trajectory.jsonl, …) —
+# evidence output, not skill code
+skills/*/scripts/cases/

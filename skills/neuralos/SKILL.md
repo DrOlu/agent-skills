@@ -1,6 +1,6 @@
 ---
 name: neuralos
-description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever they say "build a neuralOS instance for this data", "build a needle instance" (the historical CLI name), "parse this in real time", "give me a Pydantic model for this", "profile this data source", "make this queryable in plain English", "hook this data into neuralOS/needle", or "add relationships/graph probes"; whenever a new data source appears in a project and needs schema discovery, type inference, relationship/edge discovery, regex/log-template synthesis, or a query bridge; and whenever an existing neuralOS instance or menu must be extended to cover a new table, feed, or file format.
+description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Runs on macOS/Linux (Python runtime) AND on Windows hosts where only PowerShell is permitted (no Python — engine selection + a generated PowerShell bridge). Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever they say "build a neuralOS instance for this data", "build a needle instance" (the historical CLI name), "parse this in real time", "give me a Pydantic model for this", "profile this data source", "make this queryable in plain English", "hook this data into neuralOS/needle", or "add relationships/graph probes"; whenever a new data source appears in a project and needs schema discovery, type inference, relationship/edge discovery, regex/log-template synthesis, or a query bridge; whenever the target is a Windows/PowerShell-only environment; and whenever an existing neuralOS instance or menu must be extended to cover a new table, feed, or file format.
 ---
 
 # neuralOS Data — profile any source, generate its neuralOS instance
@@ -155,6 +155,14 @@ Details, edge cases and failure modes per source: `references/sources-files.md`,
   `instance.py` runs the agentic loop in-process — best when the asking
   happens inside a Python app, script, or an interactive session, and when the
   tools should execute themselves.
+- **Windows / PowerShell variant** (Windows hosts where PowerShell is the
+  ONLY permitted script runtime — no Python, ever): build phases run on a
+  Python-capable workstation (or WSL); the deployed instance carries
+  `needle_menu.json` + `graph_edges.json` + a generated `bridge.ps1` with
+  `[ValidateSet()]`-caged arguments, generated shape-check validators, and
+  the engine (`needle.exe`/`neural.exe`, weights `needle3.cact` or
+  `neuralOS.engine`) as the selector. Contract is unchanged; Pydantic is
+  build-time only. See `references/windows-powershell.md`.
 - **Engine runtime** (`--runtime engine`): generates a `tools.json` +
   selection-only bridge for the standalone ~1 MB binary — best for servers,
   edge boxes, and non-Python consumers; execution always stays with the

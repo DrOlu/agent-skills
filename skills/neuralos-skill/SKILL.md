@@ -1,6 +1,6 @@
 ---
 name: neuralos-skill
-description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive.
+description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Includes a Windows/PowerShell-only variant (no Python at runtime; CLI answers to needle or neural, weights to needle3.cact or neuralOS.engine). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive.
 ---
 
 # neuralOS — on-device tool calling
@@ -9,7 +9,10 @@ description: Run neuralOS by Neural AI (the on-device tool-calling foundation mo
 > binaries and the Python package keep their upstream names — `needle`,
 > `cactus-needle`, `needle3.cact` — and every command in this manual uses those
 > real names so nothing here is aspirational. Visible name: neuralOS.
-> Functional name: needle.
+> Functional name: needle. On Windows-only / PowerShell-only hosts the CLI
+> may be invoked as either `needle` or `neural` and the weights as either
+> `needle3.cact` or `neuralOS.engine` — same runtime, both spellings work
+> (see `references/windows-powershell.md`).
 
 
 neuralOS is a foundation model built for tiny devices: a single 121M-parameter
@@ -45,6 +48,7 @@ difference between a working agent and a flaky one.
 | Python app/script; agent loop that **executes** the tools it calls | Python API — `import needle` | `references/python-api.md` |
 | One-shot call generation from a terminal; deterministic output | `needle run` CLI (needs jax + a 242 MB checkpoint) | `references/cli.md` |
 | No Python at runtime — servers, Windows services, edge devices, embedding in C | Standalone engine binary — `./needle --model needle3.cact` | `references/engine-binary.md` |
+| **Windows hosts where PowerShell is the ONLY permitted runtime** (no Python, ever) | Engine selection + PowerShell execution loop — `needle.exe` / `neural.exe` | `references/windows-powershell.md` |
 | The model picked the wrong tool / refused / looped / mangled args | Tool design rules (read this before debugging anything else) | `references/tool-design.md` |
 | It errored or behaved oddly | Symptom table | `references/troubleshooting.md` |
 

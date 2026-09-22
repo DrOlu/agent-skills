@@ -15,7 +15,7 @@
     },
     {
       "id": 3,
-      "prompt": "Profile the efraud MySQL database (localhost:3306, admin/admin) and give me a needle instance plus Pydantic models for its transactions table. No cloud anything.",
+      "prompt": "Profile the efraud MySQL database at 127.0.0.1:3306 and give me a needle instance plus Pydantic models for its transactions table. No cloud anything. Use the local dev credentials for the DSN (e.g. mysql://user:pass@127.0.0.1:3306/efraud) — never write real credentials into committed files.",
       "expected_output": "Profiles via usql DSN (information_schema + samples), generates one model per table with db types and constraints, generates a table-scoped instance (4-6 probes), count probe returns the true row count, coverage 100%.",
       "files": []
     },

@@ -92,10 +92,12 @@ def fmt_num(v):
     return str(v)
 
 
-def field_line(fname, f, indent="    "):
-    """Return the Python field declaration for one profiled field."""
+def field_line(fname, f, indent="    ", override_name=None):
+    """Return the Python field declaration for one profiled field.
+    override_name: the deduplicated identifier to emit (the alias still
+    carries the ORIGINAL source key)."""
     py = f.get("python_type", "str")
-    name = _snake(fname)
+    name = override_name if override_name is not None else _snake(fname)
     kwargs, descs = [], [f"observed type: {f.get('detected_type', '?')}"]
     # The source's exact key (DB column, CSV header, JSON path) — rows arrive
     # keyed by it, so it must ride as the alias whenever the snake name differs.
@@ -173,10 +175,13 @@ def model_for(name, fields, sample_note, doc_extra="", used_names=None):
     used = set()
     body = []
     for f in fields:
-        fname, line = field_line(f["name"], f)
-        while fname in used:
-            fname = fname + "_"
-        used.add(fname)
+        base = _snake(f["name"])
+        final = base
+        while final in used:
+            final = final + "_"
+        used.add(final)
+        fname, line = field_line(f["name"], f,
+                                 override_name=(final if final != base else None))
         if f.get("detected_type") == "datetime":
             dt_names.append(fname)
         body.append(line)

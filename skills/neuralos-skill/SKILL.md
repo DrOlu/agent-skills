@@ -161,6 +161,11 @@ Full details in `references/engine-binary.md`.
   bundle + weights, prints the exact run command. Cross-platform.
 - `scripts/export_tools.py` — dump the `@needle.tool` schemas from a Python
   module into `tools.json` for the engine binary or `needle run --tools`.
+- `tests/` — unit tests (stdlib `unittest`) for the exporter: import-safety failures
+  raise a clear SystemExit, and the full menu export round-trips through the real
+  `@needle.tool` decorator when cactus-needle is installed. Run:
+  `python -m unittest discover -s skills/neuralos-skill/tests`.
+
 
 ## Troubleshooting quick table
 

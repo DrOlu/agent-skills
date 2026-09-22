@@ -218,3 +218,9 @@ when a database is profiled (openpyxl/pandas are used opportunistically for
 XLSX/parquet if installed, with graceful fallbacks). Generated instances
 require `pydantic` (v2) and — for the Python runtime — the on-device
 `needle` python package installed in the interpreter that runs them.
+
+**Unit tests** (`tests/`, stdlib `unittest`): pin the generator and
+graph-layer contracts — tiering, surrogate demotion, cross-column
+discovery, alias emission, datetime-never-enum, the duplicate-field-name
+dedupe. Run: `python -m unittest discover -s skills/neuralos/tests`.
+CI runs them on every push.

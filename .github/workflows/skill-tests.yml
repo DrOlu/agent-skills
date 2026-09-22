@@ -1,0 +1,27 @@
+name: skill unit tests
+
+on:
+  push:
+    paths:
+      - "skills/neuralos/**"
+      - "skills/neuralos-skill/**"
+      - ".github/workflows/skill-tests.yml"
+  pull_request:
+    paths:
+      - "skills/neuralos/**"
+      - "skills/neuralos-skill/**"
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install test deps
+        run: pip install pydantic
+      - name: neuralos unit tests
+        run: python -m unittest discover -s skills/neuralos/tests -v
+      - name: neuralos-skill unit tests
+        run: python -m unittest discover -s skills/neuralos-skill/tests -v

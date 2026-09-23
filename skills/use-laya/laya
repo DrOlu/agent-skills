@@ -69,6 +69,13 @@ def _warn_uncalibrated(questions):
 
 
 def main():
+    # Re-exec BEFORE reading stdin: if this interpreter lacks laya, execv
+    # replaces the process — and a stdin pipe already consumed by the first
+    # process image reads as EOF in the next one. Files re-read fine; pipes
+    # do not, so nothing may touch sys.stdin until laya is importable here.
+    if not _have_laya():
+        _reexec_with_laya()  # execv on success; exits 2 if none found
+
     if len(sys.argv) >= 2 and os.path.isfile(sys.argv[1]):
         body = open(sys.argv[1]).read()
     elif len(sys.argv) >= 2:
@@ -76,9 +83,6 @@ def main():
         sys.exit(2)
     else:
         body = sys.stdin.read()
-
-    if not _have_laya():
-        _reexec_with_laya()  # execv on success; exits 2 if none found
 
     req = json.loads(body)
     if "state" not in req or "questions" not in req:

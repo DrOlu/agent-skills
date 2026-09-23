@@ -74,6 +74,13 @@ Findings, all load-bearing:
 7. **Air-gapped hosts:** pre-seed
    `~/.cache/huggingface/hub/models--convaiinnovations--laya` — after that
    no network is needed, ever.
+8. **Hosts where Python is never permitted at runtime** (Windows/
+   PowerShell-only estates): laya cannot live on the box — it needs Python
+   + torch at call time, unlike the self-contained neuralOS engine binary.
+   Run laya's judgments on the jump host / orchestrator and ship the
+   (advisory) verdicts; the deployed instance stays needle-only. Full
+   cold-start runbook (both caches, smoke tests, platform notes):
+   the `neuralos-skill`'s `references/new-host-bootstrap.md`.
 
 ## The router script
 

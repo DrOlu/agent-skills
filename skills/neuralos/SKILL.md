@@ -169,7 +169,10 @@ Details, edge cases and failure modes per source: `references/sources-files.md`,
   `[ValidateSet()]`-caged arguments, generated shape-check validators, and
   the engine (`needle.exe`/`neural.exe`, weights `needle3.cact` or
   `neuralOS.engine`) as the selector. Contract is unchanged; Pydantic is
-  build-time only. See `references/windows-powershell.md`.
+  build-time only. See `references/windows-powershell.md`. (The
+  `needle`/`neural` CLI and `needle3.cact`/`neuralOS.engine` weight
+  spellings are aliases on EVERY platform — macOS and Linux bundles accept
+  them too, not just Windows.)
 - **Engine runtime** (`--runtime engine`): generates a `tools.json` +
   selection-only bridge for the standalone ~1 MB binary — best for servers,
   edge boxes, and non-Python consumers; execution always stays with the

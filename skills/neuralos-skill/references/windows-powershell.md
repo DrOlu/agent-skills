@@ -8,7 +8,9 @@ the Windows/PowerShell variant of it.
 
 > **Naming.** The engine answers to either name — `needle` (upstream binary)
 > or `neural` — and the weights to either `needle3.cact` or
-> `neuralOS.engine`. Same runtime, both spellings work. The manual shows
+> `neuralOS.engine`. This is NOT a Windows-only alias: the same two
+> spellings work on macOS and Linux engine bundles too. Same runtime, both
+> spellings work on every platform. The manual shows
 > `needle.exe` / `needle3.cact`; substitute freely:
 >
 > ```powershell

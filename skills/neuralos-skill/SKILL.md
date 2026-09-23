@@ -1,6 +1,6 @@
 ---
 name: neuralos-skill
-description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Includes a Windows/PowerShell-only variant (no Python at runtime; CLI answers to needle or neural, weights to needle3.cact or neuralOS.engine). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive. Also use it when a typed
+description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. On EVERY platform (macOS/Linux/Windows) the CLI answers to needle or neural and the weights to needle3.cact or neuralOS.engine — same runtime, both spellings work. Includes a Windows/PowerShell-only variant (no Python at runtime). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, needs a zero-dependency engine binary that serves function calls over HTTP, or wants to set up neuralOS (plus the optional laya decision seam) on a completely new host. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive. Also use it when a typed
 judgment layer (guardrails, triage, classification) is wanted offline
 alongside the tool-caller — the laya decision model is the fleet's
 package of choice for that seam.
@@ -12,10 +12,12 @@ package of choice for that seam.
 > binaries and the Python package keep their upstream names — `needle`,
 > `cactus-needle`, `needle3.cact` — and every command in this manual uses those
 > real names so nothing here is aspirational. Visible name: neuralOS.
-> Functional name: needle. On Windows-only / PowerShell-only hosts the CLI
-> may be invoked as either `needle` or `neural` and the weights as either
-> `needle3.cact` or `neuralOS.engine` — same runtime, both spellings work
-> (see `references/windows-powershell.md`).
+> Functional name: needle. **On every platform — macOS, Linux and Windows
+> alike** — the CLI may be invoked as either `needle` or `neural` and the
+> weights as either `needle3.cact` or `neuralOS.engine`: same runtime, both
+> spellings work everywhere. `references/windows-powershell.md` covers the
+> Windows-specific no-Python deployment; the naming aliases themselves are
+> platform-independent.
 
 
 neuralOS is a foundation model built for tiny devices: a single 121M-parameter
@@ -53,6 +55,7 @@ difference between a working agent and a flaky one.
 | No Python at runtime — servers, Windows services, edge devices, embedding in C | Standalone engine binary — `./needle --model needle3.cact` | `references/engine-binary.md` |
 | **Windows hosts where PowerShell is the ONLY permitted runtime** (no Python, ever) | Engine selection + PowerShell execution loop — `needle.exe` / `neural.exe` | `references/windows-powershell.md` |
 | You need a typed **judgment** (guardrail, triage, classify into ≤10 classes), offline — not a tool call | laya decision model — `pip install laya` | `references/decision-models.md` |
+| Setting up neuralOS (± the laya decision seam) on a **completely new host** | Cold-start runbook: interpreter → runtime → smoke tests | `references/new-host-bootstrap.md` |
 | The model picked the wrong tool / refused / looped / mangled args | Tool design rules (read this before debugging anything else) | `references/tool-design.md` |
 | It errored or behaved oddly | Symptom table | `references/troubleshooting.md` |
 
@@ -61,6 +64,10 @@ difference between a working agent and a flaky one.
 ```
 pip install cactus-needle          # Python 3.9+; macOS, Linux, Windows
 ```
+
+Bringing up a **brand-new host** end to end (interpreter → runtime →
+engine binary → optional laya decision seam → readiness smoke tests)?
+Follow the sequenced runbook: `references/new-host-bootstrap.md`.
 
 - On **Windows**, prefer `py -m pip install cactus-needle`. The engine ships
   as a prebuilt wheel (`libneedle3.dll`) — no compiler needed.

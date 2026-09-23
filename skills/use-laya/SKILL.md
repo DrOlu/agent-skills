@@ -61,6 +61,13 @@ pip install laya                    # Python 3.9+; macOS, Linux, Windows
   interpreter that will run your code (`python3.12 -m pip install laya`) and
   check with `python3.12 -c "import laya"` — same discipline as the
   neuralOS/needle runtime.
+- **Hosts where Python is never permitted** (Windows/PowerShell-only
+  estates, locked-down edge boxes): laya **cannot run on the box** — it
+  needs Python + torch at call time, unlike the neuralOS engine binary
+  which is fully self-contained. The pattern there: run laya on the jump
+  host / orchestrator, ship the (advisory) verdicts to the box, and keep
+  the deployed artifact needle-only. See the neuralos-skill's
+  `references/new-host-bootstrap.md` for the full cold-start runbook.
 
 ## Quick start (Python API)
 

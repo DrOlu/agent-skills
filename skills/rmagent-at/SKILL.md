@@ -157,10 +157,10 @@ lib.ask(row, "appslow", since_hours=24, limit=20)
 lib.ask(row, "apperrors", since_hours=1, limit=30)
 ```
 
-## Jev-assisted signal triage
+## Laya-assisted signal triage
 
 Trace excerpts pulled from the rings can be scored by a fast, typed decision
-model (Jev, via the `use-jev` skill): is this a real performance or failure
+model (Laya, via the `use-laya` skill): is this a real performance or failure
 pattern rather than noise, and which subsystem should the next pull focus on?
 One matrix lives in `decisions/`:
 
@@ -169,7 +169,7 @@ One matrix lives in `decisions/`:
   record as noise).
 
 ```bash
-scripts/jev_decide.py signal_triage --state-file excerpt.json
+scripts/laya_decide.py signal_triage --state-file excerpt.json
 ```
 
 Policy: confidence below 0.5 is flagged ESCALATE — route those excerpts to the
@@ -178,11 +178,11 @@ and the ring configuration is untouched.
 
 ## Needle tier 0 — offline extraction and drift
 
-Alongside the Jev matrices, every skill in this family can call
+Alongside the Laya matrices, every skill in this family can call
 **needle** — a 121M on-device model (Cactus Compute Needle, ~35 MB, no
 network, no keys, ~100 MB RAM) installed once on the jump host, never on
 the witnesses. It is the free tier of the judgment stack: needle extracts
-and compares offline, Jev judges, the LLM reasons.
+and compares offline, Laya judges, the LLM reasons.
 
 Two scripts ship in `scripts/`:
 
@@ -207,9 +207,7 @@ The engine runs in-process on the jump host (the wrapper finds a Python
 with `cactus-needle` — set `NEEDLE_PYTHON` if it lives elsewhere). No port
 is opened, nothing is installed on any witness, and the baselines are
 kilobyte holes under `~/.rmagent/needle-drift/`, not a lake. On an
-air-gapped estate this tier keeps working when the Jev tier cannot reach
-OpenRouter — matrix judgments defer to the next connected session rather
-than being guessed.
+air-gapped estate this tier keeps working — and the judgment tier with it: Laya is offline too (pre-seed its HF-cache checkpoint on air-gapped hosts), so no matrix judgment waits for a connected session.
 
 ## Non-negotiables
 

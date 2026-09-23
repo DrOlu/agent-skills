@@ -1,6 +1,9 @@
 ---
 name: neuralos-skill
-description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Includes a Windows/PowerShell-only variant (no Python at runtime; CLI answers to needle or neural, weights to needle3.cact or neuralOS.engine). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive.
+description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Includes a Windows/PowerShell-only variant (no Python at runtime; CLI answers to needle or neural, weights to needle3.cact or neuralOS.engine). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, or needs a zero-dependency engine binary that serves function calls over HTTP. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive. Also use it when a typed
+judgment layer (guardrails, triage, classification) is wanted offline
+alongside the tool-caller — the laya decision model is the fleet's
+package of choice for that seam.
 ---
 
 # neuralOS — on-device tool calling
@@ -49,6 +52,7 @@ difference between a working agent and a flaky one.
 | One-shot call generation from a terminal; deterministic output | `needle run` CLI (needs jax + a 242 MB checkpoint) | `references/cli.md` |
 | No Python at runtime — servers, Windows services, edge devices, embedding in C | Standalone engine binary — `./needle --model needle3.cact` | `references/engine-binary.md` |
 | **Windows hosts where PowerShell is the ONLY permitted runtime** (no Python, ever) | Engine selection + PowerShell execution loop — `needle.exe` / `neural.exe` | `references/windows-powershell.md` |
+| You need a typed **judgment** (guardrail, triage, classify into ≤10 classes), offline — not a tool call | laya decision model — `pip install laya` | `references/decision-models.md` |
 | The model picked the wrong tool / refused / looped / mangled args | Tool design rules (read this before debugging anything else) | `references/tool-design.md` |
 | It errored or behaved oddly | Symptom table | `references/troubleshooting.md` |
 
@@ -166,6 +170,22 @@ Full details in `references/engine-binary.md`.
   `@needle.tool` decorator when cactus-needle is installed. Run:
   `python -m unittest discover -s skills/neuralos-skill/tests`.
 
+
+## Decision model for judgments (laya, offline)
+
+neuralOS picks tools and writes their arguments — an **action model**. For
+**judgment-shaped** work in the same app (guardrails, triage, severity
+scoring, classify into ≤10 well-described classes) the fleet's offline
+package of choice is **laya** (`convaiinnovations/laya`, Apache-2.0,
+`pip install laya`, no cloud, no key, free per call): state + typed
+choice/noul/score questions in, picks + probabilities + calibrated
+confidence out. Keep it advisory and env-gated, keep choices ≤10 options
+(above that laya's confidence is uncalibrated), and do NOT use it for
+tool/probe selection — the measured verdict is that the 121M engine beats
+the 421M decision model at selection (15/18 vs 8/18 on a 37-probe menu).
+Full split, wiring pattern and rules: `references/decision-models.md`; the
+`use-laya` skill is the API reference; the `neuralos` skill's
+`references/decision-model-integration.md` carries the measured pilot.
 
 ## Troubleshooting quick table
 

@@ -1,6 +1,6 @@
 {
   "name": "gate",
-  "purpose": "Pre-gate every proposed action BEFORE it is shown to the operator: the first checker in the maker/checker pipeline. Advisory only \u2014 explicit operator approval remains mandatory for every apply, and Jev never executes anything.",
+  "purpose": "Pre-gate every proposed action BEFORE it is shown to the operator: the first checker in the maker/checker pipeline. Advisory only \u2014 explicit operator approval remains mandatory for every apply, and Laya never executes anything.",
   "state_template": "FINDING: <kind, rank, evidence summary>. PROPOSED ACTION: <name from the ACTIONS allowlist, target, witness>. DRY-RUN PREVIEW: <exactly what it will do>. UNDO: <verified undo>. CONTEXT: <anything that affects blast radius>.",
   "questions": {
     "matches_finding": {

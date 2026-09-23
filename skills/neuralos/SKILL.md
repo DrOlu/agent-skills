@@ -178,6 +178,26 @@ Details, edge cases and failure modes per source: `references/sources-files.md`,
 
 Both share the same menu and the same Pydantic-validated bridge.
 
+## Decision-model seam (optional — laya, offline)
+
+An instance may expose an **env-gated** decision-model side channel
+(`LAYA_ROUTER=1`) through **laya** — a local, offline, Apache-2.0 typed
+decision model (421M, `pip install laya`) that answers
+choice/noul/score questions with calibrated confidence. It is for
+decision-shaped side jobs only (guardrails, triage, classify into ≤10
+well-described classes) — **probe selection stays with the engine**:
+measured on the chinook 37-probe menu, the 121M engine beat laya 15/18 to
+8/18, and the confidence-gated hybrid degenerated to engine-plus-latency.
+Rules that are not negotiable: advisory only, calibrated buckets only
+(choice ≤10 options, shortlist k=9 + `no_match` beyond that), and the
+instance must work perfectly with the variable unset.
+`scripts/laya_router.py` is the tested, import-safe router (pure functions
+unit-tested in `tests/test_laya_router.py`, CI-run without torch); the full
+measured verdict, wiring rules and cold-start install live in
+`references/decision-model-integration.md`. Question/matrix files written
+for the retired cloud-Jev skill load unchanged — the `use-laya` skill is
+the laya API reference.
+
 ## Operating rules (inherited from the neuralOS runtime skill)
 
 These are non-negotiable — violating them is what makes small-model agents
@@ -219,8 +239,11 @@ XLSX/parquet if installed, with graceful fallbacks). Generated instances
 require `pydantic` (v2) and — for the Python runtime — the on-device
 `needle` python package installed in the interpreter that runs them.
 
-**Unit tests** (`tests/`, stdlib `unittest`): pin the generator and
-graph-layer contracts — tiering, surrogate demotion, cross-column
-discovery, alias emission, datetime-never-enum, the duplicate-field-name
-dedupe. Run: `python -m unittest discover -s skills/neuralos/tests`.
+**Unit tests** (`tests/`, stdlib `unittest`): pin the generator,
+graph-layer and decision-seam contracts — tiering, surrogate demotion,
+cross-column discovery, alias emission, datetime-never-enum, the
+duplicate-field-name dedupe, and the laya router's import-safety,
+criterion-compaction, calibrated-bucket guard and escalation rule (they
+run without torch installed). Run:
+`python -m unittest discover -s skills/neuralos/tests`.
 CI runs them on every push.

@@ -26,7 +26,7 @@ Notes:
     probes candidates (NEEDLE_PYTHON env override first) and re-execs.
   - The model is 121M — treat this as the free tier, not the best tier. If
     extraction quality matters more than cost, route the same fragment
-    through Jev or an LLM instead.
+    through Laya or an LLM instead.
 """
 import json, os, subprocess, sys
 

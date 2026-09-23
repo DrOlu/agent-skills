@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""laya — run a typed-decisions request through the LOCAL laya checkpoint.
+
+Usage:
+  laya request.json          # body: {"state": ..., "questions": ...} ("model" injected if absent)
+  cat req.json | laya        # stdin works too
+
+No API key, no network after the first checkpoint download (HF cache).
+"model" (when present) is the checkpoint id or a local dir path —
+default: convaiinnovations/laya.
+
+Interpreter resolution (first that can import laya wins):
+  1. the invoking python
+  2. $LAYA_PYTHON
+  3. the common python3.12 / python3 candidates
+
+Output: the answers JSON on stdout; warnings (e.g. uncalibrated 11+ option
+choices) on stderr. Exit 2 on a request that cannot run.
+"""
+import json, os, subprocess, sys
+
+DEFAULT_CKPT = "convaiinnovations/laya"
+CALIBRATED_MAX_OPTIONS = 10  # choice:11+ -> laya warns confidence uncalibrated
+
+
+def _have_laya():
+    try:
+        import laya  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _reexec_with_laya():
+    """Find an interpreter that has laya and re-run this script with it."""
+    candidates = []
+    env_py = os.environ.get("LAYA_PYTHON")
+    if env_py:
+        candidates.append(env_py)
+    candidates += [
+        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+        "python3.12", "python3",
+    ]
+    script = os.path.abspath(__file__)
+    for py in candidates:
+        try:
+            probe = subprocess.run(
+                [py, "-c", "import laya"], capture_output=True, timeout=60)
+            if probe.returncode == 0:
+                os.execv(probe.args[0], probe.args[:1] + [script] + sys.argv[1:])
+        except (OSError, subprocess.SubprocessError):
+            continue
+    print("laya: no interpreter with the laya package found. "
+          "pip install laya (into the interpreter that runs this), or set "
+          "LAYA_PYTHON to one that has it.", file=sys.stderr)
+    sys.exit(2)
+
+
+def _warn_uncalibrated(questions):
+    for qid, q in questions.items():
+        if isinstance(q, dict) and q.get("type") == "choice":
+            crit = q.get("criteria")
+            n = len(crit) if isinstance(crit, (dict, list)) else 0
+            if n > CALIBRATED_MAX_OPTIONS:
+                print(f"laya: WARNING question {qid!r} has {n} options — "
+                      f"choice:11+ confidence is UNCALIBRATED for this "
+                      f"checkpoint; keep <= 10 options or shortlist first.",
+                      file=sys.stderr)
+
+
+def main():
+    if len(sys.argv) >= 2 and os.path.isfile(sys.argv[1]):
+        body = open(sys.argv[1]).read()
+    elif len(sys.argv) >= 2:
+        print(f"laya: file not found: {sys.argv[1]}", file=sys.stderr)
+        sys.exit(2)
+    else:
+        body = sys.stdin.read()
+
+    if not _have_laya():
+        _reexec_with_laya()  # execv on success; exits 2 if none found
+
+    req = json.loads(body)
+    if "state" not in req or "questions" not in req:
+        print('laya: request needs {"state": ..., "questions": {...}}',
+              file=sys.stderr)
+        sys.exit(2)
+    _warn_uncalibrated(req["questions"])
+
+    from laya import load
+    ckpt = req.get("model", DEFAULT_CKPT)
+    agent = load(ckpt)
+    result = agent.system_one(req["state"], req["questions"])
+    result.setdefault("model", "laya-rl-agent")
+    print(json.dumps(result, indent=1))
+
+
+if __name__ == "__main__":
+    main()

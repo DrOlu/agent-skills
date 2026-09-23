@@ -26,11 +26,11 @@ half. The three skills share one constitution.
 
 ## Needle tier 0 — offline extraction and drift
 
-Alongside the Jev matrices, every skill in this family can call
+Alongside the Laya matrices, every skill in this family can call
 **needle** — a 121M on-device model (Cactus Compute Needle, ~35 MB, no
 network, no keys, ~100 MB RAM) installed once on the jump host, never on
 the witnesses. It is the free tier of the judgment stack: needle extracts
-and compares offline, Jev judges, the LLM reasons.
+and compares offline, Laya judges, the LLM reasons.
 
 Two scripts ship in `scripts/`:
 
@@ -55,9 +55,7 @@ The engine runs in-process on the jump host (the wrapper finds a Python
 with `cactus-needle` — set `NEEDLE_PYTHON` if it lives elsewhere). No port
 is opened, nothing is installed on any witness, and the baselines are
 kilobyte holes under `~/.rmagent/needle-drift/`, not a lake. On an
-air-gapped estate this tier keeps working when the Jev tier cannot reach
-OpenRouter — matrix judgments defer to the next connected session rather
-than being guessed.
+air-gapped estate this tier keeps working — and the judgment tier with it: Laya is offline too (pre-seed its HF-cache checkpoint on air-gapped hosts), so no matrix judgment waits for a connected session.
 
 ## Non-negotiables
 
@@ -130,10 +128,10 @@ done — a ticket given at case-open flows through everything. The reliability
 half needs the payment system to stamp `PAY-4419` into its own events, which is
 an integration with whatever runs the payments, not a feature of this skill.
 
-## Jev-assisted intake and hop routing
+## Laya-assisted intake and hop routing
 
 Two recurring judgments of a walk can be made by a fast, typed decision model
-(Jev, via the `use-jev` skill): is a symptom worth a walk at all, and which hop
+(Laya, via the `use-laya` skill): is a symptom worth a walk at all, and which hop
 should the walker visit next? Two matrices live in `decisions/`:
 
 - `intake_triage.json` — at intake: worth_walking / urgency / next (start the
@@ -143,11 +141,11 @@ should the walker visit next? Two matrices live in `decisions/`:
   the walk and synthesize, or hand the choice to the LLM.
 
 ```bash
-echo "<symptom report>" | scripts/jev_decide.py intake_triage
-scripts/jev_decide.py hop_route --state-file trajectory.json
+echo "<symptom report>" | scripts/laya_decide.py intake_triage
+scripts/laya_decide.py hop_route --state-file trajectory.json
 ```
 
-Policy: confidence below 0.5 is flagged ESCALATE — the LLM (not Jev) reasons
+Policy: confidence below 0.5 is flagged ESCALATE — the LLM (not Laya) reasons
 about ambiguous walks. Verdicts are advisory; the trajectory DAG, the STC, and
 the pull-only rules are unchanged.
 

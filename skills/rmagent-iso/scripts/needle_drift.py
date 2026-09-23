@@ -25,7 +25,7 @@ empirically against this needle build (v3.0.2, 3072-dim) — the embedding
 space is compressed, so the bands are tight:
   similar   >= 0.995 — routine variation; the answer looks like itself
   drifted   0.975-0.995 — the answer's shape or content mix changed; worth a
-                          Jev triage or a look (live test: a bad-day attest
+                          Laya triage or a look (live test: a bad-day attest
                           with new admin/SYSTEM/failed-logon fields scored 0.993)
   changed   < 0.975 — the answer is a different animal; look now (live test: a
                       PowerShell script block scored 0.968 against an attest

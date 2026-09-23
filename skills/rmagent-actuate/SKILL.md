@@ -39,11 +39,11 @@ If an action cannot be undone, it is not in this skill.
 
 ## Needle tier 0 — offline extraction and drift
 
-Alongside the Jev matrices, every skill in this family can call
+Alongside the Laya matrices, every skill in this family can call
 **needle** — a 121M on-device model (Cactus Compute Needle, ~35 MB, no
 network, no keys, ~100 MB RAM) installed once on the jump host, never on
 the witnesses. It is the free tier of the judgment stack: needle extracts
-and compares offline, Jev judges, the LLM reasons.
+and compares offline, Laya judges, the LLM reasons.
 
 Two scripts ship in `scripts/`:
 
@@ -68,9 +68,7 @@ The engine runs in-process on the jump host (the wrapper finds a Python
 with `cactus-needle` — set `NEEDLE_PYTHON` if it lives elsewhere). No port
 is opened, nothing is installed on any witness, and the baselines are
 kilobyte holes under `~/.rmagent/needle-drift/`, not a lake. On an
-air-gapped estate this tier keeps working when the Jev tier cannot reach
-OpenRouter — matrix judgments defer to the next connected session rather
-than being guessed.
+air-gapped estate this tier keeps working — and the judgment tier with it: Laya is offline too (pre-seed its HF-cache checkpoint on air-gapped hosts), so no matrix judgment waits for a connected session.
 
 ## Non-negotiables
 
@@ -93,13 +91,13 @@ than being guessed.
 - **Credentials never in the journal.** Same scrt-store resolution as Phase 0.
   The journal records what was done, never how it was authenticated.
 
-## The Jev pre-gate (first checker)
+## The Laya pre-gate (first checker)
 
 Before a proposed action is shown to the operator, run the gate matrix
 (`decisions/gate.json`) over the finding, the action, and the dry-run preview:
 
 ```bash
-scripts/jev_decide.py gate --state-file case.json
+scripts/laya_decide.py gate --state-file case.json
 ```
 
 It returns `matches_finding`, `scope_risk`, and a gate verdict
@@ -110,7 +108,7 @@ subnet instead of the IP" class of error before it reaches a human.
 Rules:
 
 - **Advisory only.** `gate=ready` queues the case; explicit operator approval
-  with the dry-run shown first remains mandatory. Jev never executes anything.
+  with the dry-run shown first remains mandatory. Laya never executes anything.
 - **Record the verdict.** Put the gate verdict and confidence in the journal
   reason text, next to your own.
 - **Escalate on uncertainty.** Confidence below the matrix threshold is

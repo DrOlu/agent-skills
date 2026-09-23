@@ -106,10 +106,10 @@ python3 packs_cli.py run kerberos_ad --rows rows.json --blind dc.krb   # hole, n
 | `rmagent-core` | the engine + the grain firewall that keeps this a separate grain |
 | `rmagent-actuate` | response, only after a rule fires on a source that can SEE |
 
-## Jev-assisted hit triage
+## Laya-assisted hit triage
 
 Every capped JSON answer a recipe or rule pack returns can be scored by a fast,
-typed decision model (Jev, via the `use-jev` skill) before a human reads it.
+typed decision model (Laya, via the `use-laya` skill) before a human reads it.
 One matrix lives in `decisions/`:
 
 - `rule_hit.json` — suspicious (noul) / severity (score) / next (choice: run a
@@ -117,7 +117,7 @@ One matrix lives in `decisions/`:
   record it as an allowlisted false positive).
 
 ```bash
-echo "<capped answer>" | scripts/jev_decide.py rule_hit
+echo "<capped answer>" | scripts/laya_decide.py rule_hit
 ```
 
 Policy: confidence below 0.5 is flagged ESCALATE — route those hits to the LLM
@@ -139,11 +139,11 @@ capped. The matrix is an allowlist — edit it deliberately.
 
 ## Needle tier 0 — offline extraction and drift
 
-Alongside the Jev matrices, every skill in this family can call
+Alongside the Laya matrices, every skill in this family can call
 **needle** — a 121M on-device model (Cactus Compute Needle, ~35 MB, no
 network, no keys, ~100 MB RAM) installed once on the jump host, never on
 the witnesses. It is the free tier of the judgment stack: needle extracts
-and compares offline, Jev judges, the LLM reasons.
+and compares offline, Laya judges, the LLM reasons.
 
 Two scripts ship in `scripts/`:
 
@@ -168,7 +168,5 @@ The engine runs in-process on the jump host (the wrapper finds a Python
 with `cactus-needle` — set `NEEDLE_PYTHON` if it lives elsewhere). No port
 is opened, nothing is installed on any witness, and the baselines are
 kilobyte holes under `~/.rmagent/needle-drift/`, not a lake. On an
-air-gapped estate this tier keeps working when the Jev tier cannot reach
-OpenRouter — matrix judgments defer to the next connected session rather
-than being guessed.
+air-gapped estate this tier keeps working — and the judgment tier with it: Laya is offline too (pre-seed its HF-cache checkpoint on air-gapped hosts), so no matrix judgment waits for a connected session.
 

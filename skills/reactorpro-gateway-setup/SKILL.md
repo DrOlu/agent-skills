@@ -775,3 +775,59 @@ butlers self-heal via a 60 s watchdog (2 missed self-probes → restart). An
 edge without configured targets never advertises the skill. The agentd remains
 an optional *reasoning* plane only — for data service it can be uninstalled
 without touching any of the above.
+
+
+---
+
+## MANDATORY: Needle Engine + Butler Harness Deployment
+
+**Every edge MUST deploy the needle engine and a butler harness.** This is
+not optional — the butler's serving path routes every question through
+on-device 121M inference (needle engine) for probe grounding. Without it,
+butler.query returns an honest hole rather than serving data.
+
+### What to deploy (per edge)
+
+| # | Component | Source | Install |
+|---|---|---|---|
+| 1 | **Gateway v1.7.5+** | `scripts/install-gateway.sh` or GitHub release | NSSM (Win) / launchd (Mac) / systemd (Linux) |
+| 2 | **Needle engine** | `https://neuralos.ng/download/neuralOS.zip` (contains needle.exe / neural.exe / neural.exe/neural + needle3.cact / neuralOS.engine / neuralOS.engine/neuralOS.engine) | Extract to a known path, set `NEEDLE_ENGINE_DIR` |
+| 3 | **Butler harness** | `scripts/neuralos-butler.py` (client skill) or `scripts/butler-full.py` | NSSM / launchd / systemd |
+
+### Required gateway env
+
+```bash
+LIVEAGENT_GATEWAY_MESH_SKILL_PROXY_TARGETS="<butler-ids,comma-separated>"
+LIVEAGENT_GATEWAY_MESH_INVOKE_OPERATIONS="task,skillproxy"
+LIVEAGENT_GATEWAY_MESH_TRUSTED_PEERS="<peer-fps,comma-separated>"
+```
+
+### Required butler env
+
+```bash
+BUTLER_AGENT_ID="<edge-id>/butler"
+BUTLER_MESH_URL="nats://<bus>:4222"
+BUTLER_INSTANCE_DIR="<instances-dir>"      # multi mode
+BUTLER_INSTANCE_DIR="<instance-dir>"       # single mode
+NEEDLE_ENGINE_DIR="<needle-path>"          # mandatory for ask.py grounding
+```
+
+
+### Binary Names - needle vs neural (interchangeable)
+
+The engine ships under two names depending on the distribution:
+
+| Distribution | Binary | Model | Common on |
+|---|---|---|---|
+| neuralOS release (`neuralOS.zip`) | `neural.exe` / `neural` | `neuralOS.engine` | Windows Server (DC1, WS2) |
+| needle skill (`needle3.cact`) | `needle.exe` / `needle` | `needle3.cact` | macOS (dev machines) |
+
+They are the **same 121M inference engine**. Set `NEEDLE_ENGINE_DIR` to
+whichever directory contains the binary + model pair. The ask.py scripts
+resolve the binary at runtime. If you see both, either works.
+
+### Full deployment guide
+
+See **[references/butler-architecture.md](references/butler-architecture.md)** ---
+architecture, per-OS install, verification, gotchas, rollback.
+

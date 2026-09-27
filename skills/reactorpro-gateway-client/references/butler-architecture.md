@@ -3,13 +3,28 @@
 The reference architecture for a neuralOS edge that serves data over the mesh
 **without an agentd**: a gateway (the only network-facing component) plus a
 **butler harness** (a small local skill server that runs ask.py → needle →
-database, read-only by construction). Verified live on Windows Server 2022+
+database, read-only by construction, **needle-grounded by mandate**). Verified live on Windows Server 2022+
 and macOS; Linux uses the systemd variant below.
 
 > Deployed and proven 2026-09-27 on two edges (macOS ARM + Windows Server):
 > Coronation balance ₦5,628,348.97 (Mac→WS2) and Chinook revenue $2,328.60
 > (WS2→Mac), both over fully signed lanes. This document is the distilled,
 > reproducible version of that build.
+
+
+
+> ⚠️ **MANDATORY: Every butler.query MUST go through the needle engine.**
+> The butler's serving path routes every question through ask.py → needle
+> engine (on-device 121M inference) for probe grounding. There is no
+> deterministic keyword-only fallback. The needle engine (needle.exe / neural.exe / neural.exe +
+> needle3.cact / neuralOS.engine / neuralOS.engine) is a **required deployment artifact** on every edge — the
+> butler will not start without it, and butler.query will return an honest
+> hole rather than bypassing inference.
+>
+> This is enforced in the butler code: `butler.query` always spawns
+> chinook_ask.py which invokes the needle engine binary. There is no
+> code path that skips inference.
+
 
 ---
 
@@ -52,10 +67,24 @@ and macOS; Linux uses the systemd variant below.
 - **Python 3.10+** with `nats-py` (`pip install nats-py`).
 - **neuralOS instances on local disk** — each a directory containing
   `needle_menu.json`, `ask.py`, `bridge.py`, `models.py` and a needle engine
-  (`needle` / `needle.exe` + `needle3.cact`), with `NEEDLE_ENGINE_DIR` set or a
+  (`needle` / `needle.exe / neural.exe / neural.exe` + `needle3.cact / neuralOS.engine / neuralOS.engine`), with `NEEDLE_ENGINE_DIR` set or a
   default baked in.
 - **Mutual trust**: each edge's gateway fingerprint pinned in the peer's
   `LIVEAGENT_GATEWAY_MESH_TRUSTED_PEERS`.
+
+
+### Binary Names
+
+The needle engine ships under two names depending on the distribution:
+
+| Distribution | Binary | Model |
+|---|---|---|
+| neuralOS release (`neuralOS.zip`) | `neural.exe` / `neural` | `neuralOS.engine` |
+| needle skill (`needle3.cact`) | `needle.exe` / `needle` | `needle3.cact` |
+
+They are the **same engine** — either works. Set `NEEDLE_ENGINE_DIR` to
+whichever directory contains the binary and model. The ask.py scripts resolve
+the binary at runtime via `NEEDLE_ENGINE_DIR`.
 
 ## 3. Gateway-side configuration (the edge that will *serve*)
 

@@ -186,3 +186,32 @@ the gateway-setup skill for the edge's own configuration.
 Dependencies: Python 3.10+, `nats-py`, `cryptography` for the native path;
 `curl` + `python3` for the REST path. On this machine the framework Python
 (`/Library/Frameworks/Python.framework/Versions/3.12/bin/python3`) has both.
+
+
+---
+
+## Butler harnesses — agentd-free data servers (v1.7.5 skillproxy pattern)
+
+A minimal edge needs no agentd: a **gateway** for the signed lane plus a
+**butler harness** that serves local neuralOS instance probes read-only.
+The client skill ships a ready-to-run generic butler:
+
+| File | Purpose |
+|---|---|
+| `scripts/neuralos-butler.py` | generic butler: single- or multi-instance mode, `butler.list` / `butler.query {question, instance?, k?}`, watchdog self-heal, registry announce |
+| `references/butler-architecture.md` | the full reference deployment: gateway env config, launchd / schtasks / systemd units, verification, gotchas, rollback |
+
+Quick start (any OS with Python 3.10+ and `pip install nats-py`):
+
+```bash
+BUTLER_AGENT_ID="reactorpro/coronation-ws2" \
+BUTLER_MESH_URL="nats://52.3.242.251:4222" \
+BUTLER_INSTANCE_DIR="/path/to/coronation" \
+python scripts/neuralos-butler.py
+```
+
+Calling a butler on another company's edge: use the gateway-signed
+`skillproxy` lane (see the gateway-setup skill,
+`references/butler-architecture.md` §5) — the unsigned direct-NATS path is
+fine only on a trusted bus. Butlers are read-only by construction: no write
+paths exist in the harness code.

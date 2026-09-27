@@ -745,3 +745,33 @@ providers that keep sending bytes or SSE keepalives are never cut, and a provide
 a streamed request with plain JSON is still served. The desktop's proxy and system-proxy
 clients gained `connect_timeout(15s)` + `read_timeout(300s)` (idle-between-bytes) with no
 total timeout by design — streamed answers are only ever cut by upstream silence.
+
+
+---
+
+## Agentd-free edges — gateway + butler harnesses (v1.7.5 skillproxy pattern)
+
+The recommended minimal edge no longer includes an agentd. A **gateway** (the
+only network-facing component) plus a **butler harness** (a small local
+skill-server that runs ask.py → needle → database, read-only) serves instance
+data to the mesh without any LLM, any provider key, or any agent turn.
+
+Full per-OS deployment guide — **[references/butler-architecture.md](references/butler-architecture.md)**
+(architecture, gateway env config, harness install for macOS launchd / Windows
+scheduled-task+NSSM / Linux systemd, verification, gotchas, rollback).
+
+Gateway-side essentials:
+
+```bash
+export LIVEAGENT_GATEWAY_MESH_SKILL_PROXY_TARGETS="<local-butler-ids,comma-separated>"
+export LIVEAGENT_GATEWAY_MESH_INVOKE_OPERATIONS="task,skillproxy"
+export LIVEAGENT_GATEWAY_MESH_TRUSTED_PEERS="<peer-fingerprints,comma-separated>"
+```
+
+Rules learned live: skillproxy is a **top-level skill** (not an invoke
+operation); gateway dispatches carry caller args under `payload.input`;
+harness replies must carry `id` + `to`; harness errors relay as `ok=false`;
+butlers self-heal via a 60 s watchdog (2 missed self-probes → restart). An
+edge without configured targets never advertises the skill. The agentd remains
+an optional *reasoning* plane only — for data service it can be uninstalled
+without touching any of the above.

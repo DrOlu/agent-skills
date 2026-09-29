@@ -21,6 +21,7 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `agentspan` | Comprehensive Agentspan durable workflow orchestration skill for creating, runni |
 | `animejs` | Anime.js adapter patterns for HyperFrames. Use when writing Anime.js animations  |
 | `av-whitelisting` | Submit software to antivirus vendors to prevent false positive detections. Use w |
+| `boxlite-neuralos` | End-to-end recipe + runnable scripts for running neuralOS inside BoxLite microVMs — cook ONE persistent template box with neuralOS preinstalled, verify it, then clone it into disposable job boxes; data-source instance variant (MariaDB-backed chinook agent with a self-installing boot service), REST multi-client serve, export/import archives, measured sizing, and every gotcha met in practice. |
 | `browser-use` | AI browser automation agent — navigate websites, fill forms, extract data, click |
 | `casper` | Enterprise-grade autonomous penetration testing framework for comprehensive web  |
 | `casperpro` | Enterprise-grade penetration testing framework using curl + mitmproxy + playwrig |
@@ -68,6 +69,7 @@ npx skills add DrOlu/agent-skills --skill '*' -g -y
 | `liveagent-gateway` | Drive a LiveAgent instance remotely through its gateway from any agent, shell, or script. HTTP API, v2 WebSocket+Protobuf, chat streaming, per-agent credentials, whitelisted pass-through. |
 | `loop` | Run any task iteratively until completion using Ralph Wiggum methodology. Execut |
 | `lottie` | Lottie and dotLottie adapter patterns for HyperFrames. Use when embedding lottie |
+| `msb-neuralos` | End-to-end recipe + runnable scripts for running neuralOS inside Microsandbox (msb) microVMs — cook ONE template sandbox, capture a FULL live snapshot (disk+RAM+processes), then fork it into disposable job sandboxes in seconds; chinook data-instance pattern, Windows-native notes (WHP, ARM64), measured timings, and every gotcha met in practice. |
 | `needle` | On-device foundation model (Cactus Compute Needle, 121M/2-bit, ~35 MB) for offline CPU tool calling, function calling, structured extraction and embeddings — no cloud API, no keys. Use for local-first agent tool selection on any OS, for diagnosing misbehaving needle agents, or wiring CLIs as LLM-callable tools. |
 | `netops` | The ultimate network troubleshooting skill — a CCIE/RHCE-level reference and dec |
 | `nylas` | Nylas CLI for unified email, calendar, and contacts via IMAP/SMTP, Google, and M |

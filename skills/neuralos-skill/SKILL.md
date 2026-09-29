@@ -1,21 +1,17 @@
 ---
 name: neuralos-skill
-description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, formerly distributed as Cactus Compute needle — the two names refer to the same runtime; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. On EVERY platform (macOS/Linux/Windows) the CLI answers to needle or neural and the weights to needle3.cact or neuralOS.engine — same runtime, both spellings work. Includes a Windows/PowerShell-only variant (no Python at runtime). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, needs a zero-dependency engine binary that serves function calls over HTTP, or wants to set up neuralOS (plus the optional laya decision seam) on a completely new host. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive. Also use it when a typed judgment layer (guardrails, triage, classification) is wanted offline alongside the tool-caller — the laya decision model is the fleet's package of choice for that seam.
+description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, decoupled from Cactus Compute needle and distributed independently as the `neuralos` package — engine + weights bundled into every install; 121M params, 2-bit, ~35 MB weights + <1 MB engine) for tool calling, function calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. On EVERY platform (macOS/Linux/Windows) the CLI answers to needle or neural and the weights to needle3.cact or neuralOS.engine — same runtime, both spellings work. Includes a Windows/PowerShell-only variant (no Python at runtime). Use this skill whenever the user mentions neuralOS, needle, cactus-needle, cactus compute, .cact archives, on-device / offline / local-first / edge LLM tool calling or function calling, an agent that picks functions and fills arguments without a cloud API, running a tiny model on a server / phone / robot / Raspberry Pi, PowerShell-only Windows boxes, needs a zero-dependency engine binary that serves function calls over HTTP, or wants to set up neuralOS (plus the optional laya decision seam) on a completely new host. Also use it when an agent misbehaves (wrong tool, refused calls, repeated calls, "ungrounded" errors), when wiring OS CLIs or subprocesses as LLM-callable tools, or when fine-tuning or exporting a .cact archive. Also use it when a typed judgment layer (guardrails, triage, classification) is wanted offline alongside the tool-caller — the laya decision model is the fleet's package of choice for that seam.
 ---
 
 # neuralOS — on-device tool calling
 
-> **Branding scope.** neuralOS is the product name (Neural AI). The runtime
-> binaries and the Python package keep their upstream names — `needle`,
-> `cactus-needle`, `needle3.cact` — and every command in this manual uses those
-> real names so nothing here is aspirational. Visible name: neuralOS.
-> Functional name: needle. **On every platform — macOS, Linux and Windows
-> alike** — the CLI may be invoked as either `needle` or `neural` and the
-> weights as either `needle3.cact` or `neuralOS.engine`: same runtime, both
-> spellings work everywhere. `references/windows-powershell.md` covers the
-> Windows-specific no-Python deployment; the naming aliases themselves are
-> platform-independent.
-
+> **Branding scope (updated).** neuralOS is now a fully independent product
+> and distribution: GitHub `DrOlu/neuralOS`, PyPI **`neuralos`**, npm
+> **`neuralos`** (v3.9.6+ = this runtime), site **neuralos.ng**. The import
+> package and binaries keep their upstream names — `import needle`,
+> `needle3.cact`, CLI `needle` / `neural`. Upstream `cactus-needle` remains a
+> separate project; neuralOS 3.0.3 ships upstream grounding fixes with the
+> 3.0.2 engine bundled into every install (fully offline).
 
 neuralOS is a foundation model built for tiny devices: a single 121M-parameter
 "Simple Attention Network" quantised to 2-bit, shipped as one ~35 MB weights
@@ -35,7 +31,7 @@ For the companion skill that turns raw data sources into neuralOS
 instances (profile any source → Pydantic models → generated menu, bridge and
 agent), see `neuralos`.
 
-Everything below was verified live against **cactus-needle 3.0.2** (Python
+Everything below was verified live against **neuralOS 3.0.3** (bundled 3.0.2 engine) (Python
 API, CLI, and the standalone engine on macOS arm64, with source-level checks
 of the Windows/Linux paths).
 
@@ -59,19 +55,27 @@ difference between a working agent and a flaky one.
 ## Install
 
 ```
-pip install cactus-needle          # Python 3.9+; macOS, Linux, Windows
+# PyPI — first choice on all platforms (engine + weights bundled, offline)
+pip install neuralos
+
+# Node.js runtime (weights bundled; the old npm `neuralos` daemon -> rterm-backend)
+npm install neuralos
+
+# one-line bootstrappers (venv + checksums + PATH shim)
+curl -fsSL https://neuralos.ng/install.sh | sh          # macOS / Linux
+irm https://neuralos.ng/install.ps1 | iex               # Windows PowerShell
 ```
 
 Bringing up a **brand-new host** end to end (interpreter → runtime →
 engine binary → optional laya decision seam → readiness smoke tests)?
 Follow the sequenced runbook: `references/new-host-bootstrap.md`.
 
-- On **Windows**, prefer `py -m pip install cactus-needle`. The engine ships
-  as a prebuilt wheel (`libneedle3.dll`) — no compiler needed.
-- First use auto-downloads the engine + `needle3.cact` weights into
-  `~/.cache/cactus-needle/v3/<engine-version>/` (~36 MB; on Windows:
-  `%USERPROFILE%\.cache\cactus-needle\v3\<version>\`). Set
-  `NEEDLE3_LIB_PATH` to override the library location.
+- On **Windows**, prefer `py -m pip install neuralos`. The engine ships
+  as a prebuilt wheel (`libneedle3.dll` (bundled in the wheel)) — no compiler needed.
+- The `neuralos` wheels bundle the engine + weights — no first-use download.
+  (The upstream `cactus-needle` package still downloads into
+  `~/.cache/cactus-needle/v3/<engine-version>/`; set `NEEDLE3_LIB_PATH` to
+  override the library location if you use it.)
 - If the machine must never touch the network, pre-seed that cache from
   another box, or use the standalone engine bundle (below) which needs no
   Python at runtime.
@@ -80,7 +84,7 @@ Follow the sequenced runbook: `references/new-host-bootstrap.md`.
 - **Multi-Python gotcha:** on machines with several Pythons (Homebrew vs
   python.org vs system), the `needle` CLI lives in the interpreter's bin dir
   that `pip install`ed it. If `import needle` fails under `python3`, find the
-  right interpreter (`ls */bin/needle`, `pip show cactus-needle`) — or see
+  right interpreter (`ls */bin/needle`, `pip show neuralos`) — or see
   the re-exec pattern in `references/troubleshooting.md`.
 
 ## Quick start (Python API)
@@ -171,7 +175,7 @@ Full details in `references/engine-binary.md`.
   module into `tools.json` for the engine binary or `needle run --tools`.
 - `tests/` — unit tests (stdlib `unittest`) for the exporter: import-safety failures
   raise a clear SystemExit, and the full menu export round-trips through the real
-  `@needle.tool` decorator when cactus-needle is installed. Run:
+  `@needle.tool` decorator when the neuralOS engine is installed. Run:
   `python -m unittest discover -s skills/neuralos-skill/tests`.
 
 

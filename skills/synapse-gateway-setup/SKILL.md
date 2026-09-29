@@ -1,6 +1,6 @@
 ---
-name: reactorpro-gateway-setup
-description: Install, configure, and operate the ReactorPro gateway binary as a headless service on any server — Linux (systemd), macOS (launchd), Windows, or Docker — federate it into a NATS/Synapse agent mesh, and deploy reactorpro-agentd, the headless concurrent agent worker that attaches to a gateway as a second executor. Use this skill whenever the user wants to deploy ReactorPro's gateway, stand up a ReactorPro server or VPS, run reactorpro-gateway as a background service, enable the mesh bridge, let agents in one organisation reach agents in another, connect ReactorPro desktop apps to a shared gateway, run a gateway with no desktop app attached, run a server-side headless agent (reactorpro-agentd) with a given provider, API key and model, expose a skills library to a headless worker, or troubleshoot a gateway that will not start, returns 401, reports the mesh as disconnected, or sees zero peers. Also use it for upgrading the gateway or agentd, backing up identities, and choosing mesh settings for intra- or inter-organisation deployments.
+name: synapse-gateway-setup
+description: Install, configure, and operate the Synapse Gateway binary (the ReactorPro gateway, now distributed as `synapse-gateway` — install with `pip install synapse-gateway`, `npm i -g @hyperspaceng/synapse-gateway`, or the one-liners at synapse.hyperspace.ng) as a headless service on any server — Linux (systemd), macOS (launchd), Windows, or Docker — federate it into a NATS/Synapse agent mesh, and deploy reactorpro-agentd, the headless concurrent agent worker that attaches to a gateway as a second executor. Use this skill whenever the user wants to deploy ReactorPro's gateway, stand up a ReactorPro server or VPS, run synapse-gateway as a background service, enable the mesh bridge, let agents in one organisation reach agents in another, connect ReactorPro desktop apps to a shared gateway, run a gateway with no desktop app attached, run a server-side headless agent (reactorpro-agentd) with a given provider, API key and model, expose a skills library to a headless worker, or troubleshoot a gatew …
 ---
 
 # ReactorPro Gateway — Server Setup
@@ -12,6 +12,33 @@ dependencies: no Docker, no Go toolchain, no Node, no shared libraries. One file
 token, one config.
 
 Use this skill to stand it up on a server and keep it running.
+## Install (one line, every OS — native binaries, offline after install)
+
+**PyPI — first choice on all platforms:**
+
+```bash
+pip install synapse-gateway
+```
+
+Platform wheels bundle the `synapse-gateway` + `reactorpro-agentd` native
+binaries (checksum-verified at build time) and put `synapse-gateway` /
+`synapse-agentd` commands on PATH. Node.js: `npm i -g @hyperspaceng/synapse-gateway`.
+One-line bootstrappers (macOS/Linux/Windows, download from GitHub Releases +
+verify SHA256SUMS):
+
+```sh
+curl -fsSL https://synapse.hyperspace.ng/install.sh | sh        # also: https://synapse.neuralos.ng/install.sh
+```
+
+```powershell
+irm https://synapse.hyperspace.ng/install.ps1 | iex
+```
+
+GitHub release assets keep their historical `reactorpro-gateway-<goos>-<goarch>`
+names; the pip/npm-installed commands are `synapse-gateway` / `synapse-agentd`.
+
+---
+
 
 ## Which kind of deployment are you building?
 
@@ -83,7 +110,7 @@ BASE=https://github.com/DrOlu/ReactorPro/releases/latest/download
 curl -fsSLO "$BASE/reactorpro-gateway-linux-amd64"
 curl -fsSLO "$BASE/SHA256SUMS"
 sha256sum -c --ignore-missing SHA256SUMS     # macOS: shasum -a 256 -c
-install -m 0755 reactorpro-gateway-linux-amd64 /usr/local/bin/reactorpro-gateway
+install -m 0755 reactorpro-gateway-linux-amd64 /usr/local/bin/synapse-gateway
 ```
 
 Verify the checksum. These are unsigned binaries; the checksum is the only integrity signal you
@@ -122,7 +149,7 @@ Minimal configuration:
 ```bash
 LIVEAGENT_GATEWAY_TOKEN=$(openssl rand -hex 32)   # 256-bit; 32+ chars is sensible
 LIVEAGENT_GATEWAY_HTTP_ADDR=:3000
-LIVEAGENT_GATEWAY_DATA_DIR=/var/lib/reactorpro-gateway
+LIVEAGENT_GATEWAY_DATA_DIR=/var/lib/synapse-gateway
 ```
 
 The five settings that cover almost every deployment:
@@ -135,7 +162,7 @@ The five settings that cover almost every deployment:
 | TLS cert / key | `-tls-cert` / `-tls-key` | `LIVEAGENT_GATEWAY_TLS_CERT` / `_KEY` | *(off — plain HTTP)* |
 | Mesh on/off | `-mesh-enabled` | `LIVEAGENT_GATEWAY_MESH_ENABLED` | `false` |
 
-Run `reactorpro-gateway --help` for the full list. `references/configuration.md` documents every
+Run `synapse-gateway --help` for the full list. `references/configuration.md` documents every
 flag with its default and when to change it.
 
 ### Choosing a listen address
@@ -199,7 +226,7 @@ Pick the section for the platform. Full unit files, hardening options, and Docke
 ### Linux — systemd
 
 ```ini
-# /etc/systemd/system/reactorpro-gateway.service
+# /etc/systemd/system/synapse-gateway.service
 [Unit]
 Description=ReactorPro Gateway
 After=network-online.target
@@ -207,23 +234,23 @@ Wants=network-online.target
 
 [Service]
 User=reactorpro
-EnvironmentFile=/etc/reactorpro-gateway.env
-ExecStart=/usr/local/bin/reactorpro-gateway --http-addr=127.0.0.1:3000
+EnvironmentFile=/etc/synapse-gateway.env
+ExecStart=/usr/local/bin/synapse-gateway --http-addr=127.0.0.1:3000
 Restart=always
 RestartSec=5
-StateDirectory=reactorpro-gateway
+StateDirectory=synapse-gateway
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
-install -d -m 0750 -o reactorpro -g reactorpro /var/lib/reactorpro-gateway
+install -d -m 0750 -o reactorpro -g reactorpro /var/lib/synapse-gateway
 printf 'LIVEAGENT_GATEWAY_TOKEN=%s\n' "$(openssl rand -hex 32)" \
-  > /etc/reactorpro-gateway.env
-chmod 0600 /etc/reactorpro-gateway.env
-# add: LIVEAGENT_GATEWAY_DATA_DIR=/var/lib/reactorpro-gateway
-systemctl daemon-reload && systemctl enable --now reactorpro-gateway
+  > /etc/synapse-gateway.env
+chmod 0600 /etc/synapse-gateway.env
+# add: LIVEAGENT_GATEWAY_DATA_DIR=/var/lib/synapse-gateway
+systemctl daemon-reload && systemctl enable --now synapse-gateway
 ```
 
 The environment file **must** be readable by the service user — `0600` owned by root works because
@@ -524,7 +551,7 @@ means the directory is a view of *now*, not a durable record.
 Work down this list — each step depends on the one before it:
 
 ```bash
-TOKEN=$(grep -oP '(?<=LIVEAGENT_GATEWAY_TOKEN=).*' /etc/reactorpro-gateway.env)
+TOKEN=$(grep -oP '(?<=LIVEAGENT_GATEWAY_TOKEN=).*' /etc/synapse-gateway.env)
 
 # 1. Process is listening (no auth)
 curl -s localhost:3000/healthz
@@ -569,9 +596,9 @@ reason. `references/troubleshooting.md` covers the common ones.
 The upgrade is: replace the binary, keep the data directory, restart.
 
 ```bash
-systemctl stop reactorpro-gateway
-install -m 0755 reactorpro-gateway-linux-amd64 /usr/local/bin/reactorpro-gateway
-systemctl start reactorpro-gateway
+systemctl stop synapse-gateway
+install -m 0755 reactorpro-gateway-linux-amd64 /usr/local/bin/synapse-gateway
+systemctl start synapse-gateway
 curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/status
 ```
 

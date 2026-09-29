@@ -113,7 +113,7 @@ curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/api/mesh/status | \
 ## 4. Butler harness installation
 
 The generic harness is `scripts/neuralos-butler.py` in the
-**reactorpro-gateway-client** skill. Configure by environment:
+**synapse-gateway-client** skill. Configure by environment:
 
 | Env | Meaning |
 |---|---|

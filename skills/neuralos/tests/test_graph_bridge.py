@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Unit tests for the graph layer (graph_bridge.py).
 
 The contract under test is references/graph-standards.md:

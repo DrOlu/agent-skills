@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Unit tests for profile_data.py — the Phase-1 profiler's type inference.
 
 Pins the live-lesson fixes: only strings become enum candidates (a Literal of

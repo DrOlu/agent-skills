@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """graph_bridge — reusable runtime graph layer for neuralOS instances.
 
 Drop into any instance directory alongside graph_edges.json (emitted by

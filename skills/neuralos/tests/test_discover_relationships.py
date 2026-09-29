@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Unit tests for discover_relationships.py — the graph-layer proposer.
 
 Contract: discovery PROPOSES by name only (runtime verifies); bare id<->id

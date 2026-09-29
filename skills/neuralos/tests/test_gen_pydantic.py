@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Unit tests for gen_pydantic.py — Phase-2 model emission.
 
 Pins the #1 generated-model failure (aliases: rows arrive keyed by the

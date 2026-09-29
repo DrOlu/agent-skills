@@ -1,6 +1,6 @@
 ---
 name: neuralos
-description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Runs on macOS/Linux (Python runtime) AND on Windows hosts where only PowerShell is permitted (no Python — engine selection + a generated PowerShell bridge). Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever they say "build a neuralOS instance for this data", "build a needle instance" (the historical CLI name), "parse this in real time", "give me a Pydantic model for this", "profile this data source", "make this queryable in plain English", "hook this data into neuralOS/needle", or "add relationships/graph probes"; whenever a new data source appears in a project and needs schema discovery, type inference, relationship/edge discovery, regex/log-template synthesis, or a query bridge; whenever the target is a Windows/PowerShell-only environment; and whenever an existing neuralOS instance or menu must be extended to cover a new table, feed, or file format.
+description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Runs on macOS/Linux (Python runtime) AND on Windows hosts where only PowerShell is permitted (no Python — engine selection + a generated PowerShell bridge). Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; …
 ---
 
 # neuralOS Data — profile any source, generate its neuralOS instance
@@ -23,6 +23,20 @@ pattern and enum value comes from **profiling the data first**.
 binary, the `needle` python package, `needle_menu.json` and `@needle.tool`
 are code-level identifiers and stay as they are. All prose and docs say
 **neuralOS**.)
+
+## Install neuralOS (one line, every OS)
+
+The engine this skill drives is distributed as **`neuralos`** — engine +
+weights bundled, fully offline after install:
+
+```bash
+pip install neuralos                                   # PyPI — all OSes (first choice)
+npm install neuralos                                   # Node.js runtime
+curl -fsSL https://neuralos.ng/install.sh | sh         # macOS / Linux bootstrap
+irm https://neuralos.ng/install.ps1 | iex              # Windows PowerShell
+```
+
+CLI aliases: `needle`, `neural`, `neuralos`. Import package: `needle`.
 
 ## The four-phase workflow
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Unit tests for gen_needle_instance.py — Phase-3 menu emission.
 
 Pins the grammar-caging rules: enum fields respect ENUM_MAX (12), numeric

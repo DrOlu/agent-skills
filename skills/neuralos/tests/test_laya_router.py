@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Unit tests for laya_router.py — the OPTIONAL decision-model seam.
 
 Pins the contracts that make the seam safe to ship:

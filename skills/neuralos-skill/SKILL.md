@@ -108,6 +108,31 @@ the tool, executes it **in-process**, feeds the return value back to the
 model, and returns the final response. Full API — including `Field`
 constraints, extraction and embeddings — in `references/python-api.md`.
 
+## Selector & results contract (needle 3.0.3 — verified live)
+
+Non-negotiable runtime facts. Code that ignores them mis-answers silently:
+
+- **`function_calls` is ALWAYS `[]`** — even when a tool executed and
+  `results` is correct. Route on `results`; never branch on `function_calls`.
+- **`results` persists across `agent.run()` calls on the same agent object.**
+  A question that produces no parsed call returns the PREVIOUS ask's data.
+  Either one question per process, or an explicit empty-results guard that
+  errors out (exit non-zero) instead of printing stale data.
+- **Menus above ~12 tools defeat in-context selection.** Use a structured
+  retrieval front-end — lexical top-K over triggers/name/description, with a
+  deterministic fast path that executes the rank-1 probe directly when its
+  enum-caged argument appears verbatim in the question. The `neuralos` skill
+  generates this (`ask.py`) for every data-source instance; reuse that
+  pattern.
+- **Possessive phrasings never ground** ("Ireland's top customers") —
+  normalize to "top customers in Ireland" before selection (derive the
+  values from the menu's own enum cages).
+- **Trigger bloat degrades selection globally** — adding dozens of literal
+  strings to one probe measurably hurt unrelated picks in live testing.
+  Prefer patterns; re-run the full selection suite after menu changes.
+- **`tool_index_path` is accepted but the index may never be written** on
+  3.0.3 — don't rely on `.tool_index.json` existing; verify or use retrieval.
+
 ## Tool design — the rules that make a 121M model reliable
 
 These came from live failure modes, not style guides. Details and code

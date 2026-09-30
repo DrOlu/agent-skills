@@ -122,6 +122,7 @@ Emits a ready-to-run instance directory:
 | `graph_bridge.py` | runtime graph layer (copy from `scripts/graph_bridge.py`): overview / neighbors / connect over parsed records, built at fetch time |
 | `bridge.py` | retrieval + parsing: reads the real source (file, DSN, API) and validates every record through the Pydantic models |
 | `instance.py` | the neuralOS agent: menu loaded, triggers set, agentic loop wired, example asks included |
+| `ask.py` | **mandated entry point**: structured retrieval (lexical top-K) + deterministic fast path for enum-caged args; results-gated, never prints stale data |
 | `README.md` | how to run it, what to ask it, how to extend it |
 
 Generation follows the hard rules in `references/instance-standards.md`
@@ -142,9 +143,11 @@ Never deliver unverified:
    Below ~95% means the model is too strict or the data is dirtier than the
    sample showed — widen constraints or add validators, then re-check.
 2. **Selection test** — ask the generated instance the same question three
-   ways (e.g. "how many…", "count…", "show me the number of…"). All three
-   must select the intended probe. **After adding graph probes, re-run the
-   FULL selection suite** — new menu entries can degrade existing picks.
+   ways (e.g. "how many…", "count…", "show me the number of…") **through
+   `ask.py`**. All three must select the intended probe. **After adding graph
+   probes — or editing any trigger — re-run the FULL selection suite**; menu
+   changes can degrade existing picks. Exit 2 means "no results produced":
+   fix routing, never ship a gate that prints stale data.
 3. **Truth check** — compare one relayed number against a direct query of the
    source. The data layer is the only oracle.
 4. **Graph gate** (see `references/graph-standards.md`): every `exact_fk`
@@ -237,13 +240,48 @@ unreliable:
    with no real edges gets `graph_overview` alone, or nothing — recorded in
    verification.txt).
 
+8. **Structured retrieval is MANDATED for menus above ~12 probes** — every
+   python-runtime instance ships `ask.py` (lexical top-K over triggers plus a
+   deterministic fast path for enum-caged args), and every ask goes through
+   it. Never hand a large menu to the 121M selector in-context, never branch
+   on `function_calls` (empty in 3.0.3 even on success), never print results
+   when none were produced (stale-buffer answers are the #1 silent
+   mis-answer). Possessive questions ("Ireland's top customers") are
+   normalized to canonical trigger phrasings before selection. Any menu edit
+   requires re-running the FULL selection suite through `ask.py`.
+
 Full rationale: `references/instance-standards.md`.
+
+## Runtime gotchas (needle 3.0.3 — verified live)
+
+These cost a full debugging session; treat them as contract:
+
+- **`function_calls` is ALWAYS empty** — even when a tool executed and
+  `results` is correct. Gate on `results`, never on `function_calls`.
+- **`resp["results"]` persists across runs on the same agent.** A question
+  that produces no parsed call returns the PREVIOUS ask's data — silently
+  mis-answering the user. One question per process (the generated `ask.py`),
+  or an explicit empty-results guard (exit 2).
+- **The selector fumbles country-caged probes** ("top customers in Brazil"
+  intermittently routes to the GLOBAL ranking). `ask.py`'s deterministic
+  fast path executes the rank-1 probe directly when its enum-caged argument
+  appears verbatim in the question — the model stays as fallback only.
+- **Possessive phrasings never ground** ("Ireland's top customers") —
+  normalize to "top customers in Ireland" in the orchestrator before
+  selection (generated `ask.py` does this from the menu's own enums).
+- **`tool_index_path` is accepted but the index may never materialize** —
+  verify `.tool_index.json` exists; if not, the retrieval front-end is your
+  selection layer, not the (missing) embedding index.
+- **Trigger bloat degrades selection globally** — 71 added strings on one
+  probe measurably hurt unrelated picks. Add triggers compactly (possessive
+  patterns, not per-value literals where a pattern would do), and re-run the
+  full suite after any menu change.
 
 ## Deliverables contract
 
 Every completed run leaves behind, in the chosen `--out` directory:
 `profile.json`, `graph_edges.json`, `models.py`, `needle_menu.json`,
-`bridge.py`, `instance.py`, `README.md`, and a `verification.txt` recording
+`bridge.py`, `instance.py`, `ask.py`, `README.md`, and a `verification.txt` recording
 the Phase-4 results (model coverage %, selection test, truth check, and the
 graph gate: edge truth / disjoint honesty / dangling spot-check). If any
 piece is missing, the job is not done.

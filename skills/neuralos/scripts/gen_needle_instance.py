@@ -649,6 +649,179 @@ if __name__ == "__main__":
         selection()
 '''
 
+ASK_PY = '''#!/usr/bin/env python3
+"""Structured retrieval entry point — the MANDATED way to ask this instance.
+
+Retrieval: score the question against each menu probe's triggers/name/
+description; the 121M agent sees only the top-K probes — never the whole menu.
+
+Deterministic fast path: if the rank-1 probe's REQUIRED argument is
+enum-caged and the question names one of its values verbatim, the probe is
+executed DIRECTLY and the selector is bypassed. Verified needle-3.0.3
+failure modes this avoids:
+  * type=call with ZERO parsed calls (selector fumble)
+  * resp["results"] carrying the PREVIOUS ask's output (stale answers)
+  * possessive phrasings ("X's top customers") never grounding
+
+usage: python3 ask.py "<question>" [--k 8] [--full]
+exit : 0 -> results (stdout JSON)   2 -> nothing produced (never stale data)
+"""
+import json
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+os.chdir(HERE)
+sys.path.insert(0, HERE)
+
+K_DEFAULT = 8
+STOP = set("the a an of in on for to and or is are was were what which who how "
+           "many show me give list all with their from by at it its do does did "
+           "i we you this that those these there have has had more than one not "
+           "use between during along per into over under about their".split())
+
+
+def tokens(text):
+    return set(re.findall(r"[a-z0-9_]+", str(text).lower())) - STOP
+
+
+def score_probe(probe, q_tokens):
+    s = 0.0
+    for trig in probe.get("triggers", []):
+        s += 3.0 * len(q_tokens & tokens(trig))
+    s += 1.0 * len(q_tokens & tokens(probe["name"].replace("_", " ")))
+    s += 0.3 * len(q_tokens & tokens(probe.get("description", "")))
+    return s
+
+
+def load_enum_cages(menu):
+    """{probe_name: {arg: [enum, ...]}} for REQUIRED enum-caged args."""
+    cages = {}
+    for probe in menu:
+        props = (probe.get("parameters") or {}).get("properties") or {}
+        required = (probe.get("parameters") or {}).get("required") or []
+        cage = {}
+        for arg, spec in props.items():
+            if arg in required and isinstance(spec, dict) and spec.get("enum"):
+                cage[arg] = [str(v) for v in spec["enum"]]
+        if cage:
+            cages[probe["name"]] = cage
+    return cages
+
+
+def all_enum_values(cages):
+    vals = []
+    for cage in cages.values():
+        for opts in cage.values():
+            vals.extend(opts)
+    return [v for v in dict.fromkeys(vals) if len(v) >= 3]
+
+
+def normalize_possessive(question, enum_values):
+    \"\"\"Ireland's top customers -> top customers in Ireland (the 121M model
+    does not ground on English possessives; rewrite to the canonical form the
+    menu triggers were built for).\"\"\"
+    for v in enum_values:
+        pat = re.compile(r"\\b" + re.escape(v) + r"'s\\b", re.I)
+        if pat.search(question):
+            stripped = pat.sub("", question).strip(" -,")
+            return f"{stripped} in {v}".strip(), v
+    return question, None
+
+
+def main():
+    question = " ".join(sys.argv[1:]).strip()
+    k = K_DEFAULT
+    full = "--full" in sys.argv
+    if "--k" in sys.argv:
+        k = int(sys.argv[sys.argv.index("--k") + 1])
+    if not question:
+        raise SystemExit('usage: python3 ask.py "<question>" [--k 8] [--full]')
+
+    menu = json.load(open("needle_menu.json", encoding="utf-8"))
+    import instance as inst
+    tools_by_name = {t.__name__: t for t in inst.TOOLS}
+    cages = load_enum_cages(menu)
+
+    enum_values = all_enum_values(cages)
+    question, moved = normalize_possessive(question, enum_values)
+    if moved:
+        print("normalized question:", question, file=sys.stderr)
+
+    q_tokens = tokens(question)
+    scored = sorted(((score_probe(p, q_tokens), p) for p in menu),
+                    key=lambda x: -x[0])
+
+    if full:
+        selected = list(inst.TOOLS)
+        print("context: FULL menu (%d probes)" % len(selected), file=sys.stderr)
+    else:
+        top = [p for s, p in scored if s > 0][:k]
+        selected = [tools_by_name[p["name"]] for p in top
+                    if p["name"] in tools_by_name]
+        print("retrieved:", [t.__name__ for t in selected], file=sys.stderr)
+        if not selected:
+            print(json.dumps({"error": "no probe scored > 0 for this question",
+                              "question": question}, indent=1, ensure_ascii=False))
+            raise SystemExit(2)
+
+    # ---- deterministic fast path (enum-caged rank-1 probe) ---------------
+    if selected:
+        probe = next((p for p in menu if p["name"] == selected[0].__name__), None)
+        cage = cages.get(selected[0].__name__) if probe else None
+        if probe and cage:
+            kwargs = {}
+            for arg, opts in cage.items():
+                hit = next((v for v in opts
+                            if re.search(r"\\b" + re.escape(v) + r"\\b",
+                                         question, re.I)), None)
+                if hit is None:
+                    kwargs = None
+                    break
+                kwargs[arg] = hit
+            if kwargs:
+                tool = selected[0]
+                print("deterministic:", tool.__name__, kwargs, file=sys.stderr)
+                r = tool(**kwargs)
+                if isinstance(r, dict) and selected:
+                    r = {**r, "_tool": tool.__name__}
+                print(json.dumps([r], indent=1, ensure_ascii=False, default=str))
+                return
+
+    # ---- model fallback (top-K menu, one step) ---------------------------
+    agent = inst.needle.Needle(tools=selected,
+                               system="answer from the menu probes.",
+                               auto_date=False)
+    resp = agent.run(question, max_steps=1)
+    print("type:", resp.get("type"), "| confidence:",
+          resp.get("confidence"), file=sys.stderr)
+
+    # needle 3.0.3: function_calls stays EMPTY even on success — the executed
+    # outcome arrives in results. Gate on RESULTS, never on function_calls,
+    # and never print a possibly-stale buffer when nothing was produced.
+    results = resp.get("results")
+    empty = results in (None, [], {}) or (isinstance(results, list)
+                                          and len(results) == 0)
+    if empty:
+        print(json.dumps({"error": "no results produced for this question",
+                          "question": question,
+                          "candidates_retrieved": [t.__name__ for t in selected],
+                          "confidence": resp.get("confidence")},
+                         indent=1, ensure_ascii=False))
+        raise SystemExit(2)
+
+    if isinstance(results, list) and selected:
+        for item in results:
+            if isinstance(item, dict) and "rows" in item:
+                item["_tool"] = selected[0].__name__
+    print(json.dumps(results, indent=1, ensure_ascii=False, default=str))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
 README = '''# {agent} — generated needle instance
 
 Source kind : {kind}
@@ -656,6 +829,13 @@ Runtime     : {runtime}
 Menu        : needle_menu.json ({n_probes} probes)
 
 ## Run (Python runtime)
+
+MANDATED entry point (structured retrieval — never ask instance.py directly
+when the menu exceeds ~12 probes; the 121M selector fumbles large menus):
+
+    {py} ask.py "your question in plain English"
+
+Direct (single-probe debugging only):
 
     {py} instance.py "your question in plain English"
 
@@ -789,6 +969,10 @@ def main():
                    if kind == "database" else "show me a summary of the data")
         open(os.path.join(args.out, "instance.py"), "w", encoding="utf-8").write(
             instance_code(profile, table, agent_name, example))
+        # Structured retrieval entry point (MANDATED — see SKILL.md operating
+        # rule 8): lexical top-K retrieval + deterministic fast path for
+        # enum-caged args. Never print stale results (needle 3.0.3).
+        open(os.path.join(args.out, "ask.py"), "w", encoding="utf-8").write(ASK_PY)
 
     model_cls = pascal(table) if kind == "database" else ("LogLine" if kind == "log_lines" else "Record")
     if kind == "database":

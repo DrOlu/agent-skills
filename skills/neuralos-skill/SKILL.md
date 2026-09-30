@@ -108,6 +108,15 @@ the tool, executes it **in-process**, feeds the return value back to the
 model, and returns the final response. Full API — including `Field`
 constraints, extraction and embeddings — in `references/python-api.md`.
 
+## Performance: resident daemon (amortize weights load)
+
+Process-per-ask reloads the weights every time. For services, run the
+resident daemon (`scripts/askd.py` in the `neuralos` skill): one process,
+many asks, full pipeline (audit, cache, gating, fast path) behind
+`POST /ask`. Pin the runtime (`neuralos==3.0.3`) in deployments and re-read
+the contract above on any upgrade — the results/function_calls semantics are
+version-specific.
+
 ## Selector & results contract (needle 3.0.3 — verified live)
 
 Non-negotiable runtime facts. Code that ignores them mis-answers silently:

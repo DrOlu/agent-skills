@@ -11,6 +11,8 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 NAME="chinook-ms"; CPUS=1; MEM="1G"; PORT=8877
 INSTANCE_DIR="${CHINOOK_INSTANCE_DIR:-$HOME/boxlite-lab/chinook}"; SKIP_SUITE=0
+NET_ARGS=""   # e.g. --net-default deny (NOTE: install phase NEEDS network —
+              # for offline boxes bake an OCI image with the deps instead)
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) NAME="$2"; shift 2;;
@@ -29,7 +31,8 @@ echo "== [1] create sandbox '$NAME' (if missing) =="
 if msb list | awk 'NR>1{print $1}' | grep -qx "$NAME"; then
   echo "   exists — reusing (state persists)"
 else
-  msb create --name "$NAME" --hostname chinook -c "$CPUS" -m "$MEM" python:3.12-slim >/dev/null
+  # shellcheck disable=SC2086
+  msb create --name "$NAME" --hostname chinook -c "$CPUS" -m "$MEM" $NET_ARGS python:3.12-slim >/dev/null
 fi
 msb start "$NAME" >/dev/null 2>&1 || true
 sleep 2

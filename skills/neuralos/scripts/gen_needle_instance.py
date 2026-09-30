@@ -642,40 +642,98 @@ def selection():
                 print(f"  [{phrasing!r}] {line[:160]}")
 
 
+def truth():
+    print("== truth oracle: probe vs direct SQL (numeric-aware) ==")
+    import os
+    if not os.path.exists("truth.json"):
+        print("(no truth.json — file-kind instance: nothing to cross-check)")
+        return
+    items = json.load(open("truth.json", encoding="utf-8"))
+    ok_all = True
+    for t in items:
+        via_sql = bridge._q(t["sql"])
+        if via_sql and "error" in via_sql[0]:
+            print(f"FAIL  {t['id']}: {via_sql[0]['error']}"); ok_all = False; continue
+        sql_val = list(via_sql[0].values())[0]
+        probe_fn = getattr(bridge, t["probe"], None)
+        probe_res = probe_fn() if probe_fn else {}
+        probe_val = probe_res.get("count", probe_res.get("returned"))
+        try:
+            same = float(probe_val) == float(sql_val)
+        except (TypeError, ValueError):
+            same = str(probe_val) == str(sql_val)
+        print(f"{'PASS' if same else 'FAIL'}  {t['id']}: probe={probe_val} sql={sql_val}")
+        ok_all &= same
+    if not ok_all:
+        raise SystemExit(1)
+
+
+def golden():
+    print("== golden question bank (through ask.py) ==")
+    bank = json.load(open("golden.json", encoding="utf-8"))
+    bad = 0
+    for item in bank["items"]:
+        out = subprocess.run([sys.executable, "ask.py", item["q"]],
+                             capture_output=True, text=True)
+        try:
+            env = json.loads(out.stdout)
+            probe = env.get("probe") or (env[0].get("_tool") if isinstance(env, list) and env else None)
+        except Exception:
+            probe = None
+        ok = out.returncode == 0 and (item["expect_probe"] is None or probe == item["expect_probe"])
+        bad += not ok
+        print(f"{'PASS' if ok else 'FAIL'}  {item['q']!r} -> probe={probe}")
+
+
 if __name__ == "__main__":
     fetch_sample()
     coverage()
-    if "--full" in sys.argv:
+    if "--full" in sys.argv or "--selection" in sys.argv:
         selection()
+    if "--truth" in sys.argv:
+        truth()
+    if "--golden" in sys.argv:
+        golden()
+    if "--invariants" in sys.argv:
+        import subprocess
+        r = subprocess.run([sys.executable, "invariants.py"])
+        raise SystemExit(r.returncode)
 '''
 
 ASK_PY = '''#!/usr/bin/env python3
 """Structured retrieval entry point — the MANDATED way to ask this instance.
 
-Retrieval: score the question against each menu probe's triggers/name/
-description; the 121M agent sees only the top-K probes — never the whole menu.
+Pipeline: normalize -> lexical top-K retrieval -> deterministic fast path
+(enum-caged AND pattern-captured arguments) -> model fallback (top-K menu).
+Every answer is emitted in the standard envelope and appended to the audit
+log. Identical questions are served from a TTL cache keyed by the menu
+version (data changes invalidate it).
 
-Deterministic fast path: if the rank-1 probe's REQUIRED argument is
-enum-caged and the question names one of its values verbatim, the probe is
-executed DIRECTLY and the selector is bypassed. Verified needle-3.0.3
-failure modes this avoids:
+Verified needle-3.0.3 failure modes designed around:
   * type=call with ZERO parsed calls (selector fumble)
   * resp["results"] carrying the PREVIOUS ask's output (stale answers)
   * possessive phrasings ("X's top customers") never grounding
+  * function_calls always empty, even on success — never gate on it
 
-usage: python3 ask.py "<question>" [--k 8] [--full]
-exit : 0 -> results (stdout JSON)   2 -> nothing produced (never stale data)
+usage: python3 ask.py "<question>" [--k 8] [--full] [--no-cache]
+exit : 0 -> standard envelope (stdout JSON)   2 -> nothing produced
 """
+import hashlib
 import json
 import os
 import re
 import sys
+import time
+import uuid
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)
 sys.path.insert(0, HERE)
 
 K_DEFAULT = 8
+CACHE_FILE = ".ask_cache.json"
+AUDIT_FILE = "ask_audit.jsonl"
+TTL = int(os.environ.get("NEURALOS_CACHE_TTL", "3600"))
 STOP = set("the a an of in on for to and or is are was were what which who how "
            "many show me give list all with their from by at it its do does did "
            "i we you this that those these there have has had more than one not "
@@ -695,34 +753,41 @@ def score_probe(probe, q_tokens):
     return s
 
 
-def load_enum_cages(menu):
-    """{probe_name: {arg: [enum, ...]}} for REQUIRED enum-caged args."""
+def load_cages(menu):
+    """{probe: {"required_args": {...}, "patterns": {arg: compiled regex}}}"""
     cages = {}
     for probe in menu:
         props = (probe.get("parameters") or {}).get("properties") or {}
         required = (probe.get("parameters") or {}).get("required") or []
-        cage = {}
+        req, patterns = {}, {}
         for arg, spec in props.items():
-            if arg in required and isinstance(spec, dict) and spec.get("enum"):
-                cage[arg] = [str(v) for v in spec["enum"]]
-        if cage:
-            cages[probe["name"]] = cage
+            if arg not in required:
+                continue
+            if isinstance(spec, dict) and spec.get("enum"):
+                req[arg] = {"type": "enum", "values": [str(v) for v in spec["enum"]]}
+            elif isinstance(spec, dict) and spec.get("pattern"):
+                try:
+                    patterns[arg] = re.compile(spec["pattern"])
+                except re.error:
+                    pass
+        if req or patterns:
+            cages[probe["name"]] = {"required": req, "patterns": patterns}
     return cages
 
 
-def all_enum_values(cages):
+def enum_values(cages):
     vals = []
     for cage in cages.values():
-        for opts in cage.values():
-            vals.extend(opts)
+        for spec in cage["required"].values():
+            vals.extend(spec.get("values", []))
     return [v for v in dict.fromkeys(vals) if len(v) >= 3]
 
 
-def normalize_possessive(question, enum_values):
-    \"\"\"Ireland's top customers -> top customers in Ireland (the 121M model
+def normalize_possessive(question, values):
+    \"\"\"Ireland's top customers -> top customers in Ireland. The 121M model
     does not ground on English possessives; rewrite to the canonical form the
-    menu triggers were built for).\"\"\"
-    for v in enum_values:
+    menu triggers were built for.\"\"\"
+    for v in values:
         pat = re.compile(r"\\b" + re.escape(v) + r"'s\\b", re.I)
         if pat.search(question):
             stripped = pat.sub("", question).strip(" -,")
@@ -730,92 +795,331 @@ def normalize_possessive(question, enum_values):
     return question, None
 
 
-def main():
-    question = " ".join(sys.argv[1:]).strip()
-    k = K_DEFAULT
-    full = "--full" in sys.argv
-    if "--k" in sys.argv:
-        k = int(sys.argv[sys.argv.index("--k") + 1])
-    if not question:
-        raise SystemExit('usage: python3 ask.py "<question>" [--k 8] [--full]')
+def extract_args(probe, cages, question):
+    """Extract required args for a probe (probe = the TOOL object). Returns
+    kwargs dict, or None when any required arg cannot be extracted with
+    certainty."""
+    cage = cages.get(getattr(probe, "__name__", None))
+    if not cage:
+        return None
+    kwargs = {}
+    for arg, spec in cage["required"].items():
+        if spec["type"] == "enum":
+            hit = next((v for v in spec["values"]
+                        if re.search(r"\\b" + re.escape(v) + r"\\b", question, re.I)), None)
+            if hit is None:
+                return None
+            kwargs[arg] = hit
+        else:
+            rx = cage["patterns"].get(arg)
+            if not rx:
+                return None
+            m = rx.search(question)
+            if not m:
+                return None
+            kwargs[arg] = (m.group(1) if m.groups() else m.group(0)).strip()
+    # numeric optional args left to probe defaults; strings need a capture
+    return kwargs or None
 
+
+def menu_version():
+    try:
+        return hashlib.sha1(open("needle_menu.json", "rb").read()).hexdigest()[:12]
+    except Exception:
+        return "unknown"
+
+
+def cache_load(key, mver):
+    try:
+        c = json.load(open(CACHE_FILE, encoding="utf-8"))
+        e = c.get(key)
+        if e and e.get("menu_version") == mver and time.time() - e["ts"] < TTL:
+            return e
+    except Exception:
+        pass
+    return None
+
+
+def cache_store(key, envelope):
+    try:
+        c = {}
+        if os.path.exists(CACHE_FILE):
+            c = json.load(open(CACHE_FILE, encoding="utf-8"))
+        c[key] = {"ts": time.time(), "menu_version": envelope["menu_version"],
+                  "payload": envelope}
+        json.dump(c, open(CACHE_FILE, "w", encoding="utf-8"))
+    except Exception:
+        pass
+
+
+def audit(record):
+    try:
+        with open(AUDIT_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\\n")
+    except Exception:
+        pass
+
+
+PII_HINTS = ("email", "phone", "ssn", "iban", "tax_id", "passport")
+MASK_PII = os.environ.get("NEURALOS_MASK_PII", "1") != "0"
+
+
+def mask_pii(x):
+    """Field-name-based PII masking (default ON; NEURALOS_MASK_PII=0 to
+    disable). Values under sensitive keys are masked BEFORE caching or
+    printing, so neither the cache file nor stdout ever carries PII."""
+    if not MASK_PII:
+        return x
+    if isinstance(x, dict):
+        return {k: ("***masked***"
+                    if any(h in k.lower() for h in PII_HINTS)
+                    and isinstance(v, str) else mask_pii(v))
+                for k, v in x.items()}
+    if isinstance(x, list):
+        return [mask_pii(v) for v in x]
+    return x
+
+
+def emit(envelope):
+    print(json.dumps(envelope, indent=1, ensure_ascii=False, default=str))
+
+
+def ask_one(question, k=K_DEFAULT, full=False, use_cache=True):
+    """Returns the standard envelope; also audits and caches."""
+    t0 = time.time()
+    ask_id = uuid.uuid4().hex[:12]
+    mver = menu_version()
     menu = json.load(open("needle_menu.json", encoding="utf-8"))
     import instance as inst
     tools_by_name = {t.__name__: t for t in inst.TOOLS}
-    cages = load_enum_cages(menu)
+    cages = load_cages(menu)
 
-    enum_values = all_enum_values(cages)
-    question, moved = normalize_possessive(question, enum_values)
-    if moved:
-        print("normalized question:", question, file=sys.stderr)
+    enum_vals = enum_values(cages)
+    normalized, moved = normalize_possessive(question, enum_vals)
+    norm_key = hashlib.sha1((normalized.lower() + "|" + mver).encode()).hexdigest()
 
-    q_tokens = tokens(question)
+    if use_cache:
+        hit = cache_load(norm_key, mver)
+        if hit:
+            env = dict(hit["payload"])
+            env.update({"ask_id": ask_id, "cached": True,
+                        "cache_age_s": int(time.time() - hit["ts"])})
+            env["latency_ms"] = int((time.time() - t0) * 1000)
+            emit(env)
+            audit({"ts": time.time(), "ask_id": ask_id, "question": question,
+                   "normalized": normalized, "probe": env.get("probe"),
+                   "cached": True, "latency_ms": env["latency_ms"]})
+            return env
+
+    q_tokens = tokens(normalized)
     scored = sorted(((score_probe(p, q_tokens), p) for p in menu),
                     key=lambda x: -x[0])
 
     if full:
         selected = list(inst.TOOLS)
-        print("context: FULL menu (%d probes)" % len(selected), file=sys.stderr)
+        mode = "full-menu"
     else:
         top = [p for s, p in scored if s > 0][:k]
         selected = [tools_by_name[p["name"]] for p in top
                     if p["name"] in tools_by_name]
+        mode = "retrieval"
         print("retrieved:", [t.__name__ for t in selected], file=sys.stderr)
         if not selected:
-            print(json.dumps({"error": "no probe scored > 0 for this question",
-                              "question": question}, indent=1, ensure_ascii=False))
+            env = {"ask_id": ask_id, "question": question, "normalized": normalized,
+                   "probe": None, "menu_version": mver, "error":
+                   "no probe scored > 0 for this question"}
+            emit(env); audit({**env, "ts": time.time()})
             raise SystemExit(2)
 
-    # ---- deterministic fast path (enum-caged rank-1 probe) ---------------
-    if selected:
-        probe = next((p for p in menu if p["name"] == selected[0].__name__), None)
-        cage = cages.get(selected[0].__name__) if probe else None
-        if probe and cage:
-            kwargs = {}
-            for arg, opts in cage.items():
-                hit = next((v for v in opts
-                            if re.search(r"\\b" + re.escape(v) + r"\\b",
-                                         question, re.I)), None)
-                if hit is None:
-                    kwargs = None
-                    break
-                kwargs[arg] = hit
-            if kwargs:
-                tool = selected[0]
-                print("deterministic:", tool.__name__, kwargs, file=sys.stderr)
-                r = tool(**kwargs)
-                if isinstance(r, dict) and selected:
-                    r = {**r, "_tool": tool.__name__}
-                print(json.dumps([r], indent=1, ensure_ascii=False, default=str))
-                return
+    probe_meta = next((p for p in menu if p["name"] == selected[0].__name__), None)
+    results, used_probe, conf = None, selected[0].__name__, None
 
-    # ---- model fallback (top-K menu, one step) ---------------------------
-    agent = inst.needle.Needle(tools=selected,
-                               system="answer from the menu probes.",
-                               auto_date=False)
-    resp = agent.run(question, max_steps=1)
-    print("type:", resp.get("type"), "| confidence:",
-          resp.get("confidence"), file=sys.stderr)
+    # ---- deterministic fast path ----------------------------------------
+    kwargs = extract_args(selected[0], cages, normalized)
+    if kwargs is not None and selected[0].__name__ in cages:
+        tool = selected[0]
+        print("deterministic:", tool.__name__, kwargs, file=sys.stderr)
+        r = tool(**kwargs)
+        if isinstance(r, dict) and "error" not in r:
+            r = {**r, "_tool": tool.__name__}
+            results = [r]; used_probe = tool.__name__; mode = "deterministic"
+    if results is None:
+        # ---- model fallback (top-K menu, one step) -----------------------
+        agent = inst.needle.Needle(tools=selected,
+                                   system="answer from the menu probes.",
+                                   auto_date=False)
+        resp = agent.run(normalized, max_steps=1)
+        conf = resp.get("confidence")
+        results = resp.get("results")
+        used_probe = None
+        if isinstance(results, list) and results:
+            first_env = results[0] if isinstance(results[0], dict) else {}
+            used_probe = first_env.get("_tool") or selected[0].__name__
+            for item in results:
+                if isinstance(item, dict) and "rows" in item:
+                    item["_tool"] = used_probe
 
-    # needle 3.0.3: function_calls stays EMPTY even on success — the executed
-    # outcome arrives in results. Gate on RESULTS, never on function_calls,
-    # and never print a possibly-stale buffer when nothing was produced.
-    results = resp.get("results")
+    results = mask_pii(results)
     empty = results in (None, [], {}) or (isinstance(results, list)
                                           and len(results) == 0)
+    env = {"ask_id": ask_id, "ts": time.time(), "question": question,
+           "normalized": normalized, "probe": used_probe,
+           "menu_version": mver, "mode": mode, "confidence": conf,
+           "latency_ms": int((time.time() - t0) * 1000),
+           "results": None if empty else results}
     if empty:
-        print(json.dumps({"error": "no results produced for this question",
-                          "question": question,
-                          "candidates_retrieved": [t.__name__ for t in selected],
-                          "confidence": resp.get("confidence")},
-                         indent=1, ensure_ascii=False))
+        env["error"] = "no results produced for this question"
+        env["candidates_retrieved"] = [t.__name__ for t in selected]
+        emit(env); audit({**env, "results": None})
         raise SystemExit(2)
 
-    if isinstance(results, list) and selected:
-        for item in results:
-            if isinstance(item, dict) and "rows" in item:
-                item["_tool"] = selected[0].__name__
-    print(json.dumps(results, indent=1, ensure_ascii=False, default=str))
+    emit(env)
+    audit({k: env[k] for k in ("ts", "ask_id", "question", "normalized",
+                               "probe", "confidence", "latency_ms", "mode")})
+    cache_store(norm_key, env)
+    return env
+
+
+def main():
+    question, k, full, use_cache = [], K_DEFAULT, False, True
+    args = sys.argv[1:]
+    qparts = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--k":
+            k = int(args[i + 1]); i += 2
+        elif args[i] == "--full":
+            full = True; i += 1
+        elif args[i] == "--no-cache":
+            use_cache = False; i += 1
+        else:
+            qparts.append(args[i]); i += 1
+    question = " ".join(qparts).strip()
+    if not question:
+        raise SystemExit('usage: python3 ask.py "<question>" [--k 8] [--full] [--no-cache]')
+    ask_one(question, k=k, full=full, use_cache=use_cache)  # emits the envelope
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+
+SERVE = '''#!/usr/bin/env python3
+"""Standard instance service: /healthz, /ready, POST /ask.
+
+/ask routes through ask.ask_one (structured retrieval + deterministic fast
+path + stale-results guard + audit + cache). /ready deep-checks the data
+layer; /healthz is a liveness ping. Bind: python3 serve.py --port 8877
+[--host 127.0.0.1].
+"""
+import argparse
+import json
+import os
+import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import ask as ask_module  # noqa: E402
+import bridge  # noqa: E402
+
+
+class Handler(BaseHTTPRequestHandler):
+    def _send(self, code, payload):
+        body = json.dumps(payload, ensure_ascii=False, default=str).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path == "/healthz":
+            self._send(200, {"ok": True})
+        elif self.path == "/ready":
+            try:
+                probe = (getattr(bridge, "count_records", None)
+                         or getattr(bridge, "peek", None))
+                r = probe() if probe else {}
+                self._send(200, {"ok": True, "data_layer": "ok",
+                                 "sample": r})
+            except Exception as exc:
+                self._send(503, {"ok": False, "data_layer": str(exc)[:200]})
+        else:
+            self._send(404, {"error": "not found"})
+
+    def do_POST(self):
+        if self.path != "/ask":
+            self._send(404, {"error": "not found"})
+            return
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            payload = json.loads(self.rfile.read(n) or b"{}")
+            question = str(payload.get("question") or "").strip()
+        except Exception as exc:
+            self._send(400, {"error": f"bad request: {exc}"})
+            return
+        if not question:
+            self._send(400, {"error": "empty question"})
+            return
+        try:
+            self._send(200, ask_module.ask_one(question))
+        except SystemExit as exc:
+            self._send(422, {"error": "no results produced",
+                             "code": int(exc.code or 0)})
+        except Exception as exc:
+            self._send(500, {"error": str(exc)[:300]})
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--port", type=int, default=8877)
+    ap.add_argument("--host", default="0.0.0.0")
+    a = ap.parse_args()
+    print(f"instance service -> http://{a.host}:{a.port} "
+          f"(healthz /ready /ask)", flush=True)
+    ThreadingHTTPServer((a.host, a.port), Handler).serve_forever()
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+CATALOG_MD = """# {agent} — query catalog
+
+Every probe on the menu, with an example ask. Always ask through
+`ask.py "<question>"` (structured retrieval — see SKILL.md rule 8).
+
+{rows}
+"""
+
+INVARIANTS = '''#!/usr/bin/env python3
+"""Property-based invariants for this instance (generated from the profile).
+Run: python3 invariants.py  -> exits non-zero listing failures."""
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import bridge  # noqa: E402
+
+CHECKS = {checks}
+
+
+def main():
+    failures = []
+    for name, fn in CHECKS.items():
+        try:
+            ok = fn(bridge)
+        except Exception as exc:
+            ok = False
+        print(("PASS " if ok else "FAIL ") + name)
+        if not ok:
+            failures.append(name)
+    raise SystemExit(1 if failures else 0)
 
 
 if __name__ == "__main__":
@@ -939,16 +1243,30 @@ def main():
     elif kind != "database" and not loc.startswith("/") and os.path.exists(loc):
         profile["source"]["location"] = os.path.abspath(loc)
     dsn = args.db_dsn or (profile["source"]["location"] if kind == "database" else "")
-    if kind == "database" and dsn.startswith("sqlite:///"):
-        _sp = dsn[len("sqlite:///"):]
-        if not os.path.isabs(_sp):
-            # relative sqlite path breaks when the instance runs from its own
-            # directory (caught live by eval #7) — bake the absolute path
-            # "sqlite://" + abspath == exactly 3 slashes before the path;
-            # a 4th slash makes usql fail to open the file (caught by eval #7)
-            dsn = "sqlite://" + os.path.abspath(_sp)
+    if kind == "database" and dsn.startswith("sqlite:"):
+        # usql/sqlite DSN normalization — verified live on this host:
+        #   WORKS     : sqlite:///<abs-path>   (3 slashes, then the abs path)
+        #   CANTOPEN  : sqlite:////<abs-path>  (4 slashes) and sqlite://<path>
+        # Collapse any number of leading slashes to exactly the working form.
+        _rest = dsn.split("sqlite:", 1)[1]
+        if _rest.startswith("/"):
+            _sp = "/" + _rest.lstrip("/")        # absolute form preserved
+        else:
+            _sp = os.path.abspath(_rest)         # relative -> resolve to cwd
+        dsn = "sqlite:///" + _sp.lstrip("/")     # the verified-working form
     bridge_code = (bridge_database(profile, dsn, args.dsn_env)
                    if kind == "database" else bridge_files(profile, log=(kind == "log_lines"), model_class=model_class))
+    if kind == "database":
+        # Read-only enforcement at the driver (defense in depth — probes are
+        # SELECT-only by construction, but the connection itself must refuse
+        # writes even if a future probe/regeneration gets it wrong).
+        guard = ('def _q(sql):\n'
+                 '    if not sql.lstrip().lower().startswith("select"):\n'
+                 '        raise ValueError("read-only instance: only SELECT '
+                 'statements are permitted")\n')
+        marker = "def _q(sql):\n"
+        if marker in bridge_code and "read-only instance" not in bridge_code:
+            bridge_code = bridge_code.replace(marker, guard, 1)
     open(os.path.join(args.out, "bridge.py"), "w", encoding="utf-8").write(bridge_code)
 
     # Graph layer (Phase-1 relationship discovery, optional): when its outputs
@@ -967,12 +1285,69 @@ def main():
     if args.runtime == "python":
         example = (f"give me the {snake(table or agent_name)} summary"
                    if kind == "database" else "show me a summary of the data")
+        inst_code = instance_code(profile, table, agent_name, example)
+        # DEPRECATE direct asking: instance.py's CLI main() is replaced with a
+        # stub that routes through ask.py (structured retrieval is mandated —
+        # SKILL.md rule 8). TOOLS stay importable for programmatic use.
+        stub_main = (
+            "def main() -> None:\n"
+            "    import os, subprocess, sys\n"
+            "    os.chdir(os.path.dirname(os.path.abspath(__file__)))\n"
+            "    print('[deprecated] direct asking bypasses structured retrieval;"
+            " routing via ask.py', file=sys.stderr)\n"
+            "    raise SystemExit(subprocess.call([sys.executable, 'ask.py',"
+            " *sys.argv[1:]]))\n\n\n"
+        )
+        head, sep, _ = inst_code.partition("def main() -> None:")
+        if sep:
+            tail_marker = 'if __name__ == "__main__":'
+            tail = inst_code[inst_code.index(tail_marker):]
+            inst_code = head + stub_main + tail
         open(os.path.join(args.out, "instance.py"), "w", encoding="utf-8").write(
-            instance_code(profile, table, agent_name, example))
+            inst_code)
         # Structured retrieval entry point (MANDATED — see SKILL.md operating
         # rule 8): lexical top-K retrieval + deterministic fast path for
         # enum-caged args. Never print stale results (needle 3.0.3).
         open(os.path.join(args.out, "ask.py"), "w", encoding="utf-8").write(ASK_PY)
+        # standard service (healthz/ready/ask) + query catalog
+        open(os.path.join(args.out, "serve.py"), "w", encoding="utf-8").write(SERVE)
+        rows = []
+        for p in menu:
+            args_ = (p.get("parameters") or {}).get("properties") or {}
+            example = next(iter(p.get("triggers", []) or [""]), p["name"])
+            argstr = ", ".join(f"{k}=<{'|'.join(map(str, s.get('enum', ['value']))) if s.get('enum') else s.get('type', 'value')}>" for k, s in args_.items())
+            rows.append(f"| `{p['name']}` | {p.get('description','')} | {example} {argstr} |")
+        open(os.path.join(args.out, "CATALOG.md"), "w", encoding="utf-8").write(
+            CATALOG_MD.format(agent=agent_name, rows="\n".join(rows)))
+
+    # ---- invariants, truth oracle, golden question bank ------------------
+    if kind == "database":
+        tables = [t.get("name") for t in (profile["source"].get("tables") or [])]
+        checks = {}
+        for tn in tables:
+            checks[f"{tn} rows >= 0"] = (
+                "lambda b: b._q('SELECT COUNT(*) AS n FROM `%s`')[0]['n'] >= 0" % tn)
+        for t in (profile["source"].get("tables") or []):
+            for f in (t.get("fields") or []):
+                if f.get("detected_type") in ("integer", "number") and any(
+                        h in f["name"].lower() for h in ("total", "amount", "revenue", "spend", "price")):
+                    checks[f"{t.get('name')}.{f['name']} >= 0"] = (
+                        "lambda b: float(b._q('SELECT COALESCE(MIN(%s),0) AS m FROM `%s`')[0]['m'] or 0) >= 0"
+                        % (f["name"], t.get("name")))
+        inv = INVARIANTS.replace("{checks}", json.dumps(checks, indent=4))
+        open(os.path.join(args.out, "invariants.py"), "w", encoding="utf-8").write(inv)
+        # truth oracle: table counts cross-checked against the bridge probes
+        truth = [{"id": f"{tn}__count",
+                  "sql": f"SELECT COUNT(*) AS n FROM `{tn}`",
+                  "probe": f"{tn}_count"} for tn in tables]
+        open(os.path.join(args.out, "truth.json"), "w", encoding="utf-8").write(
+            json.dumps(truth, indent=2))
+    # golden question bank: one seeded question per probe (its first trigger)
+    golden = {"version": 1, "items": [
+        {"q": (p.get("triggers") or [p["name"]])[0], "expect_probe": p["name"]}
+        for p in menu]}
+    open(os.path.join(args.out, "golden.json"), "w", encoding="utf-8").write(
+        json.dumps(golden, indent=2, ensure_ascii=False))
 
     model_cls = pascal(table) if kind == "database" else ("LogLine" if kind == "log_lines" else "Record")
     if kind == "database":

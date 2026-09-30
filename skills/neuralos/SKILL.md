@@ -123,6 +123,14 @@ Emits a ready-to-run instance directory:
 | `bridge.py` | retrieval + parsing: reads the real source (file, DSN, API) and validates every record through the Pydantic models |
 | `instance.py` | the neuralOS agent: menu loaded, triggers set, agentic loop wired, example asks included |
 | `ask.py` | **mandated entry point**: structured retrieval (lexical top-K) + deterministic fast path for enum-caged args; results-gated, never prints stale data |
+| `serve.py` | standard service: `/healthz` (liveness), `/ready` (data-layer check), `POST /ask` (full pipeline, audit, cache) |
+| `golden.json` | golden question bank — one seeded question per probe with its expected probe; powers selection gates and calibration |
+| `CATALOG.md` | human "what you can ask" catalog generated from the menu |
+| `invariants.py` | property checks generated from the profile (counts, non-negative money) — db instances |
+| `truth.json` | per-table SQL oracle cross-checks — db instances (`verify.py --truth`) |
+| `openapi.json` + `mcp.json` | menu → typed operations for OpenAPI clients and MCP hosts (`gen_openapi.py`) |
+| `ask_audit.jsonl` | per-ask audit trail (question, normalized, probe, conf, latency, cache) — written by ask.py |
+| `.ask_cache.json` | TTL cache keyed by normalized question + menu version (NEURALOS_CACHE_TTL, --no-cache) |
 | `README.md` | how to run it, what to ask it, how to extend it |
 
 Generation follows the hard rules in `references/instance-standards.md`
@@ -248,9 +256,36 @@ unreliable:
    when none were produced (stale-buffer answers are the #1 silent
    mis-answer). Possessive questions ("Ireland's top customers") are
    normalized to canonical trigger phrasings before selection. Any menu edit
-   requires re-running the FULL selection suite through `ask.py`.
+   requires re-running the FULL selection suite through `ask.py`. `ask.py`
+   also audits every ask (`ask_audit.jsonl`), caches by normalized question +
+   menu version (TTL), and masks PII fields by default
+   (`NEURALOS_MASK_PII=0` to disable).
 
 Full rationale: `references/instance-standards.md`.
+
+## Phase 5 — EXTEND (mine gated questions, propose menu growth)
+
+The instance writes every below-gate/fuzzy ask to `ask_audit.jsonl` /
+`menu_gaps.jsonl`. Mine them with:
+
+    python scripts/mine_gaps.py ask_audit.jsonl --menu needle_menu.json
+
+This proposes new triggers for the probe that retrieval ranked FIRST (right
+family, missing phrasing) and flags questions that retrieved NOTHING
+(candidates for a NEW probe). Review the proposals, apply to
+needle_menu.json/instance.py, then: `lint_triggers.py` (soft/hard collision
+check) → FULL selection suite → verification.txt. A generalization of the
+chinook `auto_extend.py` loop.
+
+## Instance tooling
+
+| Script | Purpose |
+|---|---|
+| `scripts/lint_triggers.py` | trigger collision linter — HARD (owner not in top-K: guaranteed mis-route) vs soft (model disambiguates); CI-gate on HARD |
+| `scripts/diff_profile.py` | profile/instance schema-evolution diff with impacted-probe report (exit 1 on breaking) |
+| `scripts/gen_openapi.py` | menu → OpenAPI 3.1 + MCP tool manifest — typed access without the model |
+| `scripts/calibrate.py` | learn per-probe confidence gates from the golden bank (engine conf is NOT calibrated) |
+| `scripts/mine_gaps.py` | Phase-5 gap miner (above) |
 
 ## Runtime gotchas (needle 3.0.3 — verified live)
 

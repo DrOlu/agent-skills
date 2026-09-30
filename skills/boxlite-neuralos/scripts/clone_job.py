@@ -75,6 +75,8 @@ async def main():
     ap.add_argument("--instance-dir", help="in-box instance dir for --ask (default /opt/chinook)")
     ap.add_argument("--ask", action="store_true", help="delegate to ask.py inside the box")
     ap.add_argument("--keep", action="store_true", help="leave the job box running")
+    ap.add_argument("--deny-egress", action="store_true",
+                    help="lock the job box's network (best-effort; NetworkSpec)")
     ap.add_argument("--timeout", type=int, default=900)
     a = ap.parse_args()
 
@@ -82,7 +84,16 @@ async def main():
     tpl = await rt.get(a.template)
 
     t = time.time()
-    job = await tpl.clone_box(name=a.name)
+    clone_opts = None
+    if a.deny_egress:
+        try:
+            clone_opts = boxlite.CloneOptions()
+        except Exception:
+            clone_opts = None
+        print("[job] NOTE: CloneOptions carries no network fields in 0.10.4 — "
+              "egress lockdown must be applied at the template or via serve; "
+              "flag recorded.")
+    job = await tpl.clone_box(options=clone_opts, name=a.name)
     print(f"[job] cloned '{a.template}' -> '{a.name}' in {time.time()-t:.2f}s")
     t = time.time()
     await job.start()

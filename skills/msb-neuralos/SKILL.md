@@ -315,6 +315,15 @@ msb doctor [--fix]                            # host virtualization checks
 | `can't find '__main__'` when copying scripts | nested extracted path | exec the real path `<dest>/extracted/<file>` or copy to a flat dir |
 | hypervisor unavailable (Windows) | WHP not enabled | `msb doctor --fix`, reboot |
 
+## Fleet operations
+
+| Script | Purpose |
+|---|---|
+| `scripts/spin_up.sh` | restore full/disk-only/forked + ask + suite (see Phase 2) |
+| `scripts/backup.sh` (via boxlite-neuralos) | `--runtime msb` → `msb snapshot create --full -o` with retention |
+| `scripts/upgrade.sh` (via boxlite-neuralos pattern) | snapshot rollback point → in-place upgrade → suite → rollback |
+| egress lockdown | `--net-default deny` / `--net-rule` at CREATE time (install phase needs network — bake deps into an OCI image for offline boxes; the network policy cannot be changed after create) |
+
 ## Deliverables contract
 
 A completed run leaves: the **template snapshot archive**, the **running job

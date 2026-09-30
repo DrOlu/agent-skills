@@ -350,6 +350,21 @@ asyncio.run(main())
 `scripts/keeper.py` holds a box up (mechanism 1). It also serves as the
 template for any long-lived holder.
 
+## Fleet operations
+
+| Script | Purpose |
+|---|---|
+| `scripts/warm_pool.py` | maintain N warm CoW clones of the template; `--dispense` prints one |
+| `scripts/upgrade.sh` | rollback archive → in-place upgrade → suite gate → auto-rollback on failure |
+| `scripts/backup.sh` | timestamped archive export with retention (`--keep N`) |
+| `scripts/keeper.py` | hold a box up (mechanism 1 of 3; see Keeping a box RUNNING) |
+
+**Egress lockdown**: data instances need zero network at runtime. Install
+phase requires network; for locked-down jobs create the template with a
+NetworkSpec deny (`allow_net`) or bake an offline OCI image — 0.10.4's
+`CloneOptions` carries no network fields, so lockdown is set at
+create/template time.
+
 ## Deliverables contract
 
 A completed run leaves: the **template box** (verified), the **job boxes**

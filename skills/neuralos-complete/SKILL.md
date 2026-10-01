@@ -15,24 +15,6 @@ description: >-
 
 # neuralOS — Complete Operations Manual
 
-## Single-file binaries (no Python required)
-
-Every release at https://github.com/DrOlu/neuralosd/releases ships standalone
-binaries for macOS (arm64 + x64), Linux (x64 + arm64) and Windows x64. The
-Python runtime, the framework, the four docs volumes and these skills are all
-embedded in one file. First run extracts a cache (~10 s); later runs ~0.25 s.
-
-```bash
-curl -L -o neuralosd \
-  https://github.com/DrOlu/neuralosd/releases/latest/download/neuralosd-linux-x64
-chmod +x neuralosd && sudo mv neuralosd /usr/local/bin/
-neuralosd --help
-```
-
-`neuralosd ask` / `serve` use the deterministic fast path only; add `--model`
-to load the on-device neuralOS model as a fallback. (pip: `pip install neuralosd[all]`)
-
-
 neuralOS turns any data source into a private, offline question-answering
 service. A 121M-parameter model (~35 MB, CPU-only, ~95 MB RAM) reads your
 data's actual shape and answers plain-English questions — no cloud, no API

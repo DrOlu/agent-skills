@@ -1,13 +1,14 @@
 ---
-description: Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF documents at scale.
 name: pdf
+description: Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.
+license: Proprietary. LICENSE.txt has complete terms
 ---
 
 # PDF Processing Guide
 
 ## Overview
 
-This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see reference.md. If you need to fill out a PDF form, read forms.md and follow its instructions.
+This guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions.
 
 ## Quick Start
 
@@ -165,6 +166,26 @@ story.append(Paragraph("Content for page 2", styles['Normal']))
 doc.build(story)
 ```
 
+#### Subscripts and Superscripts
+
+**IMPORTANT**: Never use Unicode subscript/superscript characters (₀₁₂₃₄₅₆₇₈₉, ⁰¹²³⁴⁵⁶⁷⁸⁹) in ReportLab PDFs. The built-in fonts do not include these glyphs, causing them to render as solid black boxes.
+
+Instead, use ReportLab's XML markup tags in Paragraph objects:
+```python
+from reportlab.platypus import Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+
+styles = getSampleStyleSheet()
+
+# Subscripts: use <sub> tag
+chemical = Paragraph("H<sub>2</sub>O", styles['Normal'])
+
+# Superscripts: use <super> tag
+squared = Paragraph("x<super>2</super> + y<super>2</super>", styles['Normal'])
+```
+
+For canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.
+
 ## Command-Line Tools
 
 ### pdftotext (poppler-utils)
@@ -283,106 +304,11 @@ with open("encrypted.pdf", "wb") as output:
 | Create PDFs | reportlab | Canvas or Platypus |
 | Command line merge | qpdf | `qpdf --empty --pages ...` |
 | OCR scanned PDFs | pytesseract | Convert to image first |
-| Fill PDF forms | pdf-lib or pypdf (see forms.md) | See forms.md |
-
-## Best Practices for Data Extraction from PDFs
-
-### Always Verify Against Source Documents
-
-When extracting structured data (names, emails, qualifications, dates, etc.) from PDFs:
-
-1. **Read raw text first** - Before writing extraction logic, extract and review the full text from each PDF to understand the actual formatting:
-   ```python
-   import pdfplumber
-   from pathlib import Path
-   
-   for pdf_path in Path("documents").glob("*.pdf"):
-       print(f"\n{'='*60}\nFILE: {pdf_path.name}\n{'='*60}")
-       with pdfplumber.open(pdf_path) as pdf:
-           for page in pdf.pages:
-               text = page.extract_text()
-               if text:
-                   print(text[:2000])  # Review first 2000 chars
-   ```
-
-2. **Don't trust regex blindly** - Automated regex patterns often fail due to:
-   - Format variations: "Bachelor of Science in Finance" vs "B.Sc, Finance" vs "B.S. (Finance)"
-   - Different section headers: "EDUCATION" vs "ACADEMICS" vs "Academic Qualification"
-   - Non-standard punctuation: parentheses, commas, semicolons, dashes
-   - Inline vs sectioned layouts
-
-3. **Verify extraction output** - Always spot-check extracted data against the original PDF content. If automated extraction returns "Not found" or suspicious values, manually review the source.
-
-### Common Pitfalls in PDF Data Extraction
-
-| Problem | Cause | Solution |
-|---------|-------|----------|
-| Missing data | Regex too narrow | Review raw text, broaden patterns |
-| Garbled text | PDF uses custom fonts/encoding | Try OCR with pytesseract instead |
-| Wrong data | Multiple documents in one PDF | Check for page breaks, multiple resumes |
-| Truncated values | Field length limits | Remove arbitrary truncation |
-| Calculated values wrong | Date parsing errors | Validate date ranges manually |
-
-### Recommended Extraction Workflow
-
-```python
-# Step 1: Extract and review raw text from ALL documents first
-texts = {}
-for pdf_path in pdf_files:
-    with pdfplumber.open(pdf_path) as pdf:
-        texts[pdf_path.name] = "\n".join(
-            page.extract_text() or "" for page in pdf.pages
-        )
-
-# Step 2: Analyze actual formats present in the documents
-# - What section headers are used?
-# - How are degrees/dates/emails formatted?
-# - Are there multiple records per document?
-
-# Step 3: Build extraction logic based on observed patterns
-# - Use flexible regex that handles variations
-# - Include fallback patterns
-# - Log what was matched vs not matched
-
-# Step 4: Verify results against source
-# - Spot check 10-20% of extractions manually
-# - Investigate any "Not found" results
-# - Cross-reference suspicious values
-```
-
-### Example: Flexible Education Extraction
-
-```python
-import re
-
-def extract_education(text):
-    """Extract educational qualifications with flexible pattern matching."""
-    education = []
-    
-    # Multiple patterns to catch format variations
-    patterns = [
-        # "Bachelor of Science in Finance"
-        r"(Bachelor'?s?|Master'?s?|Doctor\w*|Associate'?s?)\s+(?:of\s+)?(\w+)(?:\s+(?:in|of)\s+[\w\s,]+)?",
-        # "B.Sc, Finance" or "B.S. (Finance)"
-        r"(B\.?S\.?c?|M\.?S\.?c?|B\.?A\.?|M\.?A\.?|M\.?B\.?A\.?|Ph\.?D\.?|LL\.?B\.?|LL\.?M\.?)[\s,.\(]+([A-Za-z\s]+)",
-        # "PhD (Economics)"
-        r"(PhD|MBA|LLB|LLM|CAIIB|CPA|CFA|CFM)\s*\(?([A-Za-z\s]*)\)?",
-    ]
-    
-    for pattern in patterns:
-        for match in re.finditer(pattern, text, re.IGNORECASE):
-            edu_text = match.group(0).strip()
-            if edu_text and len(edu_text) > 2:
-                # Avoid duplicates
-                if not any(edu_text.lower() in e.lower() for e in education):
-                    education.append(edu_text)
-    
-    return education if education else ["Not specified - VERIFY MANUALLY"]
-```
+| Fill PDF forms | pdf-lib or pypdf (see FORMS.md) | See FORMS.md |
 
 ## Next Steps
 
-- For advanced pypdfium2 usage, see reference.md
-- For JavaScript libraries (pdf-lib), see reference.md
-- If you need to fill out a PDF form, follow the instructions in forms.md
-- For troubleshooting guides, see reference.md
+- For advanced pypdfium2 usage, see REFERENCE.md
+- For JavaScript libraries (pdf-lib), see REFERENCE.md
+- If you need to fill out a PDF form, follow the instructions in FORMS.md
+- For troubleshooting guides, see REFERENCE.md

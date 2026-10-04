@@ -164,6 +164,15 @@ Never deliver unverified:
    hides isolation is a bug); one dangling reference verified against the
    raw source; selection of the three graph probes included in the suite.
 
+5. **Behavioral banks** — freeze every verified routing into `golden.json`
+   (`expect_probe` per question) and record known-unanswerable questions as
+   trap tests with explicit refusal assertions. Banks replay on every menu
+   change; a confident answer to a trap fails the build. SCHEMA TRAP:
+   `golden_run` counts `expect_probe: null` as pass-anything — traps do NOT
+   fit golden.json; assert refusals in tests. Full guidance, the ask.py
+   floor nuance and a live worked example:
+   `references/golden-trap-banks.md`.
+
 ## Source routing
 
 | Source | Retrieval method | Profiler path | Probe set generated |

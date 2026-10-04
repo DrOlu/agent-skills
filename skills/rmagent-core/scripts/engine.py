@@ -445,11 +445,18 @@ def _ask_psrp(row: dict, skill: str, script: str, timeout: int) -> dict:
         ps = _psrp_ps(pool)
         ps.add_script(script)
         res = ps.invoke()
-    # invoke() returns output objects; errors arrive via ps.had_errors +
-    # ps.stream_error — surface them like a non-zero winrm exit
-    if ps.had_errors:
-        err = "; ".join(str(e) for e in ps.stream_error)[:500]
-        return {"ok": False, "error": err}
+        # capture error state INSIDE the with block — pypsrp clears the
+        # PowerShell object's stream accessors once the pool closes (the
+        # long-standing 'stream_error' AttributeError that masked every
+        # psrp payload failure, e.g. attackmap)
+        had_errors = ps.had_errors
+        errs = []
+        try:
+            errs = [str(e) for e in ps.streams.error]
+        except Exception:
+            pass
+    if had_errors:
+        return {"ok": False, "error": "; ".join(errs)[:500]}
     out = str(res[0]) if res else ""
     return _parse(out)
 

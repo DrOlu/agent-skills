@@ -82,6 +82,11 @@ ACTIONS = {
     "plant_canary":      (None,         "user",    "Create a DISABLED decoy account (cannot log on; every attempt is still recorded as 4625)"),
     "snapshot":          (None,         "none",    "Read-only baseline of task/svc/user/firewall state"),
     "rotate_credential": (None,         "user",    "Force a random password on a local account (breaks the attacker's copy, keeps the account usable)"),
+    "enable_netaudit":   ("disable_netaudit", "none", "Enable Filtering Platform Connection/Packet Drop auditing (5156/5157) - per-connection telemetry"),
+    "disable_netaudit":  ("enable_netaudit", "none", "Disable Filtering Platform auditing (undo of enable_netaudit)"),
+    "restart_sysmon":    (None,          "none", "Restart Sysmon64 to re-arm the driver network hook (EID3) - brief logging pause, no traffic impact"),
+    "enable_audit":     ("disable_audit", "none", "Enable Directory Service Changes auditing (success+failure) - lights the attest DC-Audit source"),
+    "disable_audit":    ("enable_audit", "none", "Disable Directory Service Changes auditing (undo of enable_audit)"),
     "isolate_host":      ("un_isolate_host", "host", "Block inbound via profile default (WinRM kept open so undo works)"),
     "un_isolate_host":   (None,         "host",    "Remove the RMAgent isolation rules"),
 }
@@ -151,7 +156,42 @@ def load_action_script(action: str) -> str:
     return p.read_text()
 
 
+class _PsrpResult:
+    """pywinrm-shaped result over pypsrp (std_out/std_err/status_code)."""
+    def __init__(self, out: str, err: str, code: int):
+        self.std_out, self.std_err, self.status_code = out, err, code
+
+
+class _PsrpSession:
+    """pywinrm-compatible facade for psrp-door rows — Rev 19 parity with the
+    engine: the script travels INSIDE the SOAP body (no 8191-char budget)."""
+    def __init__(self, row: dict):
+        from pypsrp.client import Client
+        creds = rma.creds_for(row)
+        self._client = Client(row.get("address"), username=creds["user"],
+                              password=creds["password"], ssl=False,
+                              connection_timeout=30)
+
+    def run_ps(self, script: str) -> "_PsrpResult":
+        from pypsrp.powershell import PowerShell, RunspacePool
+        with RunspacePool(self._client.wsman) as pool:
+            ps = PowerShell(pool)
+            ps.add_script(script)
+            res = ps.invoke()
+            had_errors = ps.had_errors
+            errs = []
+            try:
+                errs = [str(e) for e in ps.streams.error]
+            except Exception:
+                pass
+        if had_errors:
+            return _PsrpResult(str(res[0]) if res else "", "; ".join(errs)[:500], 1)
+        return _PsrpResult(str(res[0]) if res else "", "", 0)
+
+
 def _session(row: dict):
+    if (row.get("door") or row.get("transport") or "") == "psrp":
+        return _PsrpSession(row)
     import winrm
     creds = rma.creds_for(row)
     endpoint = row.get("endpoint") or f"http://{row['address']}:5985/wsman"

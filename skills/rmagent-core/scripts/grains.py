@@ -14,6 +14,9 @@ IDENTITY = frozenset({
     # Kerberos abuse, DCSync, privileged directory changes. A member server
     # answers these with a hole (no DC events); the DC answers them.
     "krb", "dcsync", "dirchange",
+    # Rev 22: estate diagnostics grain (2026-09-28). Sysmon config/EID3
+    # health, the netsh portproxy relay table, dangling scheduled tasks.
+    "sysmoncfg", "portproxy", "taskaudit",
 })
 
 LINUX_IDENTITY = frozenset({

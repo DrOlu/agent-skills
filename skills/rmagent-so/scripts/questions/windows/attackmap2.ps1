@@ -3,7 +3,7 @@
 $o=@()
 function A($t,$n,$v){if($v){$script:o+=@([pscustomobject]@{t=$t;n=$n;c=$v.Count;v=@($v|select -First 10)})}}
 function RK($p){$r=@();try{$k=Get-ItemProperty -Path $p -EA SilentlyContinue;if($k){$r=@($k.PSObject.Properties|?{$_.Name -notmatch '^PS'}|%{"$($_.Name)=$($_.Value)"})}}catch{};return $r}
-function RV($p,$n){try{(Get-ItemProperty -Path $p -Name $n -EA SilentlyContinue).$n}catch{}}
+function RgV($p,$n){try{(Get-ItemProperty -Path $p -Name $n -EA SilentlyContinue).$n}catch{}}
 $st=@();try{Get-ScheduledTask -EA SilentlyContinue|?{$_.State -ne 'Disabled' -and $_.TaskPath -notlike '\Microsoft*'}|select -First 15|%{$st+=$_.TaskName}}catch{}
 A 'T1053.005' 'schtasks' $st
 $sv=@();try{Get-CimInstance Win32_Service -EA SilentlyContinue|?{$_.State -eq 'Running' -and $_.PathName -notmatch '(?i)\\Windows\\|\\Program Files'}|select -First 12|%{$sv+=$_.Name}}catch{}
@@ -12,7 +12,7 @@ $wm=@();try{Get-WmiObject -Namespace root\subscription -Class __EventFilter -EA 
 A 'T1546.003' 'wmi_sub' $wm
 $sf=@();try{foreach($p in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup")){if(Test-Path $p){Get-ChildItem $p -EA SilentlyContinue|%{$sf+=$_.Name}}}}catch{}
 A 'T1547.001' 'startup' $sf
-$co=@();try{Get-ChildItem 'HKCU:\Software\Classes\CLSID' -Depth 1 -EA SilentlyContinue|select -First 20|%{$d=RV $_.PSPath 'InprocServer32';if($d -and $d -notmatch '(?i)\\Windows\\|\\Program Files'){$co+=$_.PSChildName}}}catch{}
+$co=@();try{Get-ChildItem 'HKCU:\Software\Classes\CLSID' -Depth 1 -EA SilentlyContinue|select -First 20|%{$d=RgV $_.PSPath 'InprocServer32';if($d -and $d -notmatch '(?i)\\Windows\\|\\Program Files'){$co+=$_.PSChildName}}}catch{}
 A 'T1546.008' 'com_hijack' $co
 $tk=@();foreach($v in @('__PSLockdownPolicy','PSTokenPath')){$x=[Environment]::GetEnvironmentVariable($v);if($x){$tk+="$v"}}
 A 'T1134' 'token_env' $tk

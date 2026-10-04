@@ -84,12 +84,34 @@ measured table in `references/model-benchmarks.md`. A candidate must score
 >= 9/10 with honest refusals on the traps to be considered a needle-3
 replacement.
 
+### E. Swap the neuralOS python runtime (instance.py) selector
+
+For classic python-runtime instances (an `instance.py` exposing `TOOLS` with
+`@needle.tool` functions), `scripts/instance_ollama_runtime.py` replaces the
+121M selector with the Ollama model — using Ollama's **native tool-calls
+path** (`needle.build_schema` exports the schemas), which does NOT suffer the
+format-enum grammar slowness (48 schemas run fine).
+
+```bash
+python3 scripts/instance_ollama_runtime.py --instance-dir /path/to/instance \
+    --question "How many Tracks have a song length greater than the Average song length." \
+    --execute
+```
+
+Measured on chinook (48 tools, qwen3.5:9b): sibling discrimination BOTH ways
+— count-probe on count-phrasing, list-probe with `limit=5` extracted on
+list-phrasing — where needle 3 picked the LIST probe for both. Warm ~4s,
+cold ~30s (use `ollama keep_alive`). Remember: the same model still needs
+the `none_of_these`/refusal floor on gaps.
+
 ## Files
 
 - `scripts/ollama_client.py` — shared client: `chat()` with think:false,
   schema-constrained `pick()`, 400-retry for models without think support
 - `scripts/pick_probe.py` — CLI constrained selection against any instance menu
 - `scripts/bench_stress.py` — 10-question graded benchmark (model parameterized)
+- `scripts/instance_ollama_runtime.py` — swap the needle python-runtime
+  selector (instance.py TOOLS) for an Ollama model, native tool-calls path
 - `scripts/verify_setup.py` — verifies Ollama, model, think-off, format works
 - `scripts/install_think_defaults.sh` — pulls models, writes env defaults
 - `scripts/test_neuralos_ollama.py` — offline unit tests (schema, refusal, cage)

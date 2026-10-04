@@ -13,6 +13,23 @@ behaviour is `none_of_these`.
 | SmolLM2:1.7b + format | 1/3 | no — fabricated args | 0.4s | 1.8GB | 27% BFCL per its own model card. |
 | needle 3 (121M, 2-bit, REPLACED) | 1/3 | no | 1.6s | 0.1GB | Stripped INC arg prefix; crossed domains on traps. |
 
+## Sibling discrimination — the decisive test (chinook, 2026-10-04)
+
+Question: "How many Tracks have a song length greater than the Average song
+length." — with a COUNT probe and a LIST probe both in the menu (siblings).
+
+| Selector | Pick |
+|---|---|
+| needle 3 (python runtime, rebuilt tool index, exact trigger phrasing) | LIST probe — count never given |
+| qwen3.5:9b (Ollama native tool-calls, think:false) | COUNT probe → 494, avg 6.6 min |
+
+Reverse direction also correct: list-phrasing picked the LIST probe with
+`limit=5` extracted. Warm ~4s, cold ~30s. The 121M selector cannot
+discriminate near-identical sibling tools; a mid-size instruct model can —
+and the code floor still owns refusals. Full recipe:
+`scripts/instance_ollama_runtime.py` (uses Ollama native tool-calls — 48
+schemas, no grammar slowness).
+
 ## Key findings
 
 1. **Format guarantees valid, never correct.** Every model, including 0.99-

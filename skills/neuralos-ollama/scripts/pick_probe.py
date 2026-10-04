@@ -80,15 +80,30 @@ def main():
     if args.execute and pick.get("probe") not in (None, "none_of_these"):
         sys.path.insert(0, inst)
         os.chdir(inst)
+        import re
         import probes as probes_mod  # noqa: E402
         fn = {f.__name__: f for f in probes_mod.PROBES}.get(pick["probe"])
         if fn is None:
             result["execution"] = f"unknown probe {pick['probe']}"
         else:
-            import inspect
-            kwargs = {k: pick[k] for k in ("inc", "email", "keyword", "pair",
-                                           "limit")
-                      if k in pick and k in inspect.signature(fn).parameters}
+            # args come from the model, BUT anything the model omitted is
+            # recovered from the question via the probe's own regex cage —
+            # exactly what neuralosd's extract_args does. The model never
+            # gets to skip a required caged argument.
+            kwargs = {}
+            meta = getattr(fn, "_probe", None)
+            if meta is not None:
+                for aname, spec in meta.args.items():
+                    if pick.get(aname):
+                        kwargs[aname] = pick[aname]
+                    elif spec.get("type") == "pattern":
+                        m = re.search(spec.get("pattern", ".+"), args.question,
+                                      re.IGNORECASE)
+                        if m and m.groups():
+                            kwargs[aname] = m.group(1).strip()
+                    elif spec.get("type") == "integer" and not spec.get(
+                            "required", True) and spec.get("default") is not None:
+                        kwargs[aname] = spec["default"]
             try:
                 result["execution"] = fn(**kwargs)
             except Exception as e:  # noqa: BLE001

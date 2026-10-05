@@ -143,6 +143,44 @@ The engine (`lib.py`) is shared with rmagent-windows — only the door differs
 - No witness for a box you do not administer.
 - No replacement for auditd/EDR — this is the pull-based witness, not the sensor.
 
+## Enterprise scope & sizing (Linux/macOS estate)
+
+- **Fleet shape:** one jump host fans out over SSH; witnesses need nothing
+  installed (POSIX sh + coreutils only — `journalctl`, `last`, `getent`).
+  Budget ~1 SSH round-trip per witness per question; a 100-host sweep at 8 s
+  connect budget is ~15 min serialized — parallelize 8–10 wide for ~2 min.
+- **journald sizing (the retention dial):** `SystemMaxUse=` governs how far
+  back `edges`/`explain` can see. Recommendation for app servers:
+  `SystemMaxUse=2G` + `MaxRetentionSec=30day` (a journald vacuum mid-incident
+  is a hole you chose). Check with `journalctl --disk-usage`.
+- **auth.log vs journal:** Debian-family splits SSH auth into `/var/log/auth.log`
+  (logrotate: weekly default → raise to `rotate 8` for 8 weeks) while
+  RHEL-family uses journald. Payloads read both; know which your estate keeps.
+- **Sudo escalation watch:** `sudo_accounts` from `attest` is your baseline —
+  a growth of 2+ between sweeps is a drift finding, wire `sweep` output into
+  your diff/review.
+- **macOS:** attest/sketch/edges work via `log show`/`last`; treat `attackmap`
+  as experimental until validated on your fleet.
+
+### No-Python operation (bash-native kit)
+
+`scripts/ops/rmagent-ops.sh` runs the attest probe over plain SSH from any
+bash 3.2+ jump host — **no Python on jump host or witness**:
+
+```bash
+# one witness
+SINCE_HOURS=2 ops/rmagent-ops.sh watch web01.corp deploy      # JSON, exit 1 if blind
+# whole fleet (inventory: "host[:port] [user]" per line)
+ops/rmagent-ops.sh sweep estate.txt | column -t -s$'\t'       # TSV board
+# cron it (5-min heartbeat, page on non-zero exit)
+*/5 * * * * /opt/rmagent/ops/rmagent-ops.sh watch db01.corp >> /var/log/rmagent/db01.jsonl
+```
+
+Exit codes: 0 = attest ok · 1 = BLIND/unreachable (page) · 2 = usage error.
+The remote probe needs only `sh` + coreutils — enterprises that mandate
+PowerShell on the jump host can drive Linux witnesses via
+`plink`/OpenSSH-for-Windows the same way (the probe body is portable POSIX sh).
+
 ## Fidelity gaps (documented, not hidden)
 
 - **No persistent ring.** Like Windows `edges`, `edges.sh` reads the current

@@ -345,3 +345,24 @@ evidence and to run the undo. Evidence is preserved; the box stops
 participating in the kill chain. The undo removes the rules but deliberately
 does **not** re-disable previously-off profiles (blindly turning a firewall
 back off would be worse than leaving it on).
+
+
+---
+
+## Enterprise scope & guardrails
+
+- **Risk tiers:** dry-run by default on every action; `--apply` requires a
+  plan id from a *seen* dry-run (60-min expiry). High-risk actions route
+  through MOP approval (change record), not a chat yes/no.
+- **Blast radius:** every action is named, journaled (hash-chained journal,
+  `actuate.py journal` verifies), and reversible — the undo ships with the
+  action, not as an afterthought. One host per action; no wildcard targets.
+- **Sizing:** response actions are single-digit seconds each; the budget is
+  human approval latency, not execution. For a 100-host containment scenario,
+  pre-approve the playbook (MOP), then execution is minutes end-to-end.
+- **Cadence:** actuate is the LAST step of a hunt, never a reflex. Triage
+  ranks findings and proposes actions *from the allowlist* — the operator
+  approves; the skill executes and journals.
+- **No-Python estates:** `rmagent-windows/scripts/ops/rmagent-ops.ps1`
+  covers the ops half natively; actuation stays a controlled, audited path
+  (that is a feature, not a gap — an enterprise should WANT this gate).

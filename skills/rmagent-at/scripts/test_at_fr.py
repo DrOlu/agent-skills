@@ -289,6 +289,39 @@ ok(bool(zs31) and zs31[0]["severity"] in ("high", "critical"),
    "30-sample baseline + spike -> fires (zero-variance branch, text kept)")
 ok(not zs21, "20-sample baseline + spike -> does NOT fire (n<30 guard)")
 
+# ============================================================ R19: freeze detection
+print("\n== R19. ringhealth freeze detection + real segment file (WS2 2026-10-04) ==")
+rh = (APPDIR / "ringhealth.ps1").read_text()
+ok("_*.etl" in rh, "ringhealth globs the real segment file (<name>_*.etl)")
+ok("Segment Max Size" in rh, "ringhealth parses the cap from logman")
+ok("frozen" in rh and "0.98" in rh, "ringhealth emits a frozen verdict at >=98% cap")
+ok("$blind++" in rh.replace(" ", "") or "$blind++" in rh, "stopped rings still count blind")
+ok("elseif($frozen){ $blind++" in rh, "FROZEN rings count blind (zombie = witness_blind)")
+ok("frozen_count" in rh, "answer carries frozen_count")
+ok("mtime_age_min" in rh and "stale" in rh, "answer carries staleness signals")
+ok("buffers_lost" in rh, "answer carries buffers_lost")
+ok("ConvertTo-Json -Compress -Depth 5" in rh, "depth raised for nested session rows")
+
+al19 = {}
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("al19", HERE / "autologger.py")
+al19 = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(al19)
+d_dry = al19._doctor_ps(False)
+d_app = al19._doctor_ps(True)
+ok("$Apply = $false" in d_dry and "{APPLY}" not in d_dry, "doctor dry-run sets Apply=$false (report only)")
+ok("$Apply = $true" in d_app and "{APPLY}" not in d_app, "doctor --apply sets Apply=$true (restarts)")
+ok("if($Apply){" in d_app and "if($Apply){" in d_dry, "restart block gated on $Apply")
+ok("stop $n -ets" in d_app, "doctor uses 'logman stop -ets' (releases zombie ETL handle)")
+ok("Move-Item" in d_app and ".frozen-" in d_app, "doctor ARCHIVES the frozen segment before restart (re-freeze fix)")
+ok("_\\d{6}$" in d_app or "_\\d{6}" in d_app, "segment resolution handles Output-Location-carrying-suffix (bytes=0 bug)")
+ok(" ? " not in d_app and " ? " not in al19._watchdog_ps(), "no PS7-only ternaries in new payloads")
+wd = al19._watchdog_ps()
+ok("RMAgent-RingWatchdog" in wd and "/SC MINUTE /MO 5" in wd, "watchdog = 5-min SYSTEM task")
+ok("watchdog.ps1" in wd and "Add-Content" in wd and "Select-Object -Last 200" in wd,
+   "watchdog writes a bounded 200-line log")
+ok("RMAgent-RingWatchdog" in al19._watchdog_status_ps(), "watchdog-status queries the task")
+
 # ============================================================ summary
 print()
 if FAIL:

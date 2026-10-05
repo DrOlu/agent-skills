@@ -83,6 +83,27 @@ circular file that overwrites oldest-first and restarts into new segments
 continuously. Verified live on WS1: sessions Running, `Circular: On`,
 ring files at `C:\etw\<name>_000001.etl`.
 
+**⚠️ Rev 19 correction (live-verified on WS2, 2026-10-04): the "-r wraps
+forever" promise FAILS at sustained load.** A fault-injection storm filled the
+512 MB AppTrace segment in ~26 minutes, and the file then **FROZE IN PLACE**
+— mtime stuck, logman still reporting `Running` (a zombie that accepts
+nothing), ProcTrace dying outright. Evidence inside the frozen segment is
+*preserved* (the wrap never happened), but capture is dead and `Running`
+status lies about it. Consequences baked into this skill:
+
+- `ringhealth` now reports the **real segment file** (`<name>_*.etl` glob —
+  the old `File Name:` grep returned the base path, so `bytes` was always 0),
+  plus `cap_mb`, `mtime_age_min`, `stale`, and a `frozen` verdict
+  (Running + segment ≥ 98% of cap). **Frozen counts as blind.**
+- `autologger.py --doctor` detects FROZEN/STOPPED rings (`--apply` restarts
+  them: `logman stop <n> -ets` — the `-ets` form releases the zombie's ETL
+  handle — then `start`).
+- `autologger.py --watchdog --apply` installs the same check server-side as a
+  5-minute SYSTEM scheduled task (`C:\etw\watchdog.ps1`, 200-line bounded log
+  at `C:\etw\watchdog.log`). `--watchdog-status` / `--watchdog-remove`
+  manage it. A frozen ring self-heals within 5 minutes instead of silently
+  blinding the box for hours.
+
 **Six logman/registry facts learned live** (the setup payload encodes all of
 them): Impacket's `reg.py` shadows `reg.exe` (absolute paths mandatory);
 `logman create`'s own DCS config SHADOWS the AutoLogger registry values;
@@ -143,6 +164,15 @@ python3 autologger.py --inventory estate.yaml --status
 
 # grow the buffers
 python3 autologger.py --inventory estate.yaml --setup --resize 1024
+
+# detect frozen-at-cap / stopped rings (dry-run by default)
+python3 autologger.py --inventory estate.yaml --doctor
+python3 autologger.py --inventory estate.yaml --doctor --apply      # + restart them
+
+# install the self-healing watchdog (5-min SYSTEM task, server-side)
+python3 autologger.py --inventory estate.yaml --watchdog --apply
+python3 autologger.py --inventory estate.yaml --watchdog-status
+python3 autologger.py --inventory estate.yaml --watchdog-remove --apply
 
 # remove everything (stops sessions, deletes registry keys, removes files)
 python3 autologger.py --inventory estate.yaml --teardown
@@ -223,9 +253,13 @@ air-gapped estate this tier keeps working — and the judgment tier with it: Lay
 
 ## Honest limits
 
-1. **The ring overwrites.** A busy box will cycle a 512 MB buffer in hours,
-   not days. Increase the buffer if you need longer retention — the cost
-   is disk (bincirc) rather than kernel memory.
+1. **The ring overwrites — until it freezes.** A busy box will cycle a 512 MB
+   buffer in hours of normal load (or ~26 minutes under a churn storm,
+   measured live on WS2 2026-10-04). Under sustained fill the bincirc segment
+   FROZE at cap instead of wrapping (Rev 19 correction above): evidence is
+   preserved but capture stops silently. Run the watchdog; treat `Running` +
+   at-cap as blind. Increase the buffer if you need longer retention — the
+   cost is disk (bincirc) rather than kernel memory.
 2. **Structured parsing, name-keyed.** `appnet`/`appproc` parse the event's
    XML payload by PROPERTY NAME (Message is null for ETL-file events — the
    original prose-regex parsing saw volume with zero findings and reported
@@ -247,6 +281,79 @@ air-gapped estate this tier keeps working — and the judgment tier with it: Lay
 6. **The AutoLogger is a persistent change.** `--setup` is MOP-level:
    dry-run by default, `--apply` required, `--teardown --apply` reverses
    everything (verified: teardown removes DCS + registry keys + ring files).
+7. **Big-ring decode cannot be streamed.** Full enumeration of a full
+   512 MB ETL takes 10+ minutes — longer than any WinRM/SSH command timeout
+   (30 s class). Deep analysis must run SERVER-SIDE (scheduled task /
+   persistent session) writing a small JSON summary to disk, which is then
+   pulled. A remote full-scan attempt dies mid-flight with nothing produced
+   (verified: the WS2 2026-10-04 scanner burned 673 CPU-s and left zero
+   output). Cap pulls to bounded `MaxEvents` windows, as the questions do.
+8. **Sysmon's own log is a rotating ring too.** 64 MB active file, no
+   archives by default → the storm window was UNRECOVERABLE from Sysmon
+   50 minutes after it ended (live-verified). `appsysmon` answers near a
+   rotation boundary are holes. Enterprise fix: raise retention AND ship
+   events off-box (WEF/Splunk/Sentinel) — out of this skill's scope.
+
+## Enterprise sizing & operations (Rev 19)
+
+Everything below is calibrated against the WS2 2026-10-04 fault-injection
+storm (BadApp: CPU spin ×2, lock storm, 375 MB leak / 161 threads,
+self-connect churn to 19,400 requests, `boom-*` exceptions every ~500 reqs,
+client SLOWs 1.5–2.0 s) — the worst-case this design has been measured
+against.
+
+### Buffer sizing: measure the rate, size for the retention you need
+
+```
+ring_mb = (events_per_sec × avg_event_bytes × retention_seconds) / 1MB × 2
+```
+
+Measured anchor points: a churn storm writes AppTrace at **≈20 MB/min**
+(512 MB ≈ 26 min); a quiet production box writes **≈1 MB/min or less**
+(hours-days per 512 MB). Worked examples:
+
+| Workload class | Events/sec est. | 4 h retention | 24 h retention |
+|---|---|---|---|
+| Quiet service box (≤1 MB/min) | <50 | 512 MB | 1.5–2 GB |
+| Busy app server (5–10 MB/min) | 200–500 | 1.5–2.5 GB | 8–15 GB (don't — see below) |
+| Storm/test host (≈20 MB/min) | ~1000 | 5 GB | run tests against a scratch ring |
+
+Practical rules: **(a)** 24 h retention on a busy box is the wrong goal —
+the evidence you need within minutes of an incident lives in the newest
+10%; **(b)** size for 2–4 h of *your measured* worst case; **(c)** for
+tests, accept wrap/loss, or point the session at a scratch directory;
+**(d)** disk cost is the bound, not kernel memory.
+
+### The watchdog is mandatory in production
+
+Install it on every witness that runs the rings. Without it the freeze-at-cap
+failure is silent (logman says Running; ringhealth's old `bytes=0` bug hid it
+completely). With it, worst-case blindness is the task interval (5 min) plus
+restart time (~5 s). Enterprise adds: forward `C:\etw\watchdog.log` entries
+into your monitoring (a watchdog restart is a *symptom* worth a ticket —
+"why did the ring fill?"), and alert on `ringhealth frozen_count > 0`.
+
+### Evidence preservation: freeze is a feature if you copy first
+
+A frozen segment is closed evidence — perfect for copying before restart.
+The right sequence on a busy box: **detect at-cap → copy the segment
+somewhere durable → restart the session.** The watchdog does detect+restart;
+if you need the copy step, run `--doctor` manually (dry-run first) so you can
+archive `C:\etw\<name>_*.etl` in between. For incidents, remember:
+
+```
+server-side decode (10+ min for a full 512 MB ETL) → JSON summary → pull the
+kilobytes. NEVER stream a big ETL over WinRM/SSH. (Honest limit 7.)
+```
+
+### Drills
+
+Run a BadApp-style fault injection quarterly (CPU spin + leak + churn +
+exceptions for 15 min) and verify: rings fill, watchdog restarts within one
+interval, `ringhealth` shows `frozen`/`blind_check=BLIND` if the watchdog is
+down, and the decode summary answers "what happened, per minute". An
+observability stack that has never been tested under load is a hope, not a
+control.
 
 ## Relationship to the other skills
 

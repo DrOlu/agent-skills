@@ -170,3 +170,23 @@ is opened, nothing is installed on any witness, and the baselines are
 kilobyte holes under `~/.rmagent/needle-drift/`, not a lake. On an
 air-gapped estate this tier keeps working — and the judgment tier with it: Laya is offline too (pre-seed its HF-cache checkpoint on air-gapped hosts), so no matrix judgment waits for a connected session.
 
+
+
+---
+
+## Enterprise scope & sizing
+
+- **Model:** artifacts + rule packs as CODE, run one-shot — prefetch/amcache/
+  usb/shimcache collection recipes and pure rule logic (events -> filters ->
+  thresholds -> finding). No server, no agent, no central store: the answer
+  is a capped JSON verdict, not a shipment.
+- **Sizing:** one recipe on one host is seconds and kilobytes. A fleet triage
+  (e.g. "which boxes ran a suspicious prefetch?") is a bounded loop of
+  one-shots — 100 hosts in minutes, serialized over your existing transport
+  (WinRM/SSH), zero new infrastructure.
+- **Cadence:** hunt support and incident response — the "what actually
+  executed here?" question. Answers "does this pattern mean abuse?", never
+  "ship everything to a warehouse".
+- **No-Python estates:** recipes are declarative; the collection step maps
+  1:1 to native tooling (Get-WinEvent/Scheduled Tasks/registry on Windows,
+  journalctl/auditd on Linux) — a PS/bash port of any recipe is mechanical.

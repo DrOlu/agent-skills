@@ -158,3 +158,22 @@ stay read-only and STAN/RRN-grained.
 | `scripts/questions/linux/*.sh` | live Finacle (Linux/AIX) |
 | `examples/estate.yaml` | fixture inventory |
 | `examples/fixtures/*.jsonl` | sample switch/core/blind rows |
+
+
+---
+
+## Enterprise scope & sizing
+
+- **The pattern:** reconstruct one ATM/POS/FEP transaction across Postilion
+  and Finacle from each hop's OWN logs (STAN/RRN keys). Pull-based, capped,
+  holes-instead-of-dumps: `delay_on: postilion-ingress|finacle-posting|
+  never-reached-core` localizes the hop without touching the switch.
+- **Sizing:** sub-second per reconstruction; dispute investigations that
+  took a war-room morning become a one-liner. Answers are STAN/RRN-grained
+  with PCI masking at the device — safe for ops queues and audit handoff.
+- **Cadence:** per-dispute, per-reconciliation-break, per-incident. The
+  demo runs on fixtures; the estate version binds to your own log doors.
+- **No-Python estates:** hop reads are log greps at heart — the same
+  STAN/RRN joins port directly to PowerShell (`Select-String`) or bash
+  (`grep`) against the switch/core hosts, or run from the payment team's
+  own tooling via the documented question shapes.

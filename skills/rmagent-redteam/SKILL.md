@@ -189,3 +189,24 @@ stage today, detect tomorrow, to answer "would we have caught this attack
 while it sat on the box overnight?"
 
 `--keep` leaves artifacts staged after a `run` (clean later with `clean`).
+
+
+---
+
+## Enterprise scope & rules of engagement
+
+- **This is a DRILL, not an attack:** all artifacts are prefixed
+  `RMAgentDrill_`, reversible with `clean`, and `--confirm` is mandatory.
+  Only against boxes you administer, only inside your change window.
+- **Sizing:** staging 8 LOTL artifacts on 2 witnesses is minutes; detection
+  scoring is immediate; `--keep` + delayed `detect` answers "would we have
+  caught this overnight?" — the question that actually matters.
+- **Cadence:** quarterly (align with the rmagent-at ring/watchdog drill so
+  the capture plane is exercised under the same storm). Every drill ships a
+  Telegram/report summary — detection gaps become tickets, not anecdotes.
+- **Blue/green contract:** red stages with prefixes and cleans up; blue
+  scores honestly (blind witnesses score as gaps, not passes). The drill's
+  output is the input to sizing/retention fixes — not a scoreboard.
+- **No-Python estates:** the drill *stages* artifacts via OS-native means
+  (cmd/PowerShell one-liners) — the scoring half needs the engine on the
+  jump host, which is your controlled runtime.

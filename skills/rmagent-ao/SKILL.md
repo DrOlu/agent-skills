@@ -180,3 +180,21 @@ air-gapped estate this tier keeps working — and the judgment tier with it: Lay
 4. The census is signature-based — a truly novel agent with an unknown endpoint
    and no disk artifacts is Tier 4 and shows up as a hole, which is the honest
    answer, not a false "no agents found"
+
+
+---
+
+## Enterprise scope & sizing
+
+- **Scale:** the census is pull-based and capped (32 KB/agent) — 100 hosts
+  x 5 probes in minutes; nothing installed on any host; holes (uninstrumented
+  Tiers 3/4) are reported as holes, never as "no agents".
+- **Sizing:** run the census weekly (or on-demand after change windows);
+  store per-run JSONL deltas, not full dumps — a year of a 500-host estate is
+  low MB. Ship deltas to your asset inventory (CMDB) rather than hoarding.
+- **Cadence:** change windows and incident intakes, not a standing loop.
+  The agent-plane census answers "what agents run here, what do they call,
+  what changed" — complement EDR (signature plane), don't duplicate it.
+- **No-Python estates:** census targets only need OS-native runtimes
+  (PowerShell/WinRM on Windows, POSIX sh/SSH on Linux); the jump host that
+  runs the census engine is yours to place.

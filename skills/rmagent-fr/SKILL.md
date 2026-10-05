@@ -159,3 +159,25 @@ the pull-only rules are unchanged.
 | `rmagent-redteam` | The drill — stages artifacts, scores detection |
 | `rmagent-actuate` | Phase 1 response — named, journaled, reversible |
 | `rmagent-linux` | The Linux/macOS sibling of `rmagent-so` |
+
+## Enterprise scope, sizing & cadence
+
+- **Scale:** a case file is megabytes *by design* (adaptive sampling: join
+  keys always, full detail only on smoke). 100 concurrent open cases ≈ tens
+  of MB under `~/.rmagent/cases/` — no lake, no warehouse. `case.py prune`
+  ages closed cases out (KEEP_DAYS default 30).
+- **Sizing the walks:** depth ≤ 8, fan-out 3, 32 KB pull cap — one full walk
+  ≈ ≤24 questions ≈ ≤1 min of witness time. Budget belongs to the identity;
+  an unconstrained hunter is a worm.
+- **Cadence:** open a case per ticket/symptom (not per sweep). Census is the
+  only standing loop (5-min cron); hunts fire on trigger. OTel spans flow to
+  your existing Grafana/Jaeger/Splunk via the configurable gateway —
+  the Flight Recorder complements APM, never replaces it.
+- **No-Python estates:** the *engine* runs on the jump host you control;
+  witnesses only ever see their OS-native question payloads (`.ps1` on
+  Windows, `.sh` on Linux). `rmagent-windows/scripts/ops/rmagent-ops.ps1`
+  and `rmagent-linux/scripts/ops/rmagent-ops.sh` reproduce the health/
+  doctor/watchdog loop natively if even the jump host must stay Python-free.
+- **The worked case:** EXAMPLES.md carries a full 2026-10-04 incident
+  walkthrough — intake triage, hop table with join keys, the
+  "healthy-answer-vs-degraded-box" lesson, and holes recorded as holes.

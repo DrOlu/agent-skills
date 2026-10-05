@@ -196,3 +196,20 @@ adapter after rmagent-pay.
 - STAN recycles — always STAN+RRN.
 - TLS on FEP–CBA without a broker you administer ⇒ Segment C is a hole. Do not MITM a bank link.
 - Busy switch fills a 64 MiB ring in minutes-to-hours. Size it or accept retention-boundary.
+
+
+---
+
+## Enterprise scope & sizing
+
+- **The honest limits are the feature:** an ISO-8583 hop reconstruction from
+  passive taps cannot say what the switch core doesn't log — `delay_on:
+  never-reached-core` is a real answer, not a failure. Budget for the taps,
+  not for a lake: answers are STAN/RRN-grained and capped.
+- **Sizing:** one transaction reconstruction is 2-6 hop reads (each a single
+  capped log query); a disputed-transaction SLA investigation runs in seconds.
+  PCI scope: the device PAN mask rule keeps cardholder data out of answers.
+- **Cadence:** per-dispute/per-incident. There is no standing loop — this is
+  the Flight Recorder pattern applied to payments: pull, cap, case-file.
+- **Regulator posture:** every answer names its sources and holes — you can
+  hand the output to an auditor as-is, including what it cannot see.

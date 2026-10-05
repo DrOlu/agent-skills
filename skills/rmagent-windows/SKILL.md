@@ -577,3 +577,68 @@ The detection query itself is proven — it reads live 4625s correctly.
 both witnesses and sees the armed canaries.
 
 ---
+
+## Enterprise scope, sizing & the no-Python (PowerShell-native) kit
+
+### Estate scope & sizing (Windows plane)
+
+- **Per-witness footprint:** zero install. The questions ride WinRM/PSRP;
+  resident state is only the ETW rings (`C:\etw`, default 512/256/128 MB —
+  disk, not kernel memory) and, if the estate chose Sysmon, its service.
+- **Sizing the rings (measured, not guessed):** a churn-storm writes
+  AppTrace at ~20 MB/min; a quiet server ~1 MB/min or less. Size for
+  **2–4 h of your measured worst case**: quiet service box 512 MB–2 GB;
+  busy app server 2–4 GB; anything beyond is disk theater — deep evidence
+  should be *copied off-box*, not hoarded in a bigger ring. 24 h retention
+  on a busy box is the wrong goal: the evidence you need in the first
+  minutes lives in the newest 10%.
+- **The freeze lesson (live-verified 2026-10-04, WS2):** a bincirc ring that
+  fills its segment can FREEZE at cap while logman still reports Running —
+  evidence preserved but capture dead and status lying. The watchdog below
+  is mandatory in production; worst-case blindness is its interval + ~5 s.
+- **Event-log retention:** Security/Sysmon logs rotate too (64 MB Sysmon
+  default ≈ minutes under a storm; the BadApp window was unrecoverable from
+  Sysmon 50 min later). Raise `Log Size` AND ship off-box (WEF/Splunk/
+  Sentinel) — the ring is the fast local tape, the SIEM is the archive.
+- **Fleet shape:** one jump host fans out over WinRM (8 KB command budget);
+  ~2 s per witness per question. 100 witnesses × full question set ≈ 25 min
+  serialized; parallelize by host groups.
+
+### No-Python operation (PowerShell-native kit)
+
+Enterprises that standardize on PowerShell (no Python runtimes on witnesses)
+get the same operations from `scripts/ops/rmagent-ops.ps1` — PS 5.1 + stock
+`logman/schtasks`, no dependencies. Copy one file to the witness (or push via
+GPO/WinRM) and:
+
+```powershell
+# health verdict (same JSON contract as ringhealth): frozen counts as BLIND
+powershell -File rmagent-ops.ps1 status
+# detect frozen/dead rings; -Apply archives the frozen segment (evidence kept)
+# then restarts — restarting WITHOUT archiving just re-freezes at cap
+powershell -File rmagent-ops.ps1 doctor          # report only
+powershell -File rmagent-ops.ps1 doctor -Apply   # archive + restart
+# self-healing: 5-min SYSTEM task, bounded 200-line log at C:\etw\watchdog.log
+powershell -File rmagent-ops.ps1 watchdog -Apply
+powershell -File rmagent-ops.ps1 watchdog-status
+powershell -File rmagent-ops.ps1 watchdog-remove
+```
+
+Fleet-wide from any Windows admin box (no Python needed here either):
+
+```powershell
+$witnesses = Get-Content .\witnesses.txt          # one FQDN per line
+Invoke-Command -ComputerName $witnesses -ScriptBlock {
+  powershell -File C:\ops\rmagent-ops.ps1 status
+} -AsJob | Wait-Job | Receive-Job                  # parallel fleet verdict
+```
+
+**The cross-platform rule:** *runtime on the witness, not the agent.* The
+rmagent Python engine runs where you control it (jump host, RTerm, CI);
+witnesses only ever need their OS-native runtime — PowerShell on Windows,
+POSIX sh on Linux (`rmagent-linux/scripts/ops/rmagent-ops.sh` is the bash
+mirror of this kit). An enterprise that bans Python on *servers* loses
+nothing: every Phase-0 question ships as `.ps1`/`.sh`, and the two `ops`
+kits cover health/doctor/watchdog natively.
+
+---

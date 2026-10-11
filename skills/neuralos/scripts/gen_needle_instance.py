@@ -265,8 +265,25 @@ def bridge_database(profile, dsn, dsn_env):
 DSN = os.environ.get("{dsn_env}", "{dsn}")
 
 
+def _usql_bin():
+    # NEURALOS_USQL env > PATH > the usual install dirs — hosts whose app
+    # PATH lacks usql still work when the binary lives in a standard place
+    import shutil
+    env = os.environ.get("NEURALOS_USQL", "").strip()
+    if env:
+        return env
+    found = shutil.which("usql")
+    if found:
+        return found
+    for cand in ("/opt/homebrew/bin/usql", "/usr/local/bin/usql",
+                 "/usr/bin/usql", "/snap/bin/usql"):
+        if os.path.isfile(cand):
+            return cand
+    return "usql"
+
+
 def _q(sql):
-    proc = subprocess.run(["usql", DSN, "-c", "\\\\pset format csv", "-c", sql],
+    proc = subprocess.run([_usql_bin(), DSN, "-c", "\\\\pset format csv", "-c", sql],
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace", timeout=120)
     if proc.returncode != 0:
@@ -766,10 +783,10 @@ def load_cages(menu):
             if isinstance(spec, dict) and spec.get("enum"):
                 req[arg] = {"type": "enum", "values": [str(v) for v in spec["enum"]]}
             elif isinstance(spec, dict) and spec.get("pattern"):
-                try:
-                    patterns[arg] = re.compile(spec["pattern"])
-                except re.error:
-                    pass
+                patterns[arg] = re.compile(spec["pattern"])
+                req[arg] = {"type": "pattern"}
+            elif isinstance(spec, dict) and spec.get("type") == "integer":
+                req[arg] = {"type": "integer"}
         if req or patterns:
             cages[probe["name"]] = {"required": req, "patterns": patterns}
     return cages
@@ -880,6 +897,111 @@ def mask_pii(x):
     return x
 
 
+GATE_VERSION = 1
+# Shared contract (ReactorPro #107): refusal_reason is a BARE TOKEN and the
+# specifics live in `refusal_detail`, so a consumer that exact-matches a reason
+# works identically across ReactorPro / SuperAgent / neuralOSd. Exit codes are
+# shared too: 0 answered / 2 nothing produced (SystemExit(2) below).
+MIN_QUESTION_COVERAGE = 0.5
+GATE_STOP = set("the a an of in on for to and or is are was were what which who "
+                "me give all with their from by at it its do does did "
+                "i we you this that those these there have has had more than one not "
+                "use between during along per into over under about".split())
+GENERIC_INTENT = frozenset(("how many much show list give tell me find get what which who where when "
+                            "top best most least first last sample example preview all any "
+                            "are is there exist exists please number status break down "
+                            "some few several couple").split())
+ACTION_VERBS = ("play", "erase", "delete", "remove", "drop", "wipe", "purge",
+                "send", "execute", "restart", "shutdown", "kill", "exploit",
+                "deploy", "cancel")
+QUALIFIERS = ("blocked", "overdue", "rejected", "closed", "resolved",
+              "pending", "escalated", "cancelled", "archived", "on hold",
+              "last week", "last month", "last year", "this week",
+              "this month", "yesterday", "today", "unassigned")
+
+
+def _strip_plural(tokens):
+    return {t[:-1] if len(t) > 3 and t.endswith("s") else t for t in tokens}
+
+
+def gate_tokens(text):
+    return _strip_plural(set(re.findall(r"[a-z0-9_]+", str(text).lower())) - GATE_STOP)
+
+
+def gate_probe_vocab(probe, include_enum=True):
+    """triggers + name (+ enum values) — what this probe can be said to know."""
+    v = set()
+    for t in probe.get("triggers", []):
+        v |= gate_tokens(t)
+    v |= gate_tokens(probe["name"].replace("_", " "))
+    if not include_enum:
+        return v
+    for spec in ((probe.get("parameters") or {}).get("properties") or {}).values():
+        if isinstance(spec, dict):
+            for v2 in spec.get("enum", []) or []:
+                v |= gate_tokens(v2)
+    return v
+
+
+def gate_caged_seen(winner, cages, normalized):
+    """An enum/pattern cage the question literally satisfies is the confidence
+    signal — prose thresholds do not apply to it."""
+    cage = cages.get(winner.get("name")) or {}
+    for spec in cage.get("required", {}).values():
+        if spec.get("type") == "enum":
+            for v in spec.get("values", []):
+                if re.search(r"\\b" + re.escape(v) + r"\\b", normalized, re.I):
+                    return True
+    for rx in cage.get("patterns", {}).values():
+        if rx.search(normalized):
+            return True
+    return False
+
+
+def ask_gate(normalized, menu, winner, cages):
+    """Refusal gate (GATE_VERSION 1) — pure menu+question logic, mirror of
+    neuralOSd router._gate. Returns None (confident) or a reason string.
+    Never runs a probe, never calls the model, never touches the network."""
+    vocab = {p["name"]: _strip_plural(gate_probe_vocab(p)) for p in menu}
+    menu_v = set().union(*vocab.values()) if vocab else set()
+    # The action carve-out weighs capability words only — enum values are
+    # data, not capabilities (a bucket named do-not-delete-... must not
+    # teach the menu the verb).
+    cap_v = set()
+    for p in menu:
+        cap_v |= _strip_plural(gate_probe_vocab(p, include_enum=False))
+    words = normalized.split()
+    if words and words[0] in ACTION_VERBS and words[0] not in cap_v:
+        return "action_intent"
+    if winner is None:
+        # retrieval found nothing — the honest outcome is a refusal unless an
+        # imperative already claimed it above
+        return "no_probe_matches"
+    winner_v = vocab.get(winner.get("name"), set())
+    if gate_caged_seen(winner, cages, normalized):
+        return None
+    for qual in QUALIFIERS:
+        if re.search(r"\\b" + re.escape(qual) + r"\\b", normalized, re.I):
+            head = qual.split()[0]
+            if head not in winner_v:
+                return "dropped_filter:" + qual
+    q = gate_tokens(normalized)
+    domain = {t for t in q - GENERIC_INTENT if not t.isdigit()}
+    domain = domain or (q - GENERIC_INTENT) or q
+
+    def known_anywhere(t):
+        return t in menu_v or (len(t) > 3 and t.endswith("s") and t[:-1] in menu_v) \
+            or (len(t) > 3 and (t + "s") in menu_v)
+
+    for t in domain:
+        if not known_anywhere(t):
+            return "no_probe_matches"
+    covered = len(domain & winner_v)
+    if domain and covered / len(domain) < MIN_QUESTION_COVERAGE:
+        return "low_coverage"
+    return None
+
+
 def emit(envelope):
     print(json.dumps(envelope, indent=1, ensure_ascii=False, default=str))
 
@@ -925,8 +1047,15 @@ def ask_one(question, k=K_DEFAULT, full=False, use_cache=True):
         mode = "retrieval"
         print("retrieved:", [t.__name__ for t in selected], file=sys.stderr)
         if not selected:
+            # the gate outranks the retrieval miss: an imperative must be
+            # refused as action_intent, not reported as a mere miss
+            miss_reason = ask_gate(normalized, menu, None, cages)
             env = {"ask_id": ask_id, "question": question, "normalized": normalized,
-                   "probe": None, "menu_version": mver, "error":
+                   "probe": None, "menu_version": mver,
+                   "refused": True, "refusal_reason": miss_reason,
+                   "refusal_detail": {"rule": miss_reason,
+                                      "why": "no probe scored > 0"},
+                   "gate_version": GATE_VERSION, "error":
                    "no probe scored > 0 for this question"}
             emit(env); audit({**env, "ts": time.time()})
             raise SystemExit(2)
@@ -934,8 +1063,24 @@ def ask_one(question, k=K_DEFAULT, full=False, use_cache=True):
     probe_meta = next((p for p in menu if p["name"] == selected[0].__name__), None)
     results, used_probe, conf = None, selected[0].__name__, None
 
-    # ---- deterministic fast path ----------------------------------------
+    # ---- refusal gate: after caged extraction, BEFORE execution ----------
     kwargs = extract_args(selected[0], cages, normalized)
+    gate_reason = ask_gate(normalized, menu, probe_meta or selected[0], cages)
+    if gate_reason is not None:
+        env = {"ask_id": ask_id, "ts": time.time(), "question": question,
+               "normalized": normalized, "probe": None,
+               "menu_version": mver, "mode": "refused",
+               "refused": True, "refusal_reason": gate_reason,
+               "refusal_detail": {"rule": gate_reason},
+               "gate_version": GATE_VERSION,
+               "error": "refused (%s): the menu cannot answer this "
+                        "confidently, and guessing is worse" % gate_reason,
+               "results": None,
+               "candidates_retrieved": [t.__name__ for t in selected]}
+        emit(env); audit({**env, "results": None})
+        raise SystemExit(2)
+
+    # ---- deterministic fast path ----------------------------------------
     if kwargs is not None and selected[0].__name__ in cages:
         tool = selected[0]
         print("deterministic:", tool.__name__, kwargs, file=sys.stderr)
@@ -945,19 +1090,25 @@ def ask_one(question, k=K_DEFAULT, full=False, use_cache=True):
             results = [r]; used_probe = tool.__name__; mode = "deterministic"
     if results is None:
         # ---- model fallback (top-K menu, one step) -----------------------
-        agent = inst.needle.Needle(tools=selected,
-                                   system="answer from the menu probes.",
-                                   auto_date=False)
-        resp = agent.run(normalized, max_steps=1)
-        conf = resp.get("confidence")
-        results = resp.get("results")
-        used_probe = None
-        if isinstance(results, list) and results:
-            first_env = results[0] if isinstance(results[0], dict) else {}
-            used_probe = first_env.get("_tool") or selected[0].__name__
-            for item in results:
-                if isinstance(item, dict) and "rows" in item:
-                    item["_tool"] = used_probe
+        needle_factory = getattr(inst, "needle", None)
+        if needle_factory is None:
+            # Instance ships no model runtime — honest empty envelope instead
+            # of an AttributeError traceback.
+            results = []
+        else:
+            agent = needle_factory.Needle(tools=selected,
+                                          system="answer from the menu probes.",
+                                          auto_date=False)
+            resp = agent.run(normalized, max_steps=1)
+            conf = resp.get("confidence")
+            results = resp.get("results")
+            used_probe = None
+            if isinstance(results, list) and results:
+                first_env = results[0] if isinstance(results[0], dict) else {}
+                used_probe = first_env.get("_tool") or selected[0].__name__
+                for item in results:
+                    if isinstance(item, dict) and "rows" in item:
+                        item["_tool"] = used_probe
 
     results = mask_pii(results)
     empty = results in (None, [], {}) or (isinstance(results, list)
@@ -965,6 +1116,8 @@ def ask_one(question, k=K_DEFAULT, full=False, use_cache=True):
     env = {"ask_id": ask_id, "ts": time.time(), "question": question,
            "normalized": normalized, "probe": used_probe,
            "menu_version": mver, "mode": mode, "confidence": conf,
+           "refused": False, "refusal_reason": None, "refusal_detail": None,
+           "gate_version": GATE_VERSION,
            "latency_ms": int((time.time() - t0) * 1000),
            "results": None if empty else results}
     if empty:
@@ -975,7 +1128,8 @@ def ask_one(question, k=K_DEFAULT, full=False, use_cache=True):
 
     emit(env)
     audit({k: env[k] for k in ("ts", "ask_id", "question", "normalized",
-                               "probe", "confidence", "latency_ms", "mode")})
+                               "probe", "confidence", "latency_ms", "mode",
+                               "refused", "refusal_reason", "gate_version")})
     cache_store(norm_key, env)
     return env
 

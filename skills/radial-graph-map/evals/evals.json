@@ -1,0 +1,35 @@
+{
+  "skill_name": "radial-graph-map",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Here's a CSV of my company's vendors and the contracts they're on (vendors.csv with columns vendor_a, vendor_b, contract, amount). Map the relationship graph so I can see who's connected to whom, and make sure I can read every connection label.",
+      "expected_output": "A graph spec built from the CSV (one node per vendor, edges labeled with contract info), rendered to SVG+PNG via scripts/radial_graph.py, invariant tests run and passing, metrics reported.",
+      "files": ["vendors.csv"]
+    },
+    {
+      "id": 2,
+      "prompt": "Map our engineering org: Priya (CTO) has platform, mobile and data teams; platform owns checkout and search services; the checkout team is on-call with SRE. Render it cleanly with no overlapping boxes.",
+      "expected_output": "A spec with people/team/service node types, struct edges for reporting and dash edges for service ownership, rendered SVG+PNG, zero node overlaps verified by the test suite.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I have investigation notes on a procurement fraud: Mira (head of procurement) approved three invoices from a vendor her husband founded, then deleted the approval emails. Build me an evidence map from these notes with provenance on everything.",
+      "expected_output": "A dossier-style spec: person/entity/document/event node types, green edge for the approval action, money edges for invoices, spouse edge, tips carrying verbatim note quotes, root set to the focal suspect.",
+      "files": ["notes.txt"]
+    },
+    {
+      "id": 4,
+      "prompt": "The last graph you made me has labels I can't read where edges bunch up. Fix it.",
+      "expected_output": "Recognizes the engine already enforces collision-free labels; diagnoses instead whether the spec is too dense (labels too long, too many edges) and applies the skill's guidance: shorten labels, prune low-signal edges, or split the map — then re-renders and re-verifies.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Turn this Enron-style mail archive query result into a graph: Fastow co-mentioned with Lay 247 times, with Skilling 221, with Causey 95; Fastow signed the Aug 2 2001 directive to Causey and Buy; Andersen audited Enron for $25M.",
+      "expected_output": "Spec with co edges (dashed, counts in labels) plus green directive edges to addressees and a money edge for audit fees, rendered deterministically with tests green.",
+      "files": []
+    }
+  ]
+}

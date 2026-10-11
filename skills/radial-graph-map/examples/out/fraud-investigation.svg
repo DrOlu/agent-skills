@@ -1,0 +1,311 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="11738" height="11738" viewBox="0 0 11738 11738" font-family="Helvetica,Arial,sans-serif">
+<rect width="11738" height="11738" fill="#fbfcfe"/>
+<defs>
+<marker id="arr_co" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arr_struct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+<marker id="arr_green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#15803d"/></marker>
+<marker id="arr_money" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b45309"/></marker>
+<marker id="arr_legal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7e22ce"/></marker>
+<marker id="arr_spouse" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#db2777"/></marker>
+<marker id="arr_news" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+<marker id="arr_meet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#65a30d"/></marker>
+<marker id="arr_solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arr_dash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12.3" markerHeight="12.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+</defs>
+<text x="99" y="109" font-size="56" font-weight="700" fill="#0f172a">Andrew Fastow — relationship graph</text>
+<text x="99" y="161" font-size="26.3" fill="#334155">Instance-only: every node and edge from enron_mail.sqlite (447,417 messages) · quotes verbatim</text>
+<line x1="6117" y1="5942" x2="7290" y2="4209" stroke="#475569" stroke-width="2.6" marker-end="url(#arr_struct)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="4561" y2="7423" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="7582" y2="7423" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="4190" y2="4971" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="6361" y2="8016" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="7970" y2="6889" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="4055" y2="5600" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="4032" y2="6273" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="8203" y2="5600" stroke="#94a3b8" stroke-width="2.3" stroke-dasharray="5 5" marker-end="url(#arr_co)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="5776" y2="3893" stroke="#15803d" stroke-width="4.9" marker-end="url(#arr_green)" opacity="0.95"/>
+<path d="M5226,1811 L5428,1784 L5631,1767 L5835,1761 L6039,1764 L6242,1777 L6445,1801 L6646,1834 L6845,1878 L7041,1931 L7235,1994 L7426,2067 L7612,2149 L7795,2240 L7972,2339 L8145,2448 L8311,2565 L8472,2690 L8627,2823 L8774,2964" fill="none" stroke="#15803d" stroke-width="4.9" marker-end="url(#arr_green)" opacity="0.95"/>
+<line x1="5776" y1="3893" x2="5662" y2="3021" stroke="#15803d" stroke-width="4.9" marker-end="url(#arr_green)" opacity="0.95"/>
+<path d="M5226,1811 L5026,1848 L4828,1895 L4632,1951 L4439,2017 L4250,2093 L4065,2178 L3884,2272 L3708,2375 L3537,2486 L3372,2606 L3214,2734 L3061,2869 L2916,3012 L2778,3162 L2648,3319 L2525,3482 L2411,3650 L2305,3825 L2208,4004" fill="none" stroke="#15803d" stroke-width="4.9" marker-end="url(#arr_green)" opacity="0.95"/>
+<line x1="6117" y1="5942" x2="4607" y2="4437" stroke="#475569" stroke-width="2.6" marker-end="url(#arr_struct)" opacity="0.95"/>
+<line x1="8189" y1="3847" x2="7290" y2="4209" stroke="#b45309" stroke-width="3.0" marker-end="url(#arr_money)" opacity="0.95"/>
+<path d="M2801,2801 L2966,2645 L3138,2497 L3319,2359 L3506,2230 L3700,2111 L3899,2003 L4104,1905 L4314,1818 L4528,1742 L4746,1678 L4967,1625 L5190,1583 L5415,1554 L5642,1536 L5869,1530 L6096,1536 L6323,1554 L6548,1583 L6771,1625 L6992,1678 L7210,1742 L7424,1818 L7634,1905 L7839,2003 L8038,2111 L8232,2230 L8419,2359 L8600,2497 L8772,2645 L8937,2801" fill="none" stroke="#64748b" stroke-width="2.1" stroke-dasharray="3 4" marker-end="url(#arr_news)" opacity="0.95"/>
+<line x1="4607" y1="4437" x2="4000" y2="3847" stroke="#64748b" stroke-width="2.1" stroke-dasharray="3 4" marker-end="url(#arr_news)" opacity="0.95"/>
+<line x1="3197" y1="5469" x2="4055" y2="5600" stroke="#475569" stroke-width="2.6" marker-end="url(#arr_struct)" opacity="0.95"/>
+<path d="M9940,3795 L9826,3584 L9701,3380 L9566,3183 L9420,2993 L9265,2812 L9100,2638 L8926,2473 L8745,2318 L8555,2172 L8358,2037 L8154,1912 L7943,1798 L7728,1695 L7506,1603 L7281,1523 L7052,1455 L6819,1400 L6584,1356 L6347,1325 L6108,1306 L5869,1300 L5630,1306 L5391,1325 L5154,1356 L4919,1400 L4686,1455 L4457,1523 L4232,1603 L4010,1695 L3795,1798 L3584,1912 L3380,2037 L3183,2172 L2993,2318 L2812,2473 L2638,2638 L2473,2812 L2318,2993 L2172,3183 L2037,3380 L1912,3584 L1798,3795 L1695,4010 L1603,4232 L1523,4457 L1455,4686 L1400,4919 L1356,5154 L1325,5391 L1306,5630 L1300,5869 L1306,6108 L1325,6347 L1356,6584" fill="none" stroke="#475569" stroke-width="2.6" marker-end="url(#arr_struct)" opacity="0.95"/>
+<line x1="8724" y1="4593" x2="7290" y2="4209" stroke="#b45309" stroke-width="3.0" marker-end="url(#arr_money)" opacity="0.95"/>
+<line x1="7449" y1="3293" x2="7290" y2="4209" stroke="#475569" stroke-width="2.6" marker-end="url(#arr_struct)" opacity="0.95"/>
+<line x1="8215" y1="6273" x2="6117" y2="5942" stroke="#db2777" stroke-width="3.3" marker-end="url(#arr_spouse)" opacity="0.95"/>
+<path d="M10610,6620 L10571,6832 L10523,7042 L10466,7249 L10399,7454 L10324,7656 L10239,7854 L10146,8048 L10043,8238 L9933,8423 L9814,8602 L9688,8777 L9553,8945 L9412,9107 L9263,9263" fill="none" stroke="#475569" stroke-width="2.6" marker-end="url(#arr_struct)" opacity="0.95"/>
+<line x1="8189" y1="8013" x2="7582" y2="7423" stroke="#64748b" stroke-width="2.1" stroke-dasharray="3 4" marker-end="url(#arr_news)" opacity="0.95"/>
+<path d="M6656,901 L6915,949 L7171,1010 L7423,1085 L7672,1173 L7915,1274 L8153,1387 L8384,1513 L8609,1650 L8826,1800 L9034,1960 L9235,2131 L9426,2312 L9607,2503 L9778,2704 L9938,2912 L10088,3129 L10225,3354 L10351,3585 L10464,3823 L10565,4066 L10653,4315 L10728,4567 L10789,4823 L10837,5082 L10871,5343 L10892,5606 L10899,5869 L10892,6132 L10871,6395 L10837,6656" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<path d="M6656,901 L6908,947 L7157,1007 L7403,1079 L7645,1163 L7882,1259 L8114,1368 L8341,1488 L8561,1620 L8774,1762 L8979,1916 L9176,2079 L9365,2252 L9544,2435 L9715,2627 L9875,2827 L10024,3035 L10163,3250 L10291,3472 L10407,3700 L10512,3934 L10605,4173 L10685,4417 L10752,4664 L10808,4914 L10850,5167 L10879,5421 L10895,5677 L10899,5933 L10889,6189 L10866,6444 L10830,6698 L10782,6950 L10720,7198 L10646,7444 L10560,7685 L10461,7921 L10351,8153" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<line x1="6607" y1="3021" x2="6709" y2="2185" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<path d="M6656,901 L6544,884 L6432,871 L6320,859 L6207,850 L6095,844 L5982,840 L5869,839 L5756,840 L5643,844 L5531,850 L5418,859 L5306,871 L5194,884 L5082,901" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<line x1="7290" y1="4209" x2="6607" y2="3021" stroke="#b45309" stroke-width="3.0" marker-end="url(#arr_money)" opacity="0.95"/>
+<line x1="7076" y1="7824" x2="6117" y2="5942" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<path d="M8257,10556 L8009,10675 L7754,10780 L7495,10872 L7230,10950 L6963,11014 L6692,11065 L6419,11101 L6144,11122 L5869,11129 L5594,11122 L5319,11101 L5046,11065 L4775,11014 L4508,10950 L4243,10872 L3984,10780 L3729,10675 L3481,10556 L3239,10425 L3004,10281 L2777,10125 L2559,9957 L2349,9778 L2149,9589" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<path d="M8257,10556 L8362,10501 L8465,10444 L8567,10385 L8668,10323 L8767,10259 L8865,10193 L8961,10125 L9056,10054 L9149,9982 L9240,9907 L9330,9830 L9418,9752 L9504,9671 L9589,9589" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<path d="M8257,10556 L8499,10425 L8734,10281 L8961,10125 L9179,9957 L9389,9778 L9589,9589 L9778,9389 L9957,9179 L10125,8961 L10281,8734 L10425,8499 L10556,8257 L10675,8009 L10780,7754 L10872,7495 L10950,7230 L11014,6963 L11065,6692 L11101,6419 L11122,6144 L11129,5869 L11122,5594 L11101,5319 L11065,5046 L11014,4775 L10950,4508 L10872,4243 L10780,3984 L10675,3729 L10556,3481 L10425,3239 L10281,3004 L10125,2777 L9957,2559 L9778,2349 L9589,2149 L9389,1960 L9179,1781 L8961,1613 L8734,1457 L8499,1313 L8257,1182 L8009,1063 L7754,958 L7495,866 L7230,788 L6963,724 L6692,673" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<path d="M8257,10556 L8493,10428 L8722,10288 L8944,10137 L9158,9974 L9363,9801 L9559,9618 L9746,9425 L9922,9222 L10088,9011 L10243,8792 L10386,8565 L10518,8330 L10637,8090 L10745,7844 L10839,7592 L10921,7337 L10989,7077 L11044,6814 L11085,6549 L11113,6282 L11127,6014 L11128,5745 L11115,5477 L11088,5210 L11047,4944 L10994,4681 L10926,4421 L10846,4165 L10752,3913 L10646,3667 L10528,3426 L10397,3191 L10254,2964 L10100,2744 L9935,2532 L9760,2329 L9574,2135 L9379,1951 L9174,1777 L8961,1613" fill="none" stroke="#7e22ce" stroke-width="2.8" stroke-dasharray="7 5" marker-end="url(#arr_legal)" opacity="0.95"/>
+<line x1="4213" y1="6901" x2="6117" y2="5942" stroke="#65a30d" stroke-width="2.5" marker-end="url(#arr_meet)" opacity="0.95"/>
+<path d="M977,8362 L1034,8471 L1093,8579 L1155,8685 L1220,8790 L1287,8894 L1356,8996 L1427,9096 L1500,9195 L1576,9292 L1654,9388 L1734,9482 L1816,9573 L1900,9663 L1986,9752" fill="none" stroke="#65a30d" stroke-width="2.5" marker-end="url(#arr_meet)" opacity="0.95"/>
+<path d="M977,8362 L922,8251 L870,8140 L820,8027 L773,7913 L728,7798 L686,7682 L647,7566 L610,7448 L576,7330 L545,7211 L516,7091 L490,6970 L466,6849 L446,6728" fill="none" stroke="#65a30d" stroke-width="2.5" marker-end="url(#arr_meet)" opacity="0.95"/>
+<path d="M977,8362 L859,8116 L754,7865 L661,7609 L581,7348 L514,7084 L461,6817 L420,6548 L393,6277 L380,6005 L380,5733 L393,5461 L420,5190 L461,4921 L514,4654 L581,4390 L661,4129 L754,3873 L859,3622 L977,3376" fill="none" stroke="#65a30d" stroke-width="2.5" marker-end="url(#arr_meet)" opacity="0.95"/>
+<path d="M977,8362 L856,8109 L749,7851 L654,7588 L573,7320 L506,7049 L453,6774 L414,6497 L389,6218 L379,5939 L382,5659 L400,5380 L432,5102 L478,4826 L538,4553 L612,4283 L700,4018 L801,3757 L915,3502 L1042,3252 L1181,3010 L1333,2775 L1496,2548 L1671,2330 L1857,2121 L2053,1921 L2259,1732 L2474,1553 L2698,1386 L2931,1231 L3171,1087 L3418,956 L3671,837 L3930,732 L4194,640 L4463,561 L4735,497 L5010,446" fill="none" stroke="#65a30d" stroke-width="2.5" marker-end="url(#arr_meet)" opacity="0.95"/>
+<line x1="5669" y1="8003" x2="6117" y2="5942" stroke="#64748b" stroke-width="2.1" stroke-dasharray="3 4" marker-end="url(#arr_news)" opacity="0.95"/>
+<line x1="5040" y1="7799" x2="6117" y2="5942" stroke="#64748b" stroke-width="2.1" stroke-dasharray="3 4" marker-end="url(#arr_news)" opacity="0.95"/>
+<line x1="4662" y1="3293" x2="5113" y2="4036" stroke="#64748b" stroke-width="2.1" stroke-dasharray="3 4" marker-end="url(#arr_news)" opacity="0.95"/>
+<line x1="5113" y1="4036" x2="6117" y2="5942" stroke="#b45309" stroke-width="3.0" marker-end="url(#arr_money)" opacity="0.95"/>
+<text x="6610" y="5188" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">EVP/CFO — signed &#x27;Andy</text>
+<text x="6610" y="5214" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">Fastow, EVP/CFO&#x27; (Aug 2,</text>
+<text x="6610" y="5241" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">&#x27;01)</text>
+<text x="5464" y="6564" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 247</text>
+<text x="6733" y="6564" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 221</text>
+<text x="5308" y="5534" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 95</text>
+<text x="6220" y="6800" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 89 · succeeded</text>
+<text x="6220" y="6826" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">him as CFO</text>
+<text x="6896" y="6340" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 58</text>
+<text x="5251" y="5798" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 46</text>
+<text x="5241" y="6081" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 41</text>
+<text x="6993" y="5798" font-size="22.2" fill="#94a3b8" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-mention 36</text>
+<text x="5974" y="5082" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">AUTHORED · Aug 2, 2001</text>
+<text x="7235" y="2024" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">reclassifies: &#x27;no longer a</text>
+<text x="7235" y="2050" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">related party&#x27;</text>
+<text x="5728" y="3514" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">ADDRESSEE · chief risk</text>
+<text x="5728" y="3540" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">officer (+20 recipients)</text>
+<text x="3372" y="2636" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">ADDRESSEE · chief</text>
+<text x="3372" y="2662" font-size="22.2" fill="#15803d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">accounting officer</text>
+<text x="5483" y="5297" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">set up &amp; ran (WSJ) · ended</text>
+<text x="5483" y="5323" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">ties Jul 31, &#x27;01</text>
+<text x="7811" y="3986" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">$35M trades + $1.2B lost</text>
+<text x="7811" y="4012" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">equity (news)</text>
+<text x="5869" y="1573" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">loss attributed to</text>
+<text x="4352" y="4189" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">linked entities</text>
+<text x="3557" y="5415" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">run by (company statement,</text>
+<text x="3557" y="5442" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">Oct 26 &#x27;01)</text>
+<text x="4457" y="1553" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">&#x27;workouts… shed into</text>
+<text x="4457" y="1579" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">Raptor&#x27; (May 11, &#x27;00)</text>
+<text x="8122" y="4418" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">$56M capacity write-down</text>
+<text x="8122" y="4445" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">(Sept &#x27;00)</text>
+<text x="7382" y="3678" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">JV vehicle · 181 mentions</text>
+<text x="7334" y="6121" font-size="22.2" fill="#db2777" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">SPOUSE — &#x27;Lea Fastow,</text>
+<text x="7334" y="6147" font-size="22.2" fill="#db2777" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">Andrew Fastow&#x27;s wife&#x27; (IR)</text>
+<text x="10146" y="8078" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">CHAIR ·</text>
+<text x="10146" y="8104" font-size="22.2" fill="#475569" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">lfastow@pop.pdq.net</text>
+<text x="7934" y="7765" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">presented Dec 6, 2000</text>
+<text x="9938" y="2942" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">SIC subject list (Nov 15,</text>
+<text x="9938" y="2968" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">&#x27;01)</text>
+<text x="10407" y="3743" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">SIC subject list</text>
+<text x="6650" y="2670" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">SIC subject list</text>
+<text x="5869" y="882" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">SIC subject list</text>
+<text x="7003" y="3697" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">$25M audit + $27M</text>
+<text x="7003" y="3723" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">consulting fees</text>
+<text x="6674" y="7034" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-defendant</text>
+<text x="5046" y="11107" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-defendant</text>
+<text x="8961" y="10168" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-defendant</text>
+<text x="11065" y="5089" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-defendant</text>
+<text x="11113" y="6325" font-size="22.2" fill="#7e22ce" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">co-defendant</text>
+<text x="5013" y="6498" font-size="22.2" fill="#65a30d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">attendee · Aug 27, 2001</text>
+<text x="1427" y="9139" font-size="22.2" fill="#65a30d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">attendee</text>
+<text x="647" y="7609" font-size="22.2" fill="#65a30d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">attendee</text>
+<text x="380" y="5776" font-size="22.2" fill="#65a30d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">attendee</text>
+<text x="1042" y="3295" font-size="22.2" fill="#65a30d" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">attendee</text>
+<text x="5857" y="7124" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">Oct 17: &#x27;set up and ran…</text>
+<text x="5857" y="7151" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">stood to make him&#x27;</text>
+<text x="5493" y="7006" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">Oct 19: CFO… &#x27;17 other</text>
+<text x="5493" y="7032" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">similar&#x27; deals</text>
+<text x="4851" y="3605" font-size="22.2" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">reported Dec 12, 2000</text>
+<text x="5535" y="4837" font-size="22.2" fill="#b45309" text-anchor="middle" stroke="#fbfcfe" stroke-width="6.6" paint-order="stroke">SOLD · Nov 2000</text>
+<g><title>The only Fastow sending mail is Lea (art committee). Andrew authored exactly one doc: the Aug 2, 2001 LJM2 directive.</title>
+<rect x="5621" y="5796" width="497" height="146" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="5869" y="5840" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">ANDREW FASTOW</text>
+<text x="5869" y="5876" font-size="20.6" fill="#1e293b" text-anchor="middle">EVP/CFO · founded &amp; ran LJM/LJM2</text>
+<text x="5869" y="5901" font-size="20.6" fill="#1e293b" text-anchor="middle">ousted Oct &#x27;01 → &#x27;leave of absence&#x27;</text>
+<text x="5869" y="5926" font-size="20.6" fill="#1e293b" text-anchor="middle">679 field · 181 FTS · 114 POI mentions</text>
+</g>
+<g><title>Co-defendant in the federal securities class action (enronsent02#30).</title>
+<rect x="6931" y="4112" width="359" height="97" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3.6" opacity="0.98"/>
+<text x="7110" y="4156" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">ENRON CORP.</text>
+<text x="7110" y="4193" font-size="20.6" fill="#1e293b" text-anchor="middle">the company · co-defendant</text>
+</g>
+<g><title>Co-mention 247. Named defendant (enronsent02#30).</title>
+<rect x="4191" y="7301" width="370" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="4376" y="7346" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">KEN LAY</text>
+<text x="4376" y="7382" font-size="20.6" fill="#1e293b" text-anchor="middle">Chairman/CEO · co-defendant</text>
+<text x="4376" y="7407" font-size="20.6" fill="#1e293b" text-anchor="middle">comp: $16M + $80M formula</text>
+</g>
+<g><title>Co-mention 221.</title>
+<rect x="7143" y="7301" width="439" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="7362" y="7346" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">JEFF SKILLING</text>
+<text x="7362" y="7382" font-size="20.6" fill="#1e293b" text-anchor="middle">CEO (2001) · co-defendant</text>
+<text x="7362" y="7407" font-size="20.6" fill="#1e293b" text-anchor="middle">met the art committee Dec 6, 2000</text>
+</g>
+<g><title>Co-mention 95. Attendee, Aug 27, 2001 meeting.</title>
+<rect x="3785" y="4849" width="405" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="3987" y="4894" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">RICHARD CAUSEY</text>
+<text x="3987" y="4930" font-size="20.6" fill="#1e293b" text-anchor="middle">EVP · Chief Accounting Officer</text>
+<text x="3987" y="4955" font-size="20.6" fill="#1e293b" text-anchor="middle">directive addressee · 760 FTS</text>
+</g>
+<g><title>Co-mention 89. &#x27;Unparalleled qualifications&#x27; — Lay (enronsent00#221).</title>
+<rect x="6037" y="7894" width="324" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="6199" y="7938" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">JEFF McMAHON</text>
+<text x="6199" y="7975" font-size="20.6" fill="#1e293b" text-anchor="middle">Treasurer &#x27;98–&#x27;00</text>
+<text x="6199" y="7999" font-size="20.6" fill="#1e293b" text-anchor="middle">succeeded Fastow as CFO</text>
+</g>
+<g><title>Co-mention 58.</title>
+<rect x="7531" y="6767" width="439" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="7751" y="6811" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">BEN GLISAN</text>
+<text x="7751" y="6847" font-size="20.6" fill="#1e293b" text-anchor="middle">VP · Structured Finance (May &#x27;00)</text>
+<text x="7751" y="6872" font-size="20.6" fill="#1e293b" text-anchor="middle">Andersen SIC subject list</text>
+</g>
+<g><title>Co-mention 46. Company-circulated statement, Oct 26–28, 2001.</title>
+<rect x="3512" y="5478" width="543" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="3783" y="5522" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">MICHAEL KOPPER</text>
+<text x="3783" y="5558" font-size="20.6" fill="#1e293b" text-anchor="middle">managing director</text>
+<text x="3783" y="5583" font-size="20.6" fill="#1e293b" text-anchor="middle">&#x27;Chewco was being run by&#x27; him (Oct 26 &#x27;01)</text>
+</g>
+<g><title>Subject &#x27;Re: Raptor&#x27; — the first-person SPE-shedding document.</title>
+<rect x="3535" y="6126" width="497" height="146" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="3783" y="6171" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">DAVID DELAINEY</text>
+<text x="3783" y="6207" font-size="20.6" fill="#1e293b" text-anchor="middle">EBS head · 418 POI flags</text>
+<text x="3783" y="6231" font-size="20.6" fill="#1e293b" text-anchor="middle">&#x27;immunize ourselves… shed into Raptor&#x27;</text>
+<text x="3783" y="6256" font-size="20.6" fill="#1e293b" text-anchor="middle">May 11, 2000 · To: mike.jakubik</text>
+</g>
+<g><title>Co-mention 36.</title>
+<rect x="7706" y="5478" width="497" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="7955" y="5522" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">SHERRON WATKINS</text>
+<text x="7955" y="5558" font-size="20.6" fill="#1e293b" text-anchor="middle">risk group (buy-r mailbox)</text>
+<text x="7955" y="5583" font-size="20.6" fill="#1e293b" text-anchor="middle">her warning memo is NOT in this corpus</text>
+</g>
+<g><title>The only self-authored Fastow document in the archive — a disclosure-termination directive.</title>
+<rect x="5302" y="3673" width="474" height="220" rx="16" fill="#dcfce7" stroke="#15803d" stroke-width="3.6" opacity="0.98"/>
+<text x="5539" y="3717" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">AUG 2, 2001 DIRECTIVE</text>
+<text x="5539" y="3754" font-size="20.6" fill="#1e293b" text-anchor="middle">signed: Andy Fastow, EVP/CFO</text>
+<text x="5539" y="3778" font-size="20.6" fill="#1e293b" text-anchor="middle">To: Rick Buy, Richard Causey (+20):</text>
+<text x="5539" y="3803" font-size="20.6" fill="#1e293b" text-anchor="middle">&#x27;LJM2 is no longer a &quot;related party&quot;</text>
+<text x="5539" y="3828" font-size="20.6" fill="#1e293b" text-anchor="middle">for purposes of disclosure…</text>
+<text x="5539" y="3852" font-size="20.6" fill="#1e293b" text-anchor="middle">transactions may occur as with any</text>
+<text x="5539" y="3877" font-size="20.6" fill="#1e293b" text-anchor="middle">other unrelated third party.&#x27;</text>
+</g>
+<g><title>Top touchers: M. Schmidt, S. Palmer, K. Mann, C. Votaw (legal/IR).</title>
+<rect x="4145" y="4315" width="462" height="122" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3.6" opacity="0.98"/>
+<text x="4376" y="4359" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">LJM PARTNERSHIPS</text>
+<text x="4376" y="4395" font-size="20.6" fill="#1e293b" text-anchor="middle">&#x27;related party&#x27; (company statement)</text>
+<text x="4376" y="4420" font-size="20.6" fill="#1e293b" text-anchor="middle">197 messages · legal-drafted</text>
+</g>
+<g><title>12+ art-committee mails; on the Andersen SIC subject list, Nov 15, 2001.</title>
+<rect x="7695" y="6126" width="520" height="146" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="7955" y="6171" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">LEA FASTOW</text>
+<text x="7955" y="6207" font-size="20.6" fill="#1e293b" text-anchor="middle">spouse · Enron art committee chair</text>
+<text x="7955" y="6231" font-size="20.6" fill="#1e293b" text-anchor="middle">lfastow@pop.pdq.net — only Fastow sender</text>
+<text x="7955" y="6256" font-size="20.6" fill="#1e293b" text-anchor="middle">&#x27;a non-officer employee&#x27; — IR, Nov 8 &#x27;01</text>
+</g>
+<g><title>EnronSent enronsent02#30 — Richard Sanders notification.</title>
+<rect x="6579" y="7677" width="497" height="146" rx="16" fill="#f3e8ff" stroke="#7e22ce" stroke-width="3.6" opacity="0.98"/>
+<text x="6828" y="7722" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">CLASS ACTION</text>
+<text x="6828" y="7758" font-size="20.6" fill="#1e293b" text-anchor="middle">federal securities complaint (Oct &#x27;01)</text>
+<text x="6828" y="7783" font-size="20.6" fill="#1e293b" text-anchor="middle">co-defendants: Enron, Lay,</text>
+<text x="6828" y="7807" font-size="20.6" fill="#1e293b" text-anchor="middle">Skilling, Fastow, Andersen</text>
+</g>
+<g><title>Subject: &#x27;Mtg: Ken Lay/…/Andy Fastow/Derrick&#x27;.</title>
+<rect x="3762" y="6755" width="451" height="146" rx="16" fill="#fef9c3" stroke="#a16207" stroke-width="3.6" opacity="0.98"/>
+<text x="3987" y="6799" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">AUG 27, 2001 MEETING</text>
+<text x="3987" y="6835" font-size="20.6" fill="#1e293b" text-anchor="middle">invitees: Lay, Haedicke, Whalley,</text>
+<text x="3987" y="6860" font-size="20.6" fill="#1e293b" text-anchor="middle">Delainey, Muller, Causey, Buy,</text>
+<text x="3987" y="6884" font-size="20.6" fill="#1e293b" text-anchor="middle">Fastow, Derrick — 6 wks pre-ouster</text>
+</g>
+<g><title>&#x27;Fastow set up and ran the partnerships that stood to make him…&#x27;</title>
+<rect x="5409" y="7906" width="260" height="97" rx="16" fill="#f1f5f9" stroke="#475569" stroke-width="3.6" opacity="0.98"/>
+<text x="5539" y="7951" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">WALL ST JOURNAL</text>
+<text x="5539" y="7987" font-size="20.6" fill="#1e293b" text-anchor="middle">Oct 17, 2001</text>
+</g>
+<g><title>&#x27;Fastow is involved in 17 other similar&#x27; deals.</title>
+<rect x="4780" y="7702" width="260" height="97" rx="16" fill="#f1f5f9" stroke="#475569" stroke-width="3.6" opacity="0.98"/>
+<text x="4910" y="7746" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">BLOOMBERG</text>
+<text x="4910" y="7783" font-size="20.6" fill="#1e293b" text-anchor="middle">Oct 19, 2001</text>
+</g>
+<g><title>Insider sale reported by IBD, Dec 12, 2000.</title>
+<rect x="4708" y="3939" width="405" height="97" rx="16" fill="#fef3c7" stroke="#b45309" stroke-width="3.6" opacity="0.98"/>
+<text x="4910" y="3983" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">52,080 SHARES</text>
+<text x="4910" y="4019" font-size="20.6" fill="#1e293b" text-anchor="middle">sold by &#x27;Enron CFO&#x27; · Nov 2000</text>
+</g>
+<g><title>Center of the $1.2B equity-loss news complex (enronsent00#217).</title>
+<rect x="7715" y="3725" width="474" height="122" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3.6" opacity="0.98"/>
+<text x="7952" y="3770" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">LJM2 CO-INVESTMENT LP</text>
+<text x="7952" y="3806" font-size="20.6" fill="#1e293b" text-anchor="middle">reclassified &#x27;unrelated&#x27; by Fastow&#x27;s</text>
+<text x="7952" y="3831" font-size="20.6" fill="#1e293b" text-anchor="middle">own directive, Aug 2, 2001</text>
+</g>
+<g><title>&#x27;Now that Raptor is blown up, should we begin valuations&#x27; — Risk Assessment &amp; Control.</title>
+<rect x="8262" y="4471" width="462" height="122" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3.6" opacity="0.98"/>
+<text x="8493" y="4515" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">RAPTOR</text>
+<text x="8493" y="4552" font-size="20.6" fill="#1e293b" text-anchor="middle">SPE · 454 messages</text>
+<text x="8493" y="4576" font-size="20.6" fill="#1e293b" text-anchor="middle">$56M capacity write-down (Sept &#x27;00)</text>
+</g>
+<g><title>Top touchers: Palmer, Schmidt (legal).</title>
+<rect x="6963" y="3196" width="485" height="97" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3.6" opacity="0.98"/>
+<text x="7206" y="3241" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">JEDI</text>
+<text x="7206" y="3277" font-size="20.6" fill="#1e293b" text-anchor="middle">JV SPE · 181 messages · legal-drafted</text>
+</g>
+<g><title>Fees from enronsent00#217; SIC subject list Nov 15, 2001.</title>
+<rect x="6052" y="2899" width="555" height="122" rx="16" fill="#f3e8ff" stroke="#7e22ce" stroke-width="3.6" opacity="0.98"/>
+<text x="6330" y="2943" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">ARTHUR ANDERSEN</text>
+<text x="6330" y="2980" font-size="20.6" fill="#1e293b" text-anchor="middle">auditor · $25M audit + $27M consulting</text>
+<text x="6330" y="3004" font-size="20.6" fill="#1e293b" text-anchor="middle">co-defendant · SIC probe (@us.andersen.com)</text>
+</g>
+<g><title>lfastow@pop.pdq.net — 12+ mails archived in the mcconnell-m mailbox.</title>
+<rect x="7715" y="7891" width="474" height="122" rx="16" fill="#e0f2fe" stroke="#0369a1" stroke-width="3.6" opacity="0.98"/>
+<text x="7952" y="7935" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">ENRON ART COMMITTEE</text>
+<text x="7952" y="7971" font-size="20.6" fill="#1e293b" text-anchor="middle">Lea chaired · met Skilling Dec 6 &#x27;00</text>
+<text x="7952" y="7996" font-size="20.6" fill="#1e293b" text-anchor="middle">Caesar Pelli art-space plans</text>
+</g>
+<g><title>Kopper attribution in company-circulated statement.</title>
+<rect x="2723" y="5347" width="474" height="122" rx="16" fill="#ffedd5" stroke="#c2410c" stroke-width="3.6" opacity="0.98"/>
+<text x="2960" y="5392" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">CHEWCO</text>
+<text x="2960" y="5428" font-size="20.6" fill="#1e293b" text-anchor="middle">SPE · 57 messages</text>
+<text x="2960" y="5453" font-size="20.6" fill="#1e293b" text-anchor="middle">&#x27;run by Michael Kopper&#x27; (Oct 26 &#x27;01)</text>
+</g>
+<g><title>Aug 27, 2001 meeting invite; on the Andersen SIC subject list.</title>
+<rect x="5154" y="2899" width="508" height="122" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="5408" y="2943" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">RICK BUY</text>
+<text x="5408" y="2980" font-size="20.6" fill="#1e293b" text-anchor="middle">Chief Risk Officer</text>
+<text x="5408" y="3004" font-size="20.6" fill="#1e293b" text-anchor="middle">directive addressee · Andersen SIC list</text>
+</g>
+<g><title>News complex carried in enronsent00#217.</title>
+<rect x="3572" y="3725" width="428" height="122" rx="16" fill="#fef3c7" stroke="#b45309" stroke-width="3.6" opacity="0.98"/>
+<text x="3786" y="3770" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">$35M + $1.2B</text>
+<text x="3786" y="3806" font-size="20.6" fill="#1e293b" text-anchor="middle">trades + lost shareholder equity</text>
+<text x="3786" y="3831" font-size="20.6" fill="#1e293b" text-anchor="middle">from LJM-linked entities</text>
+</g>
+<g><title>&#x27;Enron CFO Sold 52,080 Company Shares In November&#x27;.</title>
+<rect x="4402" y="3196" width="260" height="97" rx="16" fill="#f1f5f9" stroke="#475569" stroke-width="3.6" opacity="0.98"/>
+<text x="4532" y="3241" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">INVESTOR&#x27;S BD</text>
+<text x="4532" y="3277" font-size="20.6" fill="#1e293b" text-anchor="middle">Dec 12, 2000</text>
+</g>
+<g><title>Named on the SIC list with Lea Fastow, Ben Glisan, Rick Buy.</title>
+<rect x="6212" y="2088" width="497" height="97" rx="16" fill="#dbeafe" stroke="#1d4ed8" stroke-width="3.6" opacity="0.98"/>
+<text x="6460" y="2133" font-size="26.3" font-weight="700" fill="#0f172a" text-anchor="middle">KRISTINA MORDAUNT</text>
+<text x="6460" y="2169" font-size="20.6" fill="#1e293b" text-anchor="middle">Andersen SIC subject list (Nov 15 &#x27;01)</text>
+</g>
+<rect x="118" y="10971" width="921" height="503" rx="20" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="148" y="11030" font-size="32.9" font-weight="700" fill="#0f172a">LEGEND</text>
+<rect x="148" y="11073" width="46" height="30" rx="3" fill="#dbeafe" stroke="#1d4ed8"/>
+<text x="207" y="11096" font-size="23.9" fill="#334155">person</text>
+<rect x="584" y="11073" width="46" height="30" rx="3" fill="#ffedd5" stroke="#c2410c"/>
+<text x="643" y="11096" font-size="23.9" fill="#334155">entity</text>
+<rect x="148" y="11136" width="46" height="30" rx="3" fill="#dcfce7" stroke="#15803d"/>
+<text x="207" y="11159" font-size="23.9" fill="#334155">document</text>
+<rect x="584" y="11136" width="46" height="30" rx="3" fill="#fef9c3" stroke="#a16207"/>
+<text x="643" y="11159" font-size="23.9" fill="#334155">event</text>
+<rect x="148" y="11198" width="46" height="30" rx="3" fill="#f3e8ff" stroke="#7e22ce"/>
+<text x="207" y="11221" font-size="23.9" fill="#334155">legal</text>
+<rect x="584" y="11198" width="46" height="30" rx="3" fill="#e0f2fe" stroke="#0369a1"/>
+<text x="643" y="11221" font-size="23.9" fill="#334155">group</text>
+<rect x="148" y="11261" width="46" height="30" rx="3" fill="#f1f5f9" stroke="#475569"/>
+<text x="207" y="11284" font-size="23.9" fill="#334155">news</text>
+<rect x="584" y="11261" width="46" height="30" rx="3" fill="#fef3c7" stroke="#b45309"/>
+<text x="643" y="11284" font-size="23.9" fill="#334155">amount</text>
+<text x="148" y="11379" font-size="23.0" fill="#475569">solid = structural/verified · dashed = contextual/co-mention · colors = node types</text>
+<text x="148" y="11422" font-size="23.0" fill="#7e22ce">hover any node for its provenance tooltip</text>
+<text x="11639" y="11672" font-size="23.0" fill="#64748b" text-anchor="end">enron neuralOS instance · radial-graph-map skill · 2026-10-11</text>
+</svg>

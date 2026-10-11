@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="4459" height="4459" viewBox="0 0 4459 4459" font-family="Helvetica,Arial,sans-serif">
+<rect width="4459" height="4459" fill="#fbfcfe"/>
+<defs>
+<marker id="arr_co" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+<marker id="arr_struct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+<marker id="arr_green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#15803d"/></marker>
+<marker id="arr_money" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b45309"/></marker>
+<marker id="arr_legal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7e22ce"/></marker>
+<marker id="arr_spouse" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#db2777"/></marker>
+<marker id="arr_news" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+<marker id="arr_meet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#65a30d"/></marker>
+<marker id="arr_solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<marker id="arr_dash" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker>
+</defs>
+<text x="60" y="66" font-size="34" font-weight="700" fill="#0f172a">Acme Robotics — org chart</text>
+<text x="60" y="98" font-size="16.0" fill="#334155">Simple example: a 12-person company mapped with the same engine used for 40+-node forensic dossiers</text>
+<line x1="2328" y1="2266" x2="2818" y2="2876" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="2328" y1="2266" x2="1566" y2="2266" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="2328" y1="2266" x2="2807" y2="1657" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="2818" y1="2876" x2="3334" y2="2760" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="2818" y1="2876" x2="2562" y2="3369" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="1566" y1="2266" x2="1632" y2="3149" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="1566" y1="2266" x2="1170" y2="2259" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="1566" y1="2266" x2="1618" y2="1369" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="2807" y1="1657" x2="2567" y2="1149" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="2807" y1="1657" x2="3334" y2="1765" stroke="#334155" stroke-width="1.8" marker-end="url(#arr_solid)" opacity="0.95"/>
+<line x1="3334" y1="2760" x2="3809" y2="2978" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arr_dash)" opacity="0.95"/>
+<path d="M1070,3684 L1146,3741 L1225,3795 L1306,3844 L1390,3889 L1477,3930 L1565,3967 L1655,3998 L1746,4026 L1839,4048 L1933,4066 L2027,4078 L2122,4086 L2218,4089 L2313,4088 L2408,4081 L2503,4069 L2597,4053 L2690,4032 L2782,4006 L2872,3975 L2961,3940 L3047,3900 L3132,3856 L3214,3808 L3294,3755 L3370,3698 L3444,3638 L3515,3574 L3582,3506 L3646,3435 L3706,3361 L3762,3284 L3814,3204 L3862,3121 L3905,3037" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arr_dash)" opacity="0.95"/>
+<path d="M2675,280 L2774,305 L2872,336 L2968,371 L3062,411 L3155,456 L3244,506 L3331,560 L3415,619 L3496,682 L3574,749 L3648,820 L3719,894 L3785,973 L3847,1054 L3906,1138 L3959,1226 L4009,1316 L4053,1408 L4093,1503 L4128,1599 L4157,1697 L4182,1797 L4202,1898 L4216,1999 L4225,2101 L4229,2204 L4228,2306 L4221,2409 L4210,2511 L4193,2612 L4170,2712 L4143,2811 L4111,2908 L4074,3004 L4031,3097" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arr_dash)" opacity="0.95"/>
+<text x="2534" y="2523" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">direct report</text>
+<text x="2008" y="2266" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">direct report</text>
+<text x="2529" y="2010" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">direct report</text>
+<text x="3035" y="2828" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="2710" y="3083" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="1594" y="2637" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="1400" y="2293" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="1588" y="1890" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="2706" y="1444" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="3028" y="1702" font-size="13.5" fill="#334155" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">owns</text>
+<text x="3533" y="2852" font-size="13.5" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">builds</text>
+<text x="2690" y="4058" font-size="13.5" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">assembles</text>
+<text x="4053" y="1434" font-size="13.5" fill="#64748b" text-anchor="middle" stroke="#fbfcfe" stroke-width="4.0" paint-order="stroke">sells</text>
+<g><title>Reports to the board. Root of the reporting tree.</title>
+<rect x="2131" y="2192" width="197" height="74" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2.2" opacity="0.98"/>
+<text x="2230" y="2220" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">DR. AMARA OKAFOR</text>
+<text x="2230" y="2242" font-size="12.5" fill="#1e293b" text-anchor="middle">Chief Executive Officer</text>
+<text x="2230" y="2256" font-size="12.5" fill="#1e293b" text-anchor="middle">founded Acme 2019</text>
+</g>
+<g><title>Owns engineering, platform and QA.</title>
+<rect x="2614" y="2802" width="204" height="74" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2.2" opacity="0.98"/>
+<text x="2716" y="2829" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">JIN PARK</text>
+<text x="2716" y="2851" font-size="12.5" fill="#1e293b" text-anchor="middle">Chief Technology Officer</text>
+<text x="2716" y="2866" font-size="12.5" fill="#1e293b" text-anchor="middle">ex-iRobot autonomy lead</text>
+</g>
+<g><title>Owns manufacturing, supply and support.</title>
+<rect x="1334" y="2192" width="232" height="74" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2.2" opacity="0.98"/>
+<text x="1450" y="2220" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">SARA LINDQVIST</text>
+<text x="1450" y="2242" font-size="12.5" fill="#1e293b" text-anchor="middle">Chief Operating Officer</text>
+<text x="1450" y="2256" font-size="12.5" fill="#1e293b" text-anchor="middle">supply chain + manufacturing</text>
+</g>
+<g><title>Owns sales, partnerships and marketing.</title>
+<rect x="2624" y="1583" width="183" height="74" rx="10" fill="#dbeafe" stroke="#1d4ed8" stroke-width="2.2" opacity="0.98"/>
+<text x="2716" y="1610" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">MARCUS REED</text>
+<text x="2716" y="1632" font-size="12.5" fill="#1e293b" text-anchor="middle">Chief Revenue Officer</text>
+<text x="2716" y="1647" font-size="12.5" fill="#1e293b" text-anchor="middle">sales + partnerships</text>
+</g>
+<g><title>Perception, motion and fleet squads.</title>
+<rect x="3176" y="2686" width="158" height="74" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="3255" y="2713" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">ENGINEERING</text>
+<text x="3255" y="2735" font-size="12.5" fill="#1e293b" text-anchor="middle">34 engineers</text>
+<text x="3255" y="2750" font-size="12.5" fill="#1e293b" text-anchor="middle">3 squads</text>
+</g>
+<g><title>Cloud backend and release engineering.</title>
+<rect x="2404" y="3310" width="158" height="59" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="2483" y="3337" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">PLATFORM &amp; QA</text>
+<text x="2483" y="3359" font-size="12.5" fill="#1e293b" text-anchor="middle">11 engineers</text>
+</g>
+<g><title>Contract manufacturer liaison team.</title>
+<rect x="1407" y="3090" width="225" height="59" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="1520" y="3117" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">MANUFACTURING</text>
+<text x="1520" y="3139" font-size="12.5" fill="#1e293b" text-anchor="middle">Monterrey plant · 120 staff</text>
+</g>
+<g><title>Component sourcing and logistics.</title>
+<rect x="1012" y="2200" width="158" height="59" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="1091" y="2227" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">SUPPLY CHAIN</text>
+<text x="1091" y="2249" font-size="12.5" fill="#1e293b" text-anchor="middle">9 analysts</text>
+</g>
+<g><title>Tier 1-2 warehouse-robot support.</title>
+<rect x="1421" y="1310" width="197" height="59" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="1520" y="1337" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">CUSTOMER SUPPORT</text>
+<text x="1520" y="1359" font-size="12.5" fill="#1e293b" text-anchor="middle">16 agents · 3 languages</text>
+</g>
+<g><title>Regional AE teams.</title>
+<rect x="2398" y="1090" width="169" height="59" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="2483" y="1117" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">SALES EMEA+AMER</text>
+<text x="2483" y="1139" font-size="12.5" fill="#1e293b" text-anchor="middle">2 regions · 18 reps</text>
+</g>
+<g><title>Product marketing and events.</title>
+<rect x="3176" y="1706" width="158" height="59" rx="10" fill="#e0f2fe" stroke="#0369a1" stroke-width="2.2" opacity="0.98"/>
+<text x="3255" y="1733" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">MARKETING</text>
+<text x="3255" y="1755" font-size="12.5" fill="#1e293b" text-anchor="middle">7 staff</text>
+</g>
+<g><title>The product every team above ultimately serves.</title>
+<rect x="3605" y="2904" width="204" height="74" rx="10" fill="#ffe4e6" stroke="#be123c" stroke-width="2.2" opacity="0.98"/>
+<text x="3707" y="2931" font-size="16.0" font-weight="700" fill="#0f172a" text-anchor="middle">AR-40 &#x27;PACKHORSE&#x27;</text>
+<text x="3707" y="2953" font-size="12.5" fill="#1e293b" text-anchor="middle">flagship warehouse robot</text>
+<text x="3707" y="2968" font-size="12.5" fill="#1e293b" text-anchor="middle">FY26 revenue: $41M</text>
+</g>
+<rect x="72" y="3993" width="560" height="306" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="90" y="4029" font-size="20.0" font-weight="700" fill="#0f172a">LEGEND</text>
+<rect x="90" y="4055" width="28" height="18" rx="3" fill="#dbeafe" stroke="#1d4ed8"/>
+<text x="126" y="4069" font-size="14.5" fill="#334155">person</text>
+<rect x="355" y="4055" width="28" height="18" rx="3" fill="#e0f2fe" stroke="#0369a1"/>
+<text x="391" y="4069" font-size="14.5" fill="#334155">group</text>
+<rect x="90" y="4093" width="28" height="18" rx="3" fill="#ffe4e6" stroke="#be123c"/>
+<text x="126" y="4107" font-size="14.5" fill="#334155">product</text>
+<text x="90" y="4241" font-size="14.0" fill="#475569">solid = structural/verified · dashed = contextual/co-mention · colors = node types</text>
+<text x="90" y="4267" font-size="14.0" fill="#7e22ce">hover any node for its provenance tooltip</text>
+<text x="4399" y="4419" font-size="14.0" fill="#64748b" text-anchor="end">radial-graph-map skill · simple-org-chart example</text>
+</svg>

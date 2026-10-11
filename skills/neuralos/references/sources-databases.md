@@ -3,14 +3,24 @@
 ## Access
 - mysql://, postgres://, and other DSNs go through the `usql` CLI with CSV
   output (verified pattern); sqlite DSNs use the stdlib sqlite3 module.
+- The usql binary is discovered, not assumed: `NEURALOS_USQL` env → `PATH` →
+  the usual install dirs (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`,
+  `/snap/bin`). Generated bridges carry the same fallback (the efraud
+  failure mode — an app PATH without usql — is dead).
 - The DSN is baked into the generated bridge (or read from the --dsn-env var).
   It never appears in the menu, and the probes take table/column names that are
   whitelisted against the profile.
 
-## Profiling queries (MySQL dialect)
-- Tables: information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE().
-- Columns: information_schema.COLUMNS (name, data_type, column_type,
-  is_nullable) ordered by ordinal position.
+## Profiling queries (dialect-aware)
+- **mysql** — Tables: information_schema.TABLES WHERE TABLE_SCHEMA =
+  DATABASE(). Columns: information_schema.COLUMNS (name, data_type,
+  column_type, is_nullable) ordered by ordinal position. Identifiers quoted
+  with backticks.
+- **postgres** — Tables: information_schema.TABLES excluding
+  pg_catalog/information_schema, BASE TABLE only. Columns: the same
+  information_schema.COLUMNS read with DATA_TYPE aliased as column_type
+  (postgres has no ENUM column declarations — enums come from samples).
+  Identifiers quoted with double quotes.
 - Row count: exact COUNT(*) per profiled table.
 - Sample: `SELECT * FROM <t> ORDER BY 1 DESC LIMIT <n>` (newest first when the
   PK is monotonic — say so when it isn't).

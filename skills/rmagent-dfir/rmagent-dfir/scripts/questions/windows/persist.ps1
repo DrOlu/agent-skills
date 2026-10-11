@@ -1,0 +1,11 @@
+# persist — deep persistence sweep (registry autostarts, services, tasks,
+# WMI subs, IFEO, Winlogon, BITS). Loop vars never reuse $T (PS case-insens).
+$Cap=140
+$rk=@();foreach($k in 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce','HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'){try{$p=Get-ItemProperty $k -ErrorAction Stop;foreach($pr in $p.PSObject.Properties){if($pr.Name -notmatch '^PS'){if($rk.Count -lt $Limit){$v=[string]$pr.Value;if($v.Length -gt $Cap){$v=$v.Substring(0,$Cap)+'…'};$rk+=[pscustomobject]@{hive=($k -split ':')[0];name=$pr.Name;val=$v}}}}}catch{}}
+$svcs=@();try{foreach($s in Get-CimInstance Win32_Service){$pn=[string]$s.PathName;if($pn -and ($pn.ToLower() -notmatch '^c:\\windows\\') -and $svcs.Count -lt $Limit){if($pn.Length -gt $Cap){$pn=$pn.Substring(0,$Cap)+'…'};$svcs+=[pscustomobject]@{name=$s.Name;start=$s.StartMode;state=$s.State;path=$pn}}}}catch{}
+$tasks=@();try{foreach($tk in Get-ScheduledTask -ErrorAction Stop){if($tk.TaskPath -notmatch '^\\Microsoft' -and $tasks.Count -lt $Limit){$act=$tk.Actions|Select -First 1;$ex=[string]$act.Execute;$ar=[string]$act.Arguments;if($ar.Length -gt $Cap){$ar=$ar.Substring(0,$Cap)+'…'};$tasks+=[pscustomobject]@{path=$tk.TaskPath+$tk.TaskName;state=$tk.State;exec=$ex;args=$ar}}}}catch{}
+$wmi=0;$wn=@();try{$f=@(Get-CimInstance -Namespace root\subscription -ClassName __EventFilter -ErrorAction Stop);$wmi=$f.Count;foreach($x in $f){if($x.Name -notmatch 'SCM Event Log Filter' -and $wn.Count -lt 12){$wn+=$x.Name}}}catch{}
+$ifeo=@();try{foreach($pr in Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options' -ErrorAction Stop){$d=[string]$pr.GetValue('Debugger');if($d){$ifeo+=[pscustomobject]@{key=$pr.PSChildName;debugger=$d}}}}catch{}
+$wl='';try{$p=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -ErrorAction Stop;$wl="Shell=$($p.Shell) Userinit=$($p.Userinit)"}catch{}
+$bits=0;try{$bits=@(Get-BitsTransfer -AllUsers -ErrorAction Stop).Count}catch{}
+[pscustomobject]@{skill='persist';host=$env:COMPUTERNAME;utc=(Get-Date).ToUniversalTime().ToString('o');run_keys=$rk;services_nonwin=$svcs;tasks_nonms=$tasks;wmi_filters=$wmi;wmi_filter_names=$wn;ifeo_debuggers=$ifeo;winlogon=$wl;bits_jobs=$bits}|ConvertTo-Json -Compress -Depth 5

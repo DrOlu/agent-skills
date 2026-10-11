@@ -55,10 +55,13 @@ FR = frozenset()
 # Rev 23: the DFIR grain — forensic acquisition + analysis questions.
 # Names deliberately do NOT collide with the pack grain (prefetch/amcache/usb/
 # shimcache belong to rmagent-pack's recipes); dfir pulls its own named
+# questions (browser/email/exfil/procrun/recyclebin/amcpull) and does chunked,
+# hashed acquisition for targeted files.
 # questions and does chunked, hashed acquisition for targeted files.
 DFIR = frozenset({
     "vol", "conn", "persist", "logtriage", "usn", "appcompat", "usbhist",
     "ircollect", "irhash",
+    "browser", "email", "exfil", "procrun", "recyclebin", "amcpull",
 })
 
 BY_SKILL = {

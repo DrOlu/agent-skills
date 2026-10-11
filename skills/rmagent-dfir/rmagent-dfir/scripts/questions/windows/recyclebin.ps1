@@ -1,0 +1,4 @@
+# recyclebin — deleted-file evidence: $I records parsed for original path,
+# size, deletion time (v1 fixed 520-char name; v2 length-prefixed). Read-only.
+$R=@();try{foreach($sd in (Get-ChildItem 'C:\$Recycle.Bin' -Directory -Force -ErrorAction Stop)){foreach($f in (Get-ChildItem $sd.FullName -Filter '$I*' -File -Force -ErrorAction SilentlyContinue)){if($R.Count -ge $Limit){break};try{$b=[IO.File]::ReadAllBytes($f.FullName);if($b.Length -ge 28){$sz=[BitConverter]::ToInt64($b,8);$ft=[BitConverter]::ToInt64($b,16);if($b[0] -eq 2){$nl=[BitConverter]::ToInt32($b,24);$p=[Text.Encoding]::Unicode.GetString($b,28,$nl)}else{$p=[Text.Encoding]::Unicode.GetString($b,24,520).Trim([char]0)};$R+=[pscustomobject]@{sid=$sd.Name;orig=$p;size=$sz;deleted=([DateTime]::FromFileTimeUtc($ft).ToString('o'))}}}catch{}}}}catch{}
+[pscustomobject]@{skill='recyclebin';host=$env:COMPUTERNAME;utc=(Get-Date).ToUniversalTime().ToString('o');entries=$R}|ConvertTo-Json -Compress -Depth 4

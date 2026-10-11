@@ -1,6 +1,6 @@
 ---
 name: neuralos-skill
-description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, decoupled from Cactus Compute needle and now distributed independently as the `neuralos` package — 121M params, 2-bit, ~35 MB weights + engine, bundled into every install) for tool calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Install is one line on every OS — `pip install neuralos` (PyPI, all platforms, engine + weights bundled, fully offline), `npm install neuralos`, or the curl / PowerShell one-liners from neuralos.ng. Use this skill whenever the user mentions neuralOS, needle, cactus-needle, .cact archives, on-device / offline / edge LLM tool calling, an agent that picks functions and fills arguments without a cloud API, or a tiny model on a server / phone / robot / Raspberry Pi. Also use it when an agent misbehaves (wrong tool, refused calls, "ungrounded" errors) or when wiring OS CLIs as LLM-callable tools.
+description: Run neuralOS by Neural AI (the on-device tool-calling foundation model, decoupled from Cactus Compute needle and now distributed independently as the `neuralos` package — 121M params, 2-bit, ~35 MB weights + engine, bundled into every install) for tool calling, structured extraction and text embeddings that runs entirely offline on CPU across macOS, Linux and Windows. Install is one line on every OS — `pip install neuralos` (PyPI, all platforms, engine + weights bundled, fully offline), `npm install neuralos`, or the curl / PowerShell one-liners from neuralos.ng. Use this skill whenever the user mentions neuralOS, needle, cactus-needle, .cact archives, on-device / offline / edge LLM tool calling, an agent that picks functions and fills arguments without a cloud API, or a tiny model on a server / phone / robot / Raspberry Pi. Also use it when wiring ANY agent harness (Claude Code, SuperAgent, Pi, OpenCode, cron, CI) to consume a neuralOS instance — the ask envelope, exit codes and refusal gate contract (GATE_VERSION 1) — or when an agent misbehaves (wrong tool, refused calls, "ungrounded" errors) or when wiring OS CLIs as LLM-callable tools.
 ---
 
 # neuralOS — on-device tool calling
@@ -108,6 +108,92 @@ the tool, executes it **in-process**, feeds the return value back to the
 model, and returns the final response. Full API — including `Field`
 constraints, extraction and embeddings — in `references/python-api.md`.
 
+## Consume an instance from ANY agent harness (macOS / Linux / Windows)
+
+A neuralOS instance is consumed through one universal, harness-agnostic
+contract — no MCP, no SDK, no lock-in. From Claude Code, SuperAgent, Pi,
+OpenCode, a cron job, CI, or a plain shell:
+
+```bash
+# the universal runner (this skill) — always-JSON, every OS:
+python scripts/ask_instance.py /path/to/instance "which pages mention risk management"
+```
+
+**The contract** (stable — build integrations on it):
+
+| Exit | Meaning | stdout |
+|---|---|---|
+| `0` | answered | the instance's JSON envelope (`refused: false`, `probe`, `results`, …) |
+| `2` | refused / nothing produced | envelope with `refused: true`, `refusal_reason`, `gate_version: 1` |
+| `3` | harness-level failure (no ask.py, bad menu shape, timeout, unparsable output) | `harness_error` envelope naming the cause |
+
+stdout is **always exactly one JSON envelope** — never prose. stderr is for
+humans. The interpreter for `ask.py` resolves `--python` → `NEURALOS_PYTHON`
+→ the interpreter running the script (correct on Windows, where `python3`
+often does not exist).
+
+Parsers for common harness languages:
+
+```python
+# Python
+import json, subprocess, sys
+p = subprocess.run([sys.executable, "ask_instance.py", instance, q],
+                   capture_output=True, text=True)
+env = json.loads(p.stdout)          # ALWAYS parses
+if p.returncode == 0:
+    use(env["results"])
+elif p.returncode == 2:
+    tell_user(f"cannot answer: {env['refusal_reason']}")
+else:
+    raise RuntimeError(env["error"])    # harness error (exit 3)
+```
+
+```javascript
+// Node.js
+const { execFileSync } = require('child_process')
+const out = execFileSync('python', ['ask_instance.py', instance, q],
+                         { encoding: 'utf-8' })
+const env = JSON.parse(out)          // ALWAYS parses
+if (env.refused === true) console.log('refused:', env.refusal_reason)
+else console.log(env.results)
+```
+
+```powershell
+# Windows PowerShell
+$out = python scripts\ask_instance.py C:\instances\reports "how many pages" | ConvertFrom-Json
+if ($out.refused) { Write-Host "refused: $($out.refusal_reason)" }
+else { $out.results }
+```
+
+The runner also **enforces the action-intent refusal gate itself, before
+ask.py runs** — so gateless hand-authored instances (and any non-SuperAgent
+consumer) still refuse "delete all the reports" instead of executing.
+`needle_menu.json` may be a bare probe array, `{"menu": [...]}` or
+`{"probes": [...]}`; anything else is a level-3 error.
+
+Other surfaces, same instances: `serve.py` (HTTP `POST /ask`), `askd.py`
+(resident daemon below), and `gen_openapi.py` (in the `neuralos` skill)
+emits `openapi.json` + `mcp.json` for OpenAPI clients and MCP hosts.
+
+## Refusal gate & ask envelope (GATE_VERSION 1)
+
+Every ask ends in exactly one of two honest outcomes: a confident answer or
+a refusal. The gate is a pure menu+question check (no probe, no model,
+microseconds) with four refusal reasons: `action_intent` (imperative verb no
+probe claims — enum values are data, not capabilities),
+`no_probe_matches`, `dropped_filter:<qualifier>`, `low_coverage`. Refusals
+exit 2 with `refused: true`, the named `refusal_reason`, `gate_version` and
+`results: null`; every ask is audited to the instance's `ask_audit.jsonl`
+with `candidates_retrieved` — the gap log that feeds menu extension.
+Full rules, envelope schema, audit record shapes (including the
+`"via": "superagent-ts"` marker on TS-gate refusals) and the black-box
+conformance suite: `neuralos` skill → `references/refusal-gate.md`;
+run conformance against any instance with:
+
+```bash
+python <neuralos skill>/scripts/gate_conformance.py --instance /path/to/instance --verbose
+```
+
 ## Performance: resident daemon (amortize weights load)
 
 Process-per-ask reloads the weights every time. For services, run the
@@ -207,9 +293,17 @@ Full details in `references/engine-binary.md`.
   bundle + weights, prints the exact run command. Cross-platform.
 - `scripts/export_tools.py` — dump the `@needle.tool` schemas from a Python
   module into `tools.json` for the engine binary or `needle run --tools`.
-- `tests/` — unit tests (stdlib `unittest`) for the exporter: import-safety failures
-  raise a clear SystemExit, and the full menu export round-trips through the real
-  `@needle.tool` decorator when the neuralOS engine is installed. Run:
+- `scripts/ask_instance.py` — the harness-agnostic runner: one question →
+  one JSON envelope, exit 0 answered / 2 refused / 3 harness error, with the
+  action-intent refusal gate enforced pre-execution. Works on every OS,
+  from every harness.
+- `tests/` — unit tests (stdlib `unittest`) for the exporter (import-safety
+  failures raise a clear SystemExit; the full menu export round-trips
+  through the real `@needle.tool` decorator when the engine is installed)
+  and for the harness runner (envelope passthrough, exit-code contract,
+  harness-error envelopes, menu shapes, the runner's own action gate
+  including the capability carve-out and the enum-values-are-data rule,
+  interpreter resolution). Run:
   `python -m unittest discover -s skills/neuralos-skill/tests`.
 
 

@@ -1,6 +1,6 @@
 ---
 name: neuralos
-description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Runs on macOS/Linux (Python runtime) AND on Windows hosts where only PowerShell is permitted (no Python — engine selection + a generated PowerShell bridge). Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; …
+description: Turn ANY data source into a working neuralOS instance (on-device tool-calling agent) with a strict Pydantic model and a relationship/graph layer — by profiling the data first and generating everything from what the data actually contains. Runs on macOS/Linux (Python runtime) AND on Windows hosts where only PowerShell is permitted (no Python — engine selection + a generated PowerShell bridge). Use this skill whenever the user brings data of any kind (databases, log files, CSV/TSV, JSON/JSONL, REST APIs, spreadsheets, transaction dumps, unstructured text, directories of files) and wants it parsed, modeled, queried, monitored, or wired into an on-device tool-calling agent; whenever a generated instance must refuse what it cannot answer (GATE_VERSION 1 refusal gate, ask envelope, ask_audit gap loop, gate conformance); …
 ---
 
 # neuralOS Data — profile any source, generate its neuralOS instance
@@ -122,14 +122,14 @@ Emits a ready-to-run instance directory:
 | `graph_bridge.py` | runtime graph layer (copy from `scripts/graph_bridge.py`): overview / neighbors / connect over parsed records, built at fetch time |
 | `bridge.py` | retrieval + parsing: reads the real source (file, DSN, API) and validates every record through the Pydantic models |
 | `instance.py` | the neuralOS agent: menu loaded, triggers set, agentic loop wired, example asks included |
-| `ask.py` | **mandated entry point**: structured retrieval (lexical top-K) + deterministic fast path for enum-caged args; results-gated, never prints stale data |
+| `ask.py` | **mandated entry point**: structured retrieval (lexical top-K) + deterministic fast path for enum/pattern/integer-caged args + the **refusal gate (GATE_VERSION 1)**; emits the standard envelope (`refused` / `refusal_reason` / `gate_version` on every ask; exit 0 answered, exit 2 nothing produced); results-gated, never prints stale data |
 | `serve.py` | standard service: `/healthz` (liveness), `/ready` (data-layer check), `POST /ask` (full pipeline, audit, cache) |
 | `golden.json` | golden question bank — one seeded question per probe with its expected probe; powers selection gates and calibration |
 | `CATALOG.md` | human "what you can ask" catalog generated from the menu |
 | `invariants.py` | property checks generated from the profile (counts, non-negative money) — db instances |
 | `truth.json` | per-table SQL oracle cross-checks — db instances (`verify.py --truth`) |
 | `openapi.json` + `mcp.json` | menu → typed operations for OpenAPI clients and MCP hosts (`gen_openapi.py`) |
-| `ask_audit.jsonl` | per-ask audit trail (question, normalized, probe, conf, latency, cache) — written by ask.py |
+| `ask_audit.jsonl` | per-ask audit trail (question, normalized, probe, conf, latency, cache) — written by ask.py; refusals land here too with `refusal_reason` + `candidates_retrieved`, and SuperAgent's TS-gate refusals append to the same file marked `"via": "superagent-ts"` |
 | `.ask_cache.json` | TTL cache keyed by normalized question + menu version (NEURALOS_CACHE_TTL, --no-cache) |
 | `README.md` | how to run it, what to ask it, how to extend it |
 
@@ -172,6 +172,20 @@ Never deliver unverified:
    fit golden.json; assert refusals in tests. Full guidance, the ask.py
    floor nuance and a live worked example:
    `references/golden-trap-banks.md`.
+
+6. **Gate & envelope conformance** — run the black-box conformance suite
+   against the finished instance; it derives its cases from the instance's
+   own menu (false-refusal sweep over every probe's first trigger, plus
+   action/dropped-filter/unknown-subject refusals) and asserts the envelope
+   contract (exit 0/2, `refused`/`refusal_reason`/`gate_version`, legacy
+   keys intact). Cases this menu legitimately cannot exhibit are SKIPPED,
+   never failed — a wall of SKIPs means the instance predates the gate and
+   should be regenerated:
+
+       python scripts/gate_conformance.py --instance <instance_dir> --verbose
+
+   Exit 0 required before delivery. Spec, rules for implementers and the
+   explicit case schema: `references/refusal-gate.md`.
 
 ## Source routing
 
@@ -272,10 +286,32 @@ unreliable:
 
 Full rationale: `references/instance-standards.md`.
 
+## The refusal gate (GATE_VERSION 1) — mandate, not feature
+
+Every generated `ask.py` gates every ask **before any probe executes**, as a
+pure function of the menu and the question. Four refusal reasons, checked in
+order: `action_intent` (imperative verb no probe claims as a capability —
+enum values are data, not capabilities), `no_probe_matches` (a subject noun
+no probe has ever heard of), `dropped_filter:<qualifier>` (the question
+names a filter the winner would silently drop), `low_coverage` (the winner
+knows under half the question's domain nouns). A visible enum/pattern cage
+hit vouches for the winner and bypasses the vocabulary checks — never the
+action check. Refusals exit 2 with a complete envelope (never empty stdout)
+and are audited with `candidates_retrieved`, which is what the Phase-5 gap
+miner turns into menu growth. SuperAgent's TypeScript gate enforces the same
+contract app-side (and backstops gateless hand-authored ask.py files, whose
+answers to imperative questions are withheld), so the contract holds no
+matter which harness drives the instance — see
+`references/refusal-gate.md` for the full rules, envelope schema, exit
+codes, audit record and the three-implementation conformance story.
+
 ## Phase 5 — EXTEND (mine gated questions, propose menu growth)
 
 The instance writes every below-gate/fuzzy ask to `ask_audit.jsonl` /
-`menu_gaps.jsonl`. Mine them with:
+`menu_gaps.jsonl` — answered, refused and empty asks alike, with
+`refusal_reason` and `candidates_retrieved` on refusals, and a `via` field
+(`superagent-ts`) when the refusal was decided by SuperAgent's TS gate
+rather than by ask.py. Mine them with:
 
     python scripts/mine_gaps.py ask_audit.jsonl --menu needle_menu.json
 
@@ -295,6 +331,7 @@ chinook `auto_extend.py` loop.
 | `scripts/gen_openapi.py` | menu → OpenAPI 3.1 + MCP tool manifest — typed access without the model |
 | `scripts/calibrate.py` | learn per-probe confidence gates from the golden bank (engine conf is NOT calibrated) |
 | `scripts/mine_gaps.py` | Phase-5 gap miner (above) |
+| `scripts/gate_conformance.py` | black-box GATE_VERSION 1 conformance suite — derives its case matrix from the instance's own menu, asserts exit codes + envelope fields; the fleet fixture harness (all gate implementations must pass the same cases) |
 
 ## Runtime gotchas (needle 3.0.3 — verified live)
 
@@ -341,8 +378,10 @@ require `pydantic` (v2) and — for the Python runtime — the on-device
 **Unit tests** (`tests/`, stdlib `unittest`): pin the generator,
 graph-layer and decision-seam contracts — tiering, surrogate demotion,
 cross-column discovery, alias emission, datetime-never-enum, the
-duplicate-field-name dedupe, and the laya router's import-safety,
+duplicate-field-name dedupe, the laya router's import-safety,
 criterion-compaction, calibrated-bucket guard and escalation rule (they
-run without torch installed). Run:
+run without torch installed), and the gate-conformance runner's contract
+(menu shapes, derived matrix, skip-vs-fail semantics, envelope checks,
+exit codes). Run:
 `python -m unittest discover -s skills/neuralos/tests`.
 CI runs them on every push.

@@ -1,0 +1,123 @@
+# rmagent-dfir — worked examples
+
+Real commands, real shapes of output. Estate: ws1 = 44.197.31.152 (AWS
+Windows Server 2022, WinRM NTLM, creds from the scrt store).
+
+## Scenario 1 — full sweep after a suspicious finding
+
+Input (the operator was told sketch saw a new admin):
+```bash
+python3 scripts/dfir.py sweep --inventory estate.yaml --witness ws1 \
+  --since 24 --case cases/ir-042
+```
+Output:
+```
+  ws1  vol: ok
+  ws1  conn: ok
+  ws1  persist: ok
+  ws1  logtriage: ok
+  ws1  usn: ok
+  ws1  appcompat: ok
+  ws1  usbhist: ok
+[sweep] 7/7 questions answered — case cases/ir-042
+```
+Each answer lands in `cases/ir-042/answers/ws1__<question>.json`, and each
+collection is appended to `cases/ir-042/chain.jsonl`.
+
+Sample `ws1__vol.json` (trimmed):
+```json
+{ "skill": "vol", "host": "EC2AMAZ-8NK9FUP", "count": 84,
+  "lsass_foreign_modules": 0,
+  "suspicious": [ { "pid": 6012, "name": "s.exe",
+    "path": "C:\\Users\\svc\\AppData\\Roaming\\s.exe",
+    "why": "orphan+user-writable-path", "cmd": "s.exe -b 203.0.113.7:443" } ] }
+```
+
+## Scenario 2 — Laya routes the next collection
+
+```bash
+python3 scripts/dfir.py scope --case cases/ir-042 \
+  --finding "FINDING: orphaned s.exe from AppData with cmd 's.exe -b 203.0.113.7:443'.
+COLLECTED SO FAR: vol (orphan process found), conn (established connection to
+203.0.113.7:443 owned by s.exe), persist (no drill artifacts), logtriage
+(4625 spike from 203.0.113.7), usn (s.exe created 02:14 in Roaming).
+HOST CONTEXT: single AWS server, internet-exposed, payment-adjacent."
+```
+Output:
+```
+matrix: collect_scope  model: laya-local
+  next_collection: ircollect   confidence: 0.86
+  full_acquisition: 0.71
+  severity: 2                  confidence: 0.91
+policy gate (next_collection): ircollect — acquire the binary.
+```
+Volatility order held: live state first, and now the specific file.
+
+## Scenario 3 — hashed, chunked acquisition
+
+```bash
+python3 scripts/dfir.py collect --inventory estate.yaml --witness ws1 \
+  --path "C:\\Users\\svc\\AppData\\Roaming\\s.exe" --case cases/ir-042
+```
+Output:
+```json
+{ "witness": "ws1", "path": "C:\\Users\\svc\\AppData\\Roaming\\s.exe",
+  "size": 18432, "chunks": 1,
+  "sha256_file": "9f2b…c41d", "local_copy": "cases/ir-042/collected/ws1__s.exe",
+  "mtime_utc": "2026-09-19T02:14:11Z" }
+```
+Receipt written beside the binary; chain entry appended:
+```
+  2026-…Z  acquire   ws1  C:\Users\svc\AppData\Roaming\s.exe  9f2b…c41d
+```
+A path like `C:\x; calc.exe` never reaches the witness:
+```
+rejected: path fails validation (drive-absolute, no metacharacters)
+```
+
+## Scenario 4 — timeline + report
+
+```bash
+python3 scripts/dfir.py timeline --case cases/ir-042
+python3 scripts/dfir.py report  --case cases/ir-042
+```
+`timeline.jsonl` (sorted):
+```json
+{"ts": "2026-09-19T02:14:11Z", "source": "acquired", "kind": "file", "text": "C:\\Users\\svc\\AppData\\Roaming\\s.exe sha256=9f2b…c41d"}
+{"ts": "2026-09-19T09:30:00Z", "source": "answer:ws1__logtriage", "kind": "7045", "text": "name=DrillSvc"}
+{"ts": "2026-09-19T09:59:00Z", "source": "answer:ws1__vol", "kind": "vol", "text": "pid=1 name=evil.exe"}
+```
+`IR_REPORT.md` opens with:
+```
+## Chain of custody
+- 9 chained actions — **VERIFIED, hashes intact**
+- Court-ready
+```
+…and closes with the holes and the open actions.
+
+## Scenario 5 — chain tamper test (why the chain matters)
+
+Edit one byte of one journal entry, then:
+```bash
+python3 scripts/dfir.py chain --case cases/ir-042 --verify
+```
+Output:
+```
+chain: 9 entries — CORRUPT: entry 4
+```
+By policy the case is no longer court-ready. Nothing silent.
+
+## Scenario 6 — offline judgment (air-gapped estate)
+
+No OpenRouter reachable — every example above still runs, because the
+decision tier is Laya (421M, offline) and extraction is needle (offline).
+Only `scope`-style judgments carry an honest lower confidence; the matrices
+flag ESCALATE below 0.5 and the operator reads IR_REPORT.md regardless.
+
+## What this skill will NOT do
+
+- Write to, clean, or quarantine anything on the witness (that's
+  rmagent-actuate, with its own gates).
+- Acquire full memory (no agent, no driver — `vol` gives indicators).
+- Answer unlisted questions, accept unvalidated paths, or trust an unhashed
+  artifact. Holes instead of guesses — always.

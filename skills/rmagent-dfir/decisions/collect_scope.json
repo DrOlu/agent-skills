@@ -1,0 +1,20 @@
+{
+  "name": "collect_scope",
+  "purpose": "Given a finding and what has been collected so far, decide the next DFIR collection step — or declare evidence sufficient. Acquisition order of volatility lives here: live process/network state first, persistence and logs next, registry artifacts and file acquisition last.",
+  "state_template": "FINDING: <kind and evidence summary>. COLLECTED SO FAR: <dfir questions already answered, key observations>. SUSPICION: <what makes this an incident>. HOST CONTEXT: <role, exposure, criticality>.",
+  "questions": {
+    "next_collection": { "type": "choice", "instructions": "Which DFIR collection should run next on this witness?", "criteria": {
+      "vol": "Process volatility triage — live process snapshot with orphan/masquerade indicators",
+      "conn": "Live connection triage — established sockets with owning processes, external exposure",
+      "persist": "Deep persistence sweep — run keys, non-Windows services, tasks, WMI subs, IFEO, Winlogon",
+      "logtriage": "Security log digest — critical event-ID counts, failed-logon sources, new services/users",
+      "usn": "USN journal tail — recent file activity the event log never shows",
+      "appcompat": "Shimcache blob — program execution evidence from the registry",
+      "usbhist": "USB device history — removable-media exposure",
+      "ircollect": "A specific file must be acquired (state which in the finding) — hashed, chunked, read-only",
+      "sufficient": "Evidence is sufficient — move to analysis and report" } },
+    "full_acquisition": { "type": "noul", "instructions": "Does the evidence indicate the host is compromised badly enough that a full forensic acquisition workflow is warranted?" },
+    "severity": { "type": "score", "instructions": "How severe is this incident for the estate?", "criteria": ["Contained or benign — routine", "Single-host concern — collect deliberately", "Escalating — multiple indicators, possible lateral movement", "Critical — active compromise, evidence at risk"] }
+  },
+  "policy": { "escalate_below": 0.5, "gate_field": "next_collection", "note": "Volatility order is enforced here: vol/conn before persist/logtriage before usn/appcompat before ircollect. Verdicts advisory; watch-only rules unchanged." }
+}

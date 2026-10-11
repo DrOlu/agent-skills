@@ -52,6 +52,15 @@ PACK = frozenset({
 # Flight Recorder records investigations. It never knocks.
 FR = frozenset()
 
+# Rev 23: the DFIR grain — forensic acquisition + analysis questions.
+# Names deliberately do NOT collide with the pack grain (prefetch/amcache/usb/
+# shimcache belong to rmagent-pack's recipes); dfir pulls its own named
+# questions and does chunked, hashed acquisition for targeted files.
+DFIR = frozenset({
+    "vol", "conn", "persist", "logtriage", "usn", "appcompat", "usbhist",
+    "ircollect", "irhash",
+})
+
 BY_SKILL = {
     "rmagent-so": IDENTITY,
     "rmagent-windows": IDENTITY,  # facade: same grain as so
@@ -62,6 +71,7 @@ BY_SKILL = {
     "rmagent-iso": ISO,
     "rmagent-pay": PAY,
     "rmagent-pack": PACK,
+    "rmagent-dfir": DFIR,
 }
 
 # Names that must not appear on an identity skill (so/windows).

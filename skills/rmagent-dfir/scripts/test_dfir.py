@@ -20,7 +20,7 @@ def ok(cond, name):
 print("== 1. grain firewall ==")
 try:
     import lib
-    ok(len(lib.ALLOWED) == 9, f"ALLOWED has 9 dfir questions")
+    ok(len(lib.ALLOWED) == 15, f"ALLOWED has 15 dfir questions")
     CORE = Path.home() / ".agents" / "skills" / "rmagent-core" / "scripts"
     sys.path.insert(0, str(CORE))
     import grains
@@ -39,7 +39,7 @@ except Exception as e:
 print("== 2. payload budget (WinRM ~8191 chars, x2.7 UTF-16LE b64) ==")
 qdir = SKILL / "scripts" / "questions" / "windows"
 payloads = sorted(qdir.glob("*.ps1"))
-ok(len(payloads) == 9, f"9 payloads present ({[p.name for p in payloads]})")
+ok(len(payloads) == 15, f"15 payloads present ({[p.name for p in payloads]})")
 for p in payloads:
     ok(p.stat().st_size <= 2400, f"{p.name} {p.stat().st_size}B within 3500B budget")
 
@@ -117,9 +117,108 @@ ok("IR REPORT" in txt and "Chain of custody" in txt and "VERIFIED" in txt, "repo
 ok("Open actions" in txt, "report lists open actions")
 
 print("== 10. shared wrappers present and runnable ==")
-for s in ("needle_extract.py", "needle_drift.py", "laya_decide.py"):
+for s in ("needle_extract.py", "needle_drift.py", "laya_decide.py", "browser_parse.py", "amcache_parse.py"):
     p = SKILL / "scripts" / s
     ok(p.exists() and os.access(p, os.X_OK), f"{s} present + executable")
+
+print("== 11. browser_parse on a synthetic chromium DB ==")
+import sqlite3, browser_parse as bp
+bcase = Path(tempfile.mkdtemp())
+hpath = bcase / "ws1__History"
+con = sqlite3.connect(hpath)
+con.execute("CREATE TABLE urls (id INTEGER PRIMARY KEY, url TEXT, title TEXT, visit_count INTEGER, last_visit_time INTEGER, hidden INTEGER)")
+con.execute("CREATE TABLE downloads (id INTEGER PRIMARY KEY, target_path TEXT, start_time INTEGER, received_bytes INTEGER, total_bytes INTEGER, tab_url TEXT)")
+ts = int((1765430400 + 11644473600) * 1_000_000)
+con.execute("INSERT INTO urls VALUES (1, 'http://evil.example/payload', 'Evil Page', 3, ?, 0)", (ts,))
+con.execute("INSERT INTO downloads VALUES (1, 'C:\\\\Users\\\\a\\\\Downloads\\\\evil.exe', ?, 999, 999, 'http://evil.example/payload')", (ts,))
+con.commit(); con.close()
+r = bp.parse_chromium(hpath)
+ok(len(r["rows"]) == 2, f"chromium parser read {len(r['rows'])} rows (urls+downloads)")
+ok(any("evil.example" in str(x.get("url", "")) for x in r["rows"]), "url row parsed")
+ok(any("evil.exe" in str(x.get("download", "")) for x in r["rows"]), "download row parsed")
+ok(not r["holes"], "no holes on clean DB")
+ok(bp.parse_places(hpath)["holes"], "firefox parser holes gracefully on chromium DB")
+
+print("== 12. amcache_parse on a synthetic regf hive ==")
+import struct as st, amcache_parse as ap
+def build_regf():
+    nxt = [0x1020]
+    blob = bytearray()
+    def cell(b):
+        total, pad = 4 + len(b), 0
+        pad = (-total) % 8
+        o = nxt[0]
+        blob.extend(st.pack("<i", -(total + pad))); blob.extend(b); blob.extend(b"\x00" * pad)
+        nxt[0] += total + pad
+        return o + 4
+    def nk(name, subkeys_off=0, nvalues=0, values_off=0, ts=0x01D2A1B2C3D4E5F0):
+        raw = bytearray(0x4C)
+        raw[0:2] = b"nk"
+        st.pack_into("<H", raw, 2, 0x0020)
+        st.pack_into("<Q", raw, 4, ts)
+        st.pack_into("<I", raw, 0x1C, subkeys_off)
+        st.pack_into("<I", raw, 0x24, nvalues)
+        st.pack_into("<I", raw, 0x28, values_off)
+        nm = name.encode("utf-16-le")
+        st.pack_into("<H", raw, 0x48, len(nm))
+        return cell(bytes(raw) + nm)
+    def vk(name, dtype, data):
+        raw = bytearray(0x14)
+        raw[0:2] = b"vk"
+        st.pack_into("<H", raw, 2, 2 * len(name))       # utf16 name
+        st.pack_into("<I", raw, 8, dtype)
+        st.pack_into("<H", raw, 0xC, 0)
+        st.pack_into("<I", raw, 0x10, len(data))
+        nm = name.encode("utf-16-le")
+        return bytes(raw) + nm                           # data_off patched by caller
+    BASE = 0x1020
+    def patch(off, val):
+        st.pack_into("<I", blob, off - BASE + 0x1C, val)  # subkeys_off @0x1C (off = record start)
+    def patch_vo(off, val):
+        st.pack_into("<I", blob, off - BASE + 0x28, val)  # values_off @0x28
+    def patch_nv(off, val):
+        st.pack_into("<I", blob, off - BASE + 0x24, val)  # nvalues @0x24
+    def patch_vk_doff(vk_data_start, val):
+        st.pack_into("<I", blob, vk_data_start - BASE + 4, val)  # vk data_offset @4
+    # build order: parents first (offsets known), children, then patch
+    root = nk("Root"); inner = nk("Root")
+    fk = nk("FileOrKey"); fke = nk("0001\\abcdef")
+    fblob = st.pack("<I", 0x0E) + "c:\\windows\\evil.dll".encode("utf-16-le") + b"\x00\x00"
+    vk_f = cell(vk("f", 3, fblob))      # dlen must equal the true data length
+    data_f = cell(fblob)
+    patch_vk_doff(vk_f, data_f)
+    lf_fk = cell(b"lf" + st.pack("<H", 1) + st.pack("<I", fke) + b"0001")
+    patch(fk, lf_fk)
+    lst_fk = cell(st.pack("<I", vk_f))
+    patch_vo(fke, lst_fk); patch_nv(fke, 1)
+    inv = nk("InventoryApplicationFile"); inve = nk("evilapp|c:\\x\\evil.exe|A1B2C3")
+    pdata = "c:\\x\\evil.exe".encode("utf-16-le") + b"\x00\x00"
+    vk_p = cell(vk("lowercaselongpath", 1, pdata))
+    data_p = cell(pdata)
+    patch_vk_doff(vk_p, data_p)
+    lst_inv = cell(st.pack("<I", vk_p))
+    patch_vo(inve, lst_inv); patch_nv(inve, 1)
+    lf_inv = cell(b"lf" + st.pack("<H", 1) + st.pack("<I", inve) + b"EVIL")
+    patch(inv, lf_inv)
+    lf_inner = cell(b"lf" + st.pack("<H", 2) + st.pack("<I", fk) + b"FILE" + st.pack("<I", inv) + b"INVE")
+    patch(inner, lf_inner)
+    lf_root = cell(b"lf" + st.pack("<H", 1) + st.pack("<I", inner) + b"ROOT")
+    patch(root, lf_root)
+    span = 0x20 + len(blob)
+    hb = bytearray(0x20); hb[0:4] = b"hbin"; st.pack_into("<I", hb, 8, span)
+    hd = bytearray(0x1000); hd[0:4] = b"regf"
+    st.pack_into("<I", hd, 0x24, (0x1020 + 4) - 0x1000)  # root cell data offset, bin-relative
+    st.pack_into("<I", hd, 0x28, span)
+    return bytes(hd + hb + blob)
+
+rr = ap.parse(build_regf())
+ok(len(rr["entries_fileorkey"]) == 1, f"FileOrKey entry found ({rr['entries_fileorkey']})")
+ok(rr["entries_fileorkey"][0].get("f_version") == "0xe", "f-version decoded")
+ok(any("evil.dll" in s for s in rr["entries_fileorkey"][0].get("f_strings", [])), "utf16 strings extracted from f blob")
+ok(len(rr["entries_app"]) == 1, "InventoryApplicationFile entry found")
+ok(rr["entries_app"][0].get("lowercaselongpath") == "c:\\x\\evil.exe", "string value read")
+ok(rr["entries_fileorkey"][0].get("key_write"), "key last-write time decoded")
+ok(ap.parse(b"not a hive")["holes"], "non-hive is a hole, not a crash")
 
 print(f"\n== RESULT: {PASS} passed, {FAIL} failed ==")
 sys.exit(1 if FAIL else 0)

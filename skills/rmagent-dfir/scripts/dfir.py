@@ -31,7 +31,8 @@ import lib  # the dfir grain wrapper over rmagent-core
 
 WIN_PATH = re.compile(r"^[A-Za-z]:\\[^<>:\"/|?\x00-\x1f]*$")
 JUNK_TOKENS = {"FRAGMENT", "FRAGMENT:", "ok", "extract", "tool"}
-DFIR_QUESTIONS = ["vol", "conn", "persist", "logtriage", "usn", "appcompat", "usbhist"]
+DFIR_QUESTIONS = ["vol", "conn", "persist", "logtriage", "exfil", "usn", "procrun",
+                  "recyclebin", "browser", "email", "appcompat", "amcpull", "usbhist"]
 
 
 def out_json(o):

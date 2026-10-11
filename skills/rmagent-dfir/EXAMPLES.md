@@ -114,6 +114,51 @@ decision tier is Laya (421M, offline) and extraction is needle (offline).
 Only `scope`-style judgments carry an honest lower confidence; the matrices
 flag ESCALATE below 0.5 and the operator reads IR_REPORT.md regardless.
 
+## Scenario 7 — exfiltration surface (`exfil`)
+
+A user is suspected of staging files before resignation:
+```bash
+python3 scripts/dfir.py ask --inventory estate.yaml --witness ws2 \
+  --question exfil --since 336 --case cases/ir-043
+```
+Returns, within the 336-hour window: every zip/7z/rar/tar/gz under Desktop/
+Documents/Downloads with size + mtime, cloud-sync roots present per user
+(OneDrive/Dropbox/Google Drive/pCloud/Box with shallow item counts), SMB
+sessions with client + user + open-file counts, and the last RDP connect/
+disconnect events. On a server with no interactive users this returns mostly
+empty lists — that is a clean answer, not a hole (the SMB section still speaks).
+
+## Scenario 8 — browser deep-dive (discovery on-box, parsing OFFLINE)
+
+```bash
+python3 scripts/dfir.py ask --inventory estate.yaml --witness ws1 --question browser --case cases/ir-044
+# → which browsers/profiles exist, with History/Bookmarks/Web Data sizes + mtimes
+python3 scripts/dfir.py collect --inventory estate.yaml --witness ws1 \
+  --path "C:\\Users\\a\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\History" --case cases/ir-044
+python3 scripts/browser_parse.py cases/ir-044/collected/ws1__History --out cases/ir-044/browser.json
+```
+The witness only ever answers "what exists". Top-300 URLs + downloads are
+parsed from the hashed copy on the jump host (`mode=ro&immutable=1` — frozen
+evidence, no journal replay). Firefox `places.sqlite` is auto-detected by name.
+
+## Scenario 9 — deleted evidence (`recyclebin`, `procrun`, `amcpull`)
+
+```bash
+python3 scripts/dfir.py ask --inventory estate.yaml --witness ws2 --question recyclebin --case cases/ir-045
+# → $I records parsed on-box: original path, size, deletion time (UTC), per SID
+python3 scripts/dfir.py ask --inventory estate.yaml --witness ws2 --question procrun --case cases/ir-045
+# → most-recent Prefetch runs; certutil/bitsadmin/mshta/... flagged as lolbin
+python3 scripts/dfir.py ask --inventory estate.yaml --witness ws2 --question amcpull --case cases/ir-045
+# → Amcache.hve size/mtime/SHA256/readability — the pull decision is the operator's
+python3 scripts/dfir.py collect --inventory estate.yaml --witness ws2 \
+  --path "C:\\Windows\\appcompat\\Programs\\Amcache.hve" --case cases/ir-045
+python3 scripts/amcache_parse.py cases/ir-045/collected/ws2__Amcache.hve --out cases/ir-045/amcache.json
+# → InventoryApplicationFile entries (path/publisher/version) + FileOrKey first-run times
+```
+An empty Prefetch dir on a workstation is itself reported as a signal; an
+unknown Amcache `f`-value layout yields version + embedded strings — holes,
+never guessed fields.
+
 ## What this skill will NOT do
 
 - Write to, clean, or quarantine anything on the witness (that's

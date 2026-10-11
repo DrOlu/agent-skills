@@ -18,7 +18,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "scripts"))
 import export_tools as et  # noqa: E402
 
-NEEDLE = importlib.util.find_spec("needle") is not None
+def _needle_installed():
+    """True only for a REAL installed needle package. A namespace-package
+    directory that merely shadows the name (no __init__, origin=None — e.g.
+    a stray skills/needle/ folder on sys.path via cwd) must not count: the
+    subprocess import would still fail."""
+    spec = importlib.util.find_spec("needle")
+    return spec is not None and getattr(spec, "origin", None) is not None
+
+
+NEEDLE = _needle_installed()
 
 
 def write_module(name, body):

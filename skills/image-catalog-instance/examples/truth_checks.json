@@ -1,0 +1,85 @@
+{
+  "file_field": "filename",
+  "details_question_template": "details of image {filename}",
+  "per_record_expect": {
+    "state": null,
+    "leading_party": null
+  },
+  "_comment_per_record_expect": "Entries with null are checked for PRESENCE only; put literals to pin values, e.g. {\"state\": \"LAGOS\"}. Delete keys you don't want checked. Per-record presence checks for every catalog file always run.",
+  "checks": [
+    {
+      "q": "how many records",
+      "path": "results.0.count",
+      "equals": 4
+    },
+    {
+      "q": "votes for LP",
+      "path": "results.0.sheets",
+      "equals": [
+        {"image_id": "01", "votes": 9},
+        {"image_id": "02", "votes": 12},
+        {"image_id": "03", "votes": 313},
+        {"image_id": "04", "votes": 3}
+      ]
+    },
+    {
+      "q": "details of image 02.jpg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "LAGOS",
+        "ballot_papers_issued": 396,
+        "spoiled_ballot_papers": 0,
+        "total_valid_votes": 111,
+        "total_used_ballots": 114,
+        "leading_party": "APC"
+      }
+    },
+    {
+      "q": "details of image 01.png",
+      "path": "results.0.record",
+      "equals": {
+        "state": "EDO",
+        "leading_candidate": "ASUE IGHODALO",
+        "party_scores_apc": 19,
+        "party_scores_pdp": 26
+      }
+    },
+    {
+      "q": "details of image 03.jpeg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "BAUCHI",
+        "registration_area": "BIRSHI/MIRI",
+        "accredited_voters": 371,
+        "ballot_papers_issued": 471,
+        "unused_ballot_papers": 160,
+        "total_valid_votes": 370
+      }
+    },
+    {
+      "q": "details of image 04.jpg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "PLATEAU",
+        "total_valid_votes": 53,
+        "leading_party": "ADP",
+        "leading_party_votes": 39,
+        "qr_code_present": true
+      }
+    },
+    {
+      "q": "highest valid votes",
+      "path": "results.0.ranked_by_total_valid_votes",
+      "equals": [
+        {"state": "BAUCHI", "total_valid_votes": 370},
+        {"state": "LAGOS", "total_valid_votes": 111},
+        {"state": "PLATEAU", "total_valid_votes": 53}
+      ]
+    },
+    {
+      "q": "find images about a senatorial re-run",
+      "path": "results.0.matches.0.filename",
+      "equals": "04.jpg"
+    }
+  ]
+}

@@ -86,6 +86,15 @@ def main():
 
     with open(args.records) as f:
         records = json.load(f)
+    # accept a bare list (canonical) or a {"records": [...]} wrapper — the
+    # wrapper shape crashed with a confusing AttributeError once; be tolerant
+    if isinstance(records, dict):
+        records = next((v for v in records.values() if isinstance(v, list)), None)
+        if records is None:
+            sys.exit('records.json: object has no list value — expected a bare '
+                     'list of records or {"records": [...]}')
+    if not isinstance(records, list):
+        sys.exit("records.json must be a JSON list of records")
     if not records:
         sys.exit("records.json is empty — nothing to build")
 

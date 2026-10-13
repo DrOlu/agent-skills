@@ -1,0 +1,135 @@
+[
+ {
+  "name": "record_details",
+  "menu": {
+   "name": "record_details",
+   "description": "Full extracted record for one EKEDC document by filename; with no filename returns a one-line digest of all documents.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "filename": {
+      "type": "string",
+      "description": "document filename, e.g. ekedc-3.jpeg",
+      "enum": [
+       "ekedc-1.jpeg",
+       "ekedc-2.jpeg",
+       "ekedc-3.jpeg",
+       "ekedc-4.jpeg",
+       "ekedc-5.jpg",
+       "ekedc-6.jpeg",
+       "ekedc-7.png",
+       "ekedc-8.png"
+      ]
+     }
+    }
+   },
+   "triggers": [
+    "document details",
+    "record details",
+    "show document",
+    "full record",
+    "details of ekedc",
+    "what is the account number on"
+   ]
+  },
+  "wrapper": "def record_details(filename: Literal['ekedc-1.jpeg', 'ekedc-2.jpeg', 'ekedc-3.jpeg', 'ekedc-4.jpeg', 'ekedc-5.jpg', 'ekedc-6.jpeg', 'ekedc-7.png', 'ekedc-8.png'] = \"\") -> dict:\n    \"\"\"Full extracted record for one document; no filename returns a digest.\"\"\"\n    return bridge.record_details(filename=filename)"
+ },
+ {
+  "name": "totals_report",
+  "menu": {
+   "name": "totals_report",
+   "description": "Per-document money digest sorted by total due: customer, period, energy, arrears, VAT, total, and whether figures reconcile.",
+   "parameters": {
+    "type": "object",
+    "properties": {}
+   },
+   "triggers": [
+    "totals report",
+    "total due for each document",
+    "list totals",
+    "billing totals",
+    "money summary",
+    "how much is each bill"
+   ]
+  },
+  "wrapper": "def totals_report() -> dict:\n    \"\"\"Per-document money digest sorted by total due: customer, per\"\"\"\n    return bridge.totals_report()"
+ },
+ {
+  "name": "max_total_due",
+  "menu": {
+   "name": "max_total_due",
+   "description": "Deterministic scan: which document has the largest total due, with full ranking.",
+   "parameters": {
+    "type": "object",
+    "properties": {}
+   },
+   "triggers": [
+    "largest total due",
+    "highest bill",
+    "which document has the largest total",
+    "biggest amount due",
+    "most expensive bill"
+   ]
+  },
+  "wrapper": "def max_total_due() -> dict:\n    \"\"\"Deterministic scan: which document has the largest total due\"\"\"\n    return bridge.max_total_due()"
+ },
+ {
+  "name": "arithmetic_check",
+  "menu": {
+   "name": "arithmetic_check",
+   "description": "Recompute every document's internal arithmetic (energy = kwh x rate, VAT 7.5%, totals) from extracted primitives and compare to printed figures.",
+   "parameters": {
+    "type": "object",
+    "properties": {}
+   },
+   "triggers": [
+    "arithmetic check",
+    "numbers add up",
+    "add up",
+    "reconcile totals",
+    "are the bills consistent",
+    "check the figures",
+    "verify arithmetic"
+   ]
+  },
+  "wrapper": "def arithmetic_check() -> dict:\n    \"\"\"Recompute every document's internal arithmetic (energy = kwh\"\"\"\n    return bridge.arithmetic_check()"
+ },
+ {
+  "name": "semantic_search_images",
+  "menu": {
+   "name": "semantic_search_images",
+   "description": "Semantic similarity search over record content descriptions (local text embedder; not pixel search). Use for discovery by topic, customer or street: customers include NOFISAT, ADEYEMO, ADESANYA, ABIODUN, RALIATU, JAMBU, NDUNEZI; places include Igbosere, Ikate, Ijesha, Surulere, Ajangbadi, Aba.",
+   "parameters": {
+    "type": "object",
+    "properties": {
+     "query": {
+      "type": "string",
+      "description": "free-text query, e.g. negative reading notice",
+      "pattern": "[\\s\\S]{3,}"
+     },
+     "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+     }
+    },
+    "required": [
+     "query"
+    ]
+   },
+   "triggers": [
+    "semantic search",
+    "find scans about",
+    "which image mentions",
+    "similar documents",
+    "bills for NOFISAT ADEYEMO ADESANYA ABIODUN RALIATU JAMBU NDUNEZI",
+    "streets Igbosere Ikate Ijesha Surulere Ajangbadi Aba",
+    "which customer",
+    "which bill",
+    "which bills",
+    "for NOFISAT"
+   ]
+  },
+  "wrapper": "def semantic_search_images(query: str, limit: int = 5) -> dict:\n    \"\"\"Semantic search over record content descriptions.\"\"\"\n    return bridge.semantic_search_images(query=query, limit=limit)"
+ }
+]

@@ -10,16 +10,48 @@
     {
       "q": "how many records",
       "path": "results.0.count",
-      "equals": 4
+      "equals": 10
     },
     {
       "q": "votes for LP",
       "path": "results.0.sheets",
       "equals": [
-        {"image_id": "01", "votes": 9},
-        {"image_id": "02", "votes": 12},
-        {"image_id": "03", "votes": 313},
-        {"image_id": "04", "votes": 3}
+        {
+          "image_id": "01",
+          "votes": 1
+        },
+        {
+          "image_id": "02",
+          "votes": 12
+        },
+        {
+          "image_id": "03",
+          "votes": 313
+        },
+        {
+          "image_id": "04",
+          "votes": 3
+        },
+        {
+          "image_id": "05",
+          "votes": 8
+        },
+        {
+          "image_id": "07",
+          "votes": 0
+        },
+        {
+          "image_id": "08",
+          "votes": 125
+        },
+        {
+          "image_id": "09",
+          "votes": null
+        },
+        {
+          "image_id": "10",
+          "votes": 54
+        }
       ]
     },
     {
@@ -35,16 +67,6 @@
       }
     },
     {
-      "q": "details of image 01.png",
-      "path": "results.0.record",
-      "equals": {
-        "state": "EDO",
-        "leading_candidate": "ASUE IGHODALO",
-        "party_scores_apc": 19,
-        "party_scores_pdp": 26
-      }
-    },
-    {
       "q": "details of image 03.jpeg",
       "path": "results.0.record",
       "equals": {
@@ -52,28 +74,120 @@
         "registration_area": "BIRSHI/MIRI",
         "accredited_voters": 371,
         "ballot_papers_issued": 471,
-        "unused_ballot_papers": 160,
+        "unused_ballot_papers": 100,
         "total_valid_votes": 370
       }
     },
     {
-      "q": "details of image 04.jpg",
+      "q": "details of image 01.jpeg",
       "path": "results.0.record",
       "equals": {
-        "state": "PLATEAU",
-        "total_valid_votes": 53,
-        "leading_party": "ADP",
-        "leading_party_votes": 39,
+        "state": "EDO",
+        "election": "2024 Edo State Governorship Election",
+        "leading_party": "APC",
+        "leading_party_votes": 352,
+        "total_valid_votes": 406,
         "qr_code_present": true
+      }
+    },
+    {
+      "q": "details of image 05.jpg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "RIVERS",
+        "leading_party": "APC",
+        "leading_party_votes": 296,
+        "total_valid_votes": 293,
+        "ballot_papers_issued": null
+      }
+    },
+    {
+      "q": "details of image 07.jpeg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "KANO",
+        "leading_party": "APC",
+        "leading_party_votes": 134,
+        "total_valid_votes": 136,
+        "unused_ballot_papers": 647
+      }
+    },
+    {
+      "q": "details of image 08.jpg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "LAGOS",
+        "leading_party": "LP",
+        "leading_party_votes": 125,
+        "total_valid_votes": 193,
+        "form_type": "EC 8A(ii)"
+      }
+    },
+    {
+      "q": "details of image 09.jpeg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "IMO",
+        "leading_party": "APC",
+        "leading_party_votes": 56,
+        "total_valid_votes": null
+      }
+    },
+    {
+      "q": "details of image 10.jpeg",
+      "path": "results.0.record",
+      "equals": {
+        "state": "KOGI",
+        "leading_party": "LP",
+        "leading_party_votes": 54,
+        "total_valid_votes": 84,
+        "unused_ballot_papers": 377
+      }
+    },
+    {
+      "q": "details of image 06.jpeg",
+      "path": "results.0.record",
+      "equals": {
+        "duplicate_of": "01",
+        "total_valid_votes": 406
       }
     },
     {
       "q": "highest valid votes",
       "path": "results.0.ranked_by_total_valid_votes",
       "equals": [
-        {"state": "BAUCHI", "total_valid_votes": 370},
-        {"state": "LAGOS", "total_valid_votes": 111},
-        {"state": "PLATEAU", "total_valid_votes": 53}
+        {
+          "image_id": "01",
+          "total_valid_votes": 406
+        },
+        {
+          "image_id": "03",
+          "total_valid_votes": 370
+        },
+        {
+          "image_id": "05",
+          "total_valid_votes": 293
+        },
+        {
+          "image_id": "08",
+          "total_valid_votes": 193
+        },
+        {
+          "image_id": "07",
+          "total_valid_votes": 136
+        },
+        {
+          "image_id": "02",
+          "total_valid_votes": 111
+        },
+        {
+          "image_id": "10",
+          "total_valid_votes": 84
+        },
+        {
+          "image_id": "04",
+          "total_valid_votes": 53
+        }
       ]
     },
     {

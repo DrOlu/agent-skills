@@ -122,8 +122,8 @@ def _embed_store():
     with open(EMBEDDINGS_FILE) as fh:
         return json.load(fh)
 
-def _ollama_embed(text):
-    key = hashlib.sha1(text.encode()).hexdigest()
+def _ollama_embed(text, qtmpl=QUERY_PROMPT):
+    key = hashlib.sha1((qtmpl + text).encode()).hexdigest()
     try:
         cache = json.load(open(EMBED_CACHE_FILE))
     except Exception:
@@ -131,7 +131,7 @@ def _ollama_embed(text):
     if key in cache:
         return cache[key]
     payload = json.dumps({"model": EMBED_MODEL,
-                          "input": QUERY_PROMPT.format(text=text)}).encode()
+                          "input": qtmpl.replace("{text}", text)}).encode()
     req = urllib.request.Request(f"{OLLAMA_URL}/api/embed", data=payload,
                                  headers={"Content-Type": "application/json"})
     try:
@@ -156,12 +156,13 @@ the deterministic fast path captures the whole question — no model fumble):
 ```python
 def semantic_search_images(query: str = "", limit: int = 4) -> dict:
     query = (query or "").strip() or "scanned document"
+    store = _embed_store()                       # load first: it owns the query prompt
+    qtmpl = (store.get("prompt_style") or {}).get("query", QUERY_PROMPT)
     try:
-        qvec = _ollama_embed(query)
+        qvec = _ollama_embed(query, qtmpl)
     except RuntimeError as exc:
         return {"query": query, "backend": "unavailable", "matches": [],
                 "note": str(exc)[:200]}          # honest, never fabricated
-    store = _embed_store()
     by_file = {r.get("filename"): r for r in _rows()}   # your row loader
     scored = []
     for rid, item in store["items"].items():
@@ -174,6 +175,15 @@ def semantic_search_images(query: str = "", limit: int = 4) -> dict:
     return {"query": query, "model": store["model"],
             "matches": [_digest(rec, sim) for sim, rec in scored[:limit]]}
 ```
+
+The store's shape is `{"model", "dims", "prompt_style": {"document",
+"query"}, "items": {id: {"file", "vector", "text_sha", "embedded_text"}}}`.
+Vectors live at `items[id]["vector"]` and the query prompt template at
+`prompt_style["query"]` — read BOTH from the store, never re-derive them
+(a probe that guesses `store["vectors"]` or the older `/api/embeddings`
+endpoint returns empty matches with every check still green; both mistakes
+shipped once each). Match the query prompt to what `build_embeddings.py`
+embedded with, or the cosine ranking is noise.
 
 Similar-image probe (stored vectors only — no ollama at ask time):
 
@@ -212,9 +222,54 @@ Menu entry for the semantic probe (the pattern cage is the trick):
 }
 ```
 
-Trigger-mass rule of thumb: if a generic-word probe steals another probe's
-questions, cut the generic triggers and put the distinguishing tokens
-(party names, form codes) in ONE compact trigger plus the description.
+Trigger-mass rules (both earned live):
+
+1. **Generic nouns leak.** If a generic-word probe steals another probe's
+   questions, cut the generic triggers. A semantic probe triggered on
+   "search documents" will eat "how many documents are there" — the noun
+   "documents" appears in nearly every question about the dataset. Keep the
+   distinguishing VERB tokens ("add up", "reconcile", "rank") on the probe
+   that owns them.
+2. **The gate only sees triggers + name + enum values.** It never reads
+   descriptions. Every domain noun a user might say — customer names,
+   street names, "dataset", document types — must appear in some probe's
+   TRIGGERS or the gate refuses the question as `no_probe_matches`.
+   Putting them in descriptions (the natural instinct) does nothing for
+   the gate. Both fixes shipped after a real build where "Do the numbers
+   add up in all the documents?" routed to semantic search and "Which
+   bills are for NOFISAT?" was refused outright.
+
+### Register every probe in instance.py (the triple-wire)
+
+Menu + bridge is NOT enough. Generated instances resolve execution through
+`inst.TOOLS`, which is a list of explicitly decorated wrappers in
+`instance.py`:
+
+```python
+@needle.tool(triggers=['document details', 'record details', 'show document'])
+def record_details(filename: Literal["01.png", "02.jpg"] = "") -> dict:
+    """Full extracted record for one document; no filename returns a digest."""
+    return bridge.record_details(filename=filename)
+TOOLS.append(record_details)
+```
+
+A probe present in `needle_menu.json` but missing this wrapper **scores
+normally and then silently vanishes**: ask.py answers `no probe scored >
+0` even though retrieval found it. This exact failure shipped once and
+cost a debug loop, because the refusal message blames retrieval, not
+wiring. Never hand-sync the three files — use:
+
+```bash
+python3 <skill>/scripts/register_probes.py --instance . --probes probes.json
+python3 <skill>/scripts/register_probes.py --instance . --probes probes.json --check
+```
+
+`probes.json` is a list of `{"name", "menu": <menu entry>, "wrapper":
+"<function source delegating to bridge>"}`; the script appends menu
+entries + decorated wrappers idempotently, refuses to shadow a stray
+unmanaged `def`, `compile()`s instance.py before writing, and clears
+`.ask_cache.json`. Run with `--check` as the last step of Phase 5 —
+it exits 1 on any half-wired probe.
 
 ### details probe behavior
 

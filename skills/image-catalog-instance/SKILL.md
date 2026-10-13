@@ -145,7 +145,9 @@ Transcription protocol, per image (full rules: `references/vision-transcription.
 
 Author the transcriptions as a records file (the one creative artifact —
 the agent writes it from its zoom reads), then let the script add file facts
-and enforce sanity:
+and enforce sanity. Format: a **bare JSON list** of records (a
+`{"records": [...]}` wrapper is also accepted); every record carries a
+`description` — that text IS the semantic-search embedding input:
 
 ```bash
 python3 scripts/transcribe_catalog.py \
@@ -203,6 +205,39 @@ Add the image-specific probes to the bridge (full copy-paste templates in
   `{"backend": "unavailable", "matches": []}` digest. Never raise past the
   envelope, never fabricate matches.
 
+Copy the semantic/similar probe templates from `references/workflow.md` §4
+**verbatim** — the embeddings store schema (`items.<file>.vector`,
+`prompt_style.query`) and the `/api/embed` endpoint are load-bearing; a
+re-derived probe that guesses `store["vectors"]` or `/api/embeddings`
+returns empty matches with every check still green.
+
+**Triple-wire every probe.** A probe exists in THREE places, and ask.py
+needs all three:
+
+1. `bridge.py` — the implementation (yours to author);
+2. `needle_menu.json` — the menu entry (retrieval scoring runs off this);
+3. `instance.py` — a `@needle.tool(triggers=...)` wrapper + `TOOLS.append(name)`
+   (execution resolves through `inst.TOOLS`).
+
+A probe wired into the menu but not instance.py *scores fine and then
+silently vanishes* — the envelope reads `no probe scored > 0` even though
+scoring found it. Never hand-sync the three files; use:
+
+```bash
+python3 scripts/register_probes.py --instance /path/to/instance \
+    --probes probes.json          # triple-wires idempotently, clears ask cache
+python3 scripts/register_probes.py --instance ... --probes probes.json --check
+#   --check audits and exits 1 on half-wired probes (run it before delivery)
+```
+
+**Gate vocabulary is triggers + name + enum values ONLY.** The refusal
+gate's `known_anywhere` check never reads probe descriptions. Every
+domain noun a user might say — dataset words ("bills", "dataset"),
+customer names, street names — must appear in some probe's **triggers**,
+or the gate refuses a perfectly answerable question as
+`no_probe_matches`. Putting those nouns in descriptions (the natural
+instinct) fixes retrieval scoring and does NOTHING for the gate.
+
 Key design fact: **semantic search is for discovery** ("which sheet is about
 a re-run"); **precise numeric questions route to deterministic probes**
 (votes, counts, rankings). Rebalancing trigger mass between a generic-word
@@ -253,8 +288,9 @@ IS the audit trail).
    rumor, not a result.
 7. Semantic probes = discovery; numeric questions route to deterministic
    probes. Free-text args pattern-caged so the fast path owns them.
-8. After any data change: rebuild embeddings for changed descriptions and
-   clear the ask cache.
+8. After any data OR menu change: rebuild embeddings for changed
+   descriptions and clear the ask cache (menu edits change the menu version
+   the cache is keyed by — stale triggers refuse fresh questions).
 9. Embedder unreachable ⇒ honest unavailable digest; never fabricated
    matches.
 10. Secrets/backend URLs via env (`OLLAMA_URL`), never model-facing args.
@@ -270,7 +306,11 @@ IS the audit trail).
 | `"024"` became `24` | profiler int-coercion | fix_profile force_str |
 | model rejects valid future records | generator bounds over-fit to N samples | hand-relax constraints post-gen |
 | stale answers after data change | ask cache keyed by menu version only | clear `.ask_cache.json` |
-| probe X steals probe Y's questions | bare-token trigger mass imbalance | trim generic triggers; put distinguishing tokens in a compact trigger + description |
+| probe X steals probe Y's questions | bare-token trigger mass imbalance | trim generic triggers (e.g. "documents") from the thief; put the distinguishing VERB tokens ("add up", "reconcile") in a compact trigger on the right probe |
+| gate refuses an answerable question (`no_probe_matches`) though a probe clearly covers it | gate vocab = triggers+name+enums ONLY; descriptions are invisible to it | put the dataset's own nouns (customer names, "dataset", doc types) in TRIGGERS, not descriptions |
+| new probe refuses with `no probe scored > 0` though scoring clearly finds it | probe in menu but NOT wrapped in instance.py (`inst.TOOLS` resolves execution) | triple-wire via `register_probes.py`; run it with `--check` before delivery |
+| semantic probe returns `matches: []` with all checks green | probe re-derived with wrong store keys or endpoint | copy workflow.md §4 template verbatim: `items.<file>.vector`, `/api/embed` + `input`, `prompt_style.query` |
+| `AttributeError: 'str' object has no attribute 'get'` building catalog | records.json wrapped in an object | now tolerated (bare list or `{"records": [...]}`); prefer bare list |
 | zero-retrieval questions die as `no_probe_matches` before qualifier checks | gate order | expected; write traps to expect it |
 
 ## File map
@@ -282,6 +322,7 @@ scripts/crop_bands.py                Phase 2 — band/box zoom crops
 scripts/transcribe_catalog.py        Phase 3 — records + file facts → catalog.json (with poison checks)
 scripts/build_embeddings.py          Phase 3/4 — description → ollama embeddings (incremental by text-sha)
 scripts/fix_profile.py               Phase 4 — profiler fixups from a config file
+scripts/register_probes.py           Phase 4 — triple-wire probes (bridge→menu→instance.py), idempotent, --check audits
 scripts/run_truth_checks.py          Phase 5 — exhaustive per-record + per-question truth battery
 references/workflow.md               full walkthrough incl. probe code templates
 references/vision-transcription.md   the transcription/uncertainty protocol

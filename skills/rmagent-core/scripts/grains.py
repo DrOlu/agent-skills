@@ -62,6 +62,7 @@ DFIR = frozenset({
     "vol", "conn", "persist", "logtriage", "usn", "appcompat", "usbhist",
     "ircollect", "irhash",
     "browser", "email", "exfil", "procrun", "recyclebin", "amcpull",
+    "livewindow",
 })
 
 BY_SKILL = {

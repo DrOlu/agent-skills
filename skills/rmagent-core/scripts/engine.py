@@ -49,7 +49,7 @@ WALK_DEPTH = 8
 WALK_FANOUT = 3
 MAX_CONCURRENT = 2          # hunt walks per jump host
 MAX_CONCURRENT_ATTEND = 3   # census knock pool (all-windows budget)
-ASK_TIMEOUT_SEC = 25
+ASK_TIMEOUT_SEC = 45
 EXPLAIN_TIMEOUT_SEC = 15 * 60
 COOLDOWN_SEC = 5 * 60
 # REV 17 (H2 companion): ONE transport default for every consumer of this
@@ -708,7 +708,7 @@ def ask(row: dict, skill: str, since_hours: float = 2.0, limit: int = 50,
 
     try:
         session = winrm.Session(endpoint, auth=(creds["user"], creds["password"]),
-                                transport=transport)
+                                transport=transport, timeout=timeout)
         r = session.run_ps(script)
         out = r.std_out
         if isinstance(out, bytes):

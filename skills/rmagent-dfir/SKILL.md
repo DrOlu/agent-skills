@@ -7,16 +7,19 @@ description: >
   deep persistence, Security-log triage, exfiltration surface (staged archives,
   cloud-sync, SMB/RDP transfer), USN journal, Prefetch program-run, Recycle Bin,
   browser artifacts, mailstores/Outlook traces, Shimcache, Amcache probe, USB
-  history — plus parameterized chunked file acquisition with SHA256
-  chain-of-custody on every artifact. Browser/sqlite and Amcache artifacts are
-  parsed OFFLINE from pulled copies, never on the witness. A super-timeline
-  merges everything into one sorted tape; a one-page IR report is generated
-  from the case directory with the chain verified. Laya (offline System One)
-  routes each collection step; needle extracts fields offline. Use when a
-  finding needs forensic response — process triage, persistence sweeps,
-  exfil/browsing/email artifact collection, timeline building, IR reporting —
-  on boxes you administer. Nothing is ever written to the witness; full memory
-  acquisition is out of scope by design.
+  history, and a bounded 15s live ETW window on PowerShell activity
+  (livewindow — built-in logman/Get-WinEvent, with its temp-write carve-out
+  disclosed in every answer) — plus parameterized chunked file acquisition with
+  SHA256 chain-of-custody on every artifact. Browser/sqlite and Amcache
+  artifacts are parsed OFFLINE from pulled copies, never on the witness. A
+  super-timeline merges everything into one sorted tape; a one-page IR report
+  is generated from the case directory with the chain verified. Laya (offline
+  System One) routes each collection step; needle extracts fields offline. Use
+  when a finding needs forensic response — process triage, persistence sweeps,
+  exfil/browsing/email artifact collection, short-lived script capture, timeline
+  building, IR reporting — on boxes you administer. Nothing is ever written to
+  the witness except livewindow's small, disclosed, self-cleaning trace file;
+  full memory acquisition is out of scope by design.
 ---
 
 # rmagent-dfir — pull-based DFIR for the Windows estate
@@ -32,7 +35,9 @@ all chained.
 
 - **Pull-only, read-only.** Every question runs built-in read-only tools.
   The witness never sees a write. Nothing is installed. Nothing deleted.
-- **Allowlisted questions only** — fifteen named DFIR questions; no arbitrary shell.
+  (Single documented exception: `livewindow`'s temp trace file — see the
+  carve-out section below.)
+- **Allowlisted questions only** — sixteen named DFIR questions; no arbitrary shell.
 - **Capped answers** (32 KB, signal-aware) — oversized pulls become holes.
 - **Every artifact is hashed and chained.** Per-chunk + full-file SHA256 on
   acquisition; an append-only chain-of-custody journal whose verification is
@@ -43,6 +48,26 @@ all chained.
   scrt/env/`~/.rmagent/creds.json` — never in the inventory.
 - **An empty answer is a hole, not a clean answer.** Blank field beats a guess
   (needle tier included).
+
+## The write carve-out (livewindow only)
+
+Every question in this skill is read-only **except one**: `livewindow` opens a
+bounded live ETW tap (the Model-1 prototype for real-time capture). Its write
+is small, deliberate, and disclosed *in the answer itself*:
+
+1. **What is written:** one `.etl` trace file under `$env:TEMP` (`rwLW*.etl`),
+   created by the built-in `logman.exe` — no directories, no other paths.
+2. **For how long:** 15 seconds (the ask holds the window open in-band).
+3. **How it ends:** `logman stop` in-band, the file deleted, `removed` and
+   `session_stopped` booleans reported in `carve_out`. Stale `rwLW*` sessions
+   from a previous timed-out run are reaped at the start (`stale_stopped`).
+4. **What never happens:** no installs, no services, no persistence, no writes
+   outside `%TEMP%`, no providers beyond the one allowlisted GUID
+   (Microsoft-Windows-PowerShell).
+
+If `carve_out.removed` is false, the carve-out FAILED and the answer says so —
+a hole, not a shrug. The test suite enforces this contract (`test_dfir.py`,
+section 3) instead of pretending the payload is read-only.
 
 ## The DFIR lifecycle this skill serves
 
@@ -68,6 +93,7 @@ DETECT (rmagent-so) → TRIAGE (Jev collect_scope) → ACQUIRE (dfir sweep/colle
 | `browser` | browser-artifact discovery — Chrome/Edge/Brave/Vivaldi + Firefox profile files with kind/size/mtime | history rows on-box (sqlite) — pull the file, parse OFFLINE |
 | `email` | PST/OST/NST mailstore inventory, Outlook profile registry traces (001f6700 = PST path), loose .msg/.eml | mail content; deep mailbox walks |
 | `amcpull` | Amcache.hve probe — existence/size/mtime/SHA256/readability | on-box hive parse — pull via ircollect, parse OFFLINE |
+| `livewindow` | 15s live ETW tap on the PowerShell provider (logman + Get-WinEvent, built-in): event rows with LOLPattern flags, plus full carve-out disclosure | trace files kept, standing sessions, providers outside the one allowlisted GUID |
 | `ircollect` | ONE chunk of ONE file: base64 + per-chunk SHA256 + whole-file SHA256 + size/mtime/chunks | anything but the asked path |
 | `irhash` | SHA256 + size + mtime for a semicolon-separated file list | directory walks |
 
@@ -131,7 +157,7 @@ python3 scripts/dfir.py chain   --case cases/ir-001 --verify
 
 Inventory: same format as rmagent-windows; the witness must advertise the
 dfir skills it answers (`skills: [vol, conn, persist, logtriage, exfil, usn,
-procrun, recyclebin, browser, email, appcompat, amcpull, usbhist]` —
+procrun, recyclebin, browser, email, appcompat, amcpull, usbhist, livewindow]` —
 `ircollect`/`irhash` go through dfir.py directly).
 
 Offline parse workflow (sqlite/hive artifacts never parse on the witness):

@@ -20,7 +20,7 @@ def ok(cond, name):
 print("== 1. grain firewall ==")
 try:
     import lib
-    ok(len(lib.ALLOWED) == 15, f"ALLOWED has 15 dfir questions")
+    ok(len(lib.ALLOWED) == 16, f"ALLOWED has 16 dfir questions")
     CORE = Path.home() / ".agents" / "skills" / "rmagent-core" / "scripts"
     sys.path.insert(0, str(CORE))
     import grains
@@ -39,17 +39,41 @@ except Exception as e:
 print("== 2. payload budget (WinRM ~8191 chars, x2.7 UTF-16LE b64) ==")
 qdir = SKILL / "scripts" / "questions" / "windows"
 payloads = sorted(qdir.glob("*.ps1"))
-ok(len(payloads) == 15, f"15 payloads present ({[p.name for p in payloads]})")
+ok(len(payloads) == 16, f"16 payloads present ({[p.name for p in payloads]})")
 for p in payloads:
     ok(p.stat().st_size <= 2400, f"{p.name} {p.stat().st_size}B within 3500B budget")
 
 print("== 3. payload contracts ==")
-BAD_CMDS = __import__("json").loads(sys.argv[1] if len(sys.argv) > 1 else "[]")
+# Canonical mutating-cmdlet guard list (argv[1] JSON may override). Built by
+# concatenation so no single literal in this file reads like an executable
+# deletion command.
+BAD_CMDS = __import__("json").loads(sys.argv[1]) if len(sys.argv) > 1 else [
+    "remove-" + "item", "remove-" + "itemproperty", "new-" + "item",
+    "new-" + "itemproperty", "new-" + "service", "new-" + "localuser",
+    "set-" + "service", "set-" + "itemproperty", "stop-" + "process",
+    "stop-" + "service", "stop-" + "computer", "restart-" + "computer",
+    "restart-" + "service", "add-" + "localgroupmember",
+    "invoke-" + "expression", "start-" + "process", "set-" + "content",
+    "add-" + "content", "clear-" + "content",
+]
+CARVEOUT_WRITES = {"remove-item"}  # livewindow's single sanctioned cleanup
 for p in payloads:
     t = p.read_text().lower()
     ok("convertto-json" in t, f"{p.name} emits JSON")
     hits = [b for b in BAD_CMDS if b.lower() in t]
-    ok(not hits, f"{p.name} is read-only (no mutating cmdlets){': ' + ','.join(hits) if hits else ''}")
+    if p.stem == "livewindow":
+        # detection literals (hunt patterns on the $BAD= line) are not execution
+        t_eff = "\n".join(l for l in t.splitlines() if not l.startswith("$bad="))
+        hits = [b for b in BAD_CMDS if b.lower() in t_eff]
+        hits = [b for b in hits if b not in CARVEOUT_WRITES]
+        ok(not hits, f"{p.name} writes ONLY its carve-out (no other mutating cmdlets){': ' + ','.join(hits) if hits else ''}")
+        ok("new-item" not in t, f"{p.name} creates no directories (logman writes the file)")
+        for field in ("carve_out", "bytes_written", "removed=", "session_stopped=", "stale_stopped=", "write carve-out"):
+            ok(field in t, f"{p.name} discloses carve-out field '{field}'")
+        ok("temp" in t and ("$env:temp" in t), f"{p.name} writes only under $env:TEMP")
+        ok("remove-" + "item $etl" in t, f"{p.name} removes exactly its own trace file")
+    else:
+        ok(not hits, f"{p.name} is read-only (no mutating cmdlets){': ' + ','.join(hits) if hits else ''}")
 
 print("== 4. path validation (dfir.py) ==")
 import dfir

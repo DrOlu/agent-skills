@@ -21,6 +21,7 @@
       "procrun": "Prefetch program-run — first/last execution of LOLBins and tools",
       "recyclebin": "Recycle Bin records — deleted evidence, anti-forensics",
       "amcpull": "Amcache execution inventory — broad first-run evidence when Shimcache is thin",
+      "livewindow": "A live 15s ETW window on PowerShell activity — short-lived script execution between sweeps",
       "none": "No artifact family stands out — keep the general sweep" } },
     "full_acquisition": { "type": "noul", "instructions": "Does the evidence indicate the host is compromised badly enough that a full forensic acquisition workflow is warranted?" },
     "severity": { "type": "score", "instructions": "How severe is this incident for the estate?", "criteria": ["Contained or benign — routine", "Single-host concern — collect deliberately", "Escalating — multiple indicators, possible lateral movement", "Critical — active compromise, evidence at risk"] }

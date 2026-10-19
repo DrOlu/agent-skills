@@ -159,6 +159,37 @@ An empty Prefetch dir on a workstation is itself reported as a signal; an
 unknown Amcache `f`-value layout yields version + embedded strings — holes,
 never guessed fields.
 
+## Scenario 10 — the live window (`livewindow`)
+
+A cradle ran and died between sweeps — the Security log never saw it. Open a
+15-second live tap on the PowerShell provider and catch the next one:
+```bash
+python3 scripts/dfir.py ask --inventory estate.yaml --witness ws1 \
+  --question livewindow --case cases/ir-046
+```
+Output, in one answer:
+- `events_seen` / `events` — every PowerShell-provider event during the 15s
+  window (id, time, level, capped message), each flagged when its message
+  matches a hunt pattern (`iex`, `downloadstring`, `-enc`, `frombase64`,
+  `net.webclient`, …)
+- `carve_out` — the write carve-out, disclosed in-band: the temp `.etl` path,
+  bytes written, whether the file was removed, whether the trace session
+  stopped cleanly, and how many stale `rwLW*` sessions were reaped first
+
+```
+carve_out: { temp_file: C:\Users\A~\AppData\Local\Temp\rwLW9f3c1a.etl,
+             bytes_written: 1163264, removed: true, session_stopped: true, stale_stopped: 0 }
+carve_note: WRITE CARVE-OUT: one .etl trace file in $env:TEMP during a 15s
+            window, then deleted; trace session stopped in-band; ...
+```
+
+This is the ONE question in the family that writes anything to the witness —
+a single self-cleaning temp file, bounded by the ask itself, disclosed in the
+answer, and enforced by the test suite. If `removed` is false, treat it as a
+hole and go collect the file by hand. Re-run it in a sweep and it runs last:
+by the time the sweep reaches it, anything that tripped during collection
+walks right into the window.
+
 ## What this skill will NOT do
 
 - Write to, clean, or quarantine anything on the witness (that's

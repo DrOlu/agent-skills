@@ -32,7 +32,8 @@ import lib  # the dfir grain wrapper over rmagent-core
 WIN_PATH = re.compile(r"^[A-Za-z]:\\[^<>:\"/|?\x00-\x1f]*$")
 JUNK_TOKENS = {"FRAGMENT", "FRAGMENT:", "ok", "extract", "tool"}
 DFIR_QUESTIONS = ["vol", "conn", "persist", "logtriage", "exfil", "usn", "procrun",
-                  "recyclebin", "browser", "email", "appcompat", "amcpull", "usbhist"]
+                  "recyclebin", "browser", "email", "appcompat", "amcpull", "usbhist",
+                  "livewindow"]
 
 
 def out_json(o):
@@ -75,7 +76,8 @@ def valid_windows_path(p: str) -> bool:
 def cmd_ask(a):
     inv = load_inv(a.inventory)
     row = witness(inv, a.witness)
-    r = lib.ask(row, a.question, since_hours=a.since, limit=a.limit)
+    to = 45 if a.question == "livewindow" else 25
+    r = lib.ask(row, a.question, since_hours=a.since, limit=a.limit, timeout=to)
     if a.case:
         cdir = Path(a.case); (cdir / "answers").mkdir(parents=True, exist_ok=True)
         with open(cdir / "answers" / f"{a.witness}__{a.question}.json", "w") as f:
@@ -92,7 +94,8 @@ def cmd_sweep(a):
     cdir = Path(a.case); (cdir / "answers").mkdir(parents=True, exist_ok=True)
     results = {}
     for q in DFIR_QUESTIONS:
-        r = lib.ask(row, q, since_hours=a.since, limit=a.limit)
+        to = 45 if q == "livewindow" else 25
+        r = lib.ask(row, q, since_hours=a.since, limit=a.limit, timeout=to)
         ok = bool(r.get("ok"))
         results[q] = "ok" if ok else f"hole: {str(r.get('error') or r.get('hole', {}).get('why', ''))[:80]}"
         with open(cdir / "answers" / f"{a.witness}__{q}.json", "w") as f:

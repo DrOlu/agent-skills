@@ -238,8 +238,8 @@ blind_drift 8, new_service 8, new_task 7.
 
 ```powershell
 plasma actuate actions                                            # the allowlist
-plasma actuate apply block_ip --target 1.2.3.4 --reason "C2"      # dry-run
-plasma actuate apply block_ip --target 1.2.3.4 --reason "C2" --apply
+plasma actuate apply block_ip --target 1.2.3.4 --reason "C2"      # dry-run -> journal id
+plasma actuate apply block_ip --target 1.2.3.4 --reason "C2" --apply --plan 3
 plasma actuate undo --id 3 --apply
 ```
 
@@ -307,7 +307,7 @@ indirection — inline secrets refused, enforced by test).
 
 ```powershell
 $env:PLASMA_GITHUB_TOKEN = "<PAT>"
-plasma update check                        # current vs latest
+plasma update check                        # exit 0 = up to date, 2 = update available
 plasma update apply --bin C:\ProgramData\Plasma\bin\plasma.exe
 ```
 
@@ -349,7 +349,7 @@ plasma fleet scan --inventory fleet.json --case drill --window 86400
 
 1. **Detect-only sensors.** WHIDS v1.7.0 has no kill/block actions; the
    tap writes matches only; nothing auto-responds.
-2. **Human-gated response.** Actuate = dry-run first + `--apply` +
+2. **Human-gated response.** Actuate = dry-run first + `--apply --plan <dry-run id>` (apply refuses without the id of a seen dry-run for the same action+target) +
    `--reason` mandatory + journaled verified undo.
 3. **Lockout-proof.** Protected services/processes/accounts refused;
    isolation keeps RDP/WinRM alive.
@@ -392,7 +392,7 @@ OBSERVE     plasma observe attest|sketch|edges|explain|pslogs|attackmap|...
 TAP         plasma tap list|selftest|run --providers p,w,d --for 5m
 IDENTITY    plasma identity pull --events store.jsonl --since 60
 WHIDS       plasma whids pull|push|status --root 'C:\Program Files\Whids'
-ACTUATE     plasma actuate apply <action> --target X --reason Y [--apply]
+ACTUATE     plasma actuate apply <action> --target X --reason Y [--apply --plan <id>]
             plasma actuate undo --id N --apply | journal
 FLEET       plasma fleet scan|report --inventory fleet.json --case NAME
 UPDATE      plasma update check|apply --token-env PLASMA_GITHUB_TOKEN

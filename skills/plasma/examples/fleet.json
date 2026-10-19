@@ -1,0 +1,27 @@
+{
+  "hosts": [
+    {
+      "name": "WS2",
+      "transport": "winrm",
+      "endpoint": "52.x.x.x",
+      "username": "Administrator",
+      "password_env": "WS2PW",
+      "events_path": "C:\\ProgramData\\Plasma\\data\\events.jsonl"
+    },
+    {
+      "name": "WS1",
+      "transport": "file",
+      "events_path": "/path/to/exported/ws1-events.jsonl",
+      "_comment": "file transport: for nodes reached via SSM or offline export"
+    },
+    {
+      "name": "DC01",
+      "transport": "winrm",
+      "endpoint": "10.0.0.10",
+      "username": "CORP\\svc-plasma",
+      "password_env": "DC01_PW",
+      "events_path": "C:\\ProgramData\\Plasma\\data\\events.jsonl",
+      "cap": 500
+    }
+  ]
+}

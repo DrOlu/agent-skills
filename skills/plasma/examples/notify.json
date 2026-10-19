@@ -1,0 +1,14 @@
+{
+  "channels": [
+    {
+      "type": "telegram",
+      "token_env": "PLASMA_TG_TOKEN",
+      "chat_id": "123456789"
+    },
+    {
+      "type": "webhook",
+      "url": "https://hooks.example.com/services/plasma-alerts"
+    }
+  ],
+  "min_score": 7
+}

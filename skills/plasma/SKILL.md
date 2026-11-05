@@ -229,6 +229,11 @@ plasma observe sysmon_health # channel volume by event id
 plasma drift record --question attest    # snapshot baseline
 plasma drift score  --question attest    # 0-10 scored diff + verdict
 plasma drift list
+
+# 1.1.0 — story chains run inside `watch` automatically; standalone:
+plasma chain score --events 'C:\ProgramData\Plasma\data\events.jsonl'
+# response sequences (one plan gates the whole sequence, aborts on failure, undo reverses last-first)
+plasma playbook apply contain-user --target suspicious_bob --reason "lateral hop, no ticket"
 ```
 
 Scores: canary_tripped 10, sensor_down 10, admin_added 9, new_persistence 9,
@@ -395,6 +400,11 @@ WHIDS       plasma whids pull|push|status --root 'C:\Program Files\Whids'
 ACTUATE     plasma actuate apply <action> --target X --reason Y [--apply --plan <id>]
             plasma actuate undo --id N --apply | journal
 FLEET       plasma fleet scan|report --inventory fleet.json --case NAME
+CHAIN       plasma chain score --events store.jsonl            # story-level: phish spawn, brute-force-success, persistence-after-privilege
+COVERAGE    plasma coverage                                    # ATT&CK techniques watched vs blind (honest holes)
+DEEP        plasma deep persistence --json-out deep.json       # every auto-start location + signature status
+STORE       plasma store rotate|compact|stats --events store.jsonl
+PLAYBOOK    plasma playbook list | apply contain-user --target bob --reason R [--apply --plan <id>] | undo --id N --apply
 UPDATE      plasma update check|apply --token-env PLASMA_GITHUB_TOKEN
 ASK         plasma ask --prompt "..." --events store.jsonl
 ```
